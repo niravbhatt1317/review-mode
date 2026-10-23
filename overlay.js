@@ -15,7 +15,7 @@
    the browser extension injects it with window.__reviewExt = { project, who, listUrl } and answers the same
    requests through its bridge (rv() below), with pictures as signed links from the hub. */
 const EXT = window.__reviewExt || null;
-const PAGE_MODE = location.pathname.startsWith("/__review") || (EXT && location.protocol === "chrome-extension:");
+const PAGE_MODE = location.pathname.startsWith("/__review") || (EXT && /-extension:$/.test(location.protocol)); // chrome-extension:, moz-extension:
 if (!EXT) {
   /* which session: ?session=_xxx on any page (the page view or the app), kept for the tab so the app's own
      route changes do not drop it. Nothing given means main, the real review. Until 2026-10-21 only the page view
