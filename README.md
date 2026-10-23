@@ -23,6 +23,10 @@ Firefox that updates itself).
 | `pack.mjs` | bumps the version and writes `dist/review-mode-<v>.zip` (Chrome) and `-firefox.zip` |
 | `firefox-release.mjs` | after Mozilla signs a build: the files for `docs/firefox/` (served by GitHub Pages) |
 | `docs/` | the site: install page, privacy page, Firefox files and update list |
+| `collector/` | the Vite plugin (`plugin.js`), the wrapper (`vite.js`), the config and the stores |
+| `cli/review.mjs` | the `review` command: init, list, show, status, pull |
+| `skill/SKILL.md` | the Claude skill a project gets from `npx review init` |
+| `hub/` | the SQL that sets up a team's hub |
 | `STORE.md` | how both stores are published |
 
 ## Release
@@ -33,11 +37,23 @@ Firefox that updates itself).
 3. Firefox: Developer Hub → Upload New Version → the Firefox zip → when approved, download the signed `.xpi`, then
    `node firefox-release.mjs <that file>`, commit `docs/`, push. Firefox installs update within a day.
 
-## Using it from a project (the dev-server host)
+## Using it in a project (the dev-server host)
 
-A project can serve the overlay itself and answer it with a local collector, so Claude or a developer can read the
-comments and move statuses from the command line. The console does this: `npm install github:niravbhatt1317/review-mode`
-and import `review-mode/hub-core.js`, `review-mode/overlay.js` and `review-mode/hub.json`.
+Any Vite project can serve the overlay itself and answer it with a local collector, so reviewers need no extension on
+the dev server beyond the pictures, and Claude or a developer can read the comments and move statuses from the
+command line:
+
+```sh
+npm install -D github:niravbhatt1317/review-mode
+npx review init            # review.config.json, .review/vite.config.js, the dev:review script, .gitignore lines, the Claude skill
+npm run dev:review         # the project on the review port (4178 by default), with the overlay
+npx review list            # the project's comments; also show, status, pull
+```
+
+`review.config.json` holds the project's name on the hub and the port; add a `hub` block ({ url, anonKey, people })
+for another team's hub. `.review/sessions/_*/` are local test sessions (`?session=_test`); everything else is on the
+hub. The skill at `.claude/skills/review/SKILL.md` tells Claude the same commands. The hub itself is set up once per
+team with `hub/schema.sql` and `hub/people.sql` in the Supabase SQL Editor.
 
 ## Testing headless
 
