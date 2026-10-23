@@ -1,6 +1,6 @@
 {
   "name": "review-mode",
-  "version": "2.0.42",
+  "version": "2.0.43",
   "description": "Design review comments on any page, shared on a team hub. The browser extension and the shared rules.",
   "type": "module",
   "license": "MIT",
