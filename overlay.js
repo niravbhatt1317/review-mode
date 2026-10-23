@@ -1,0 +1,3860 @@
+/* REVIEW MODE, the in-page half (Nirav, 2026-10-19). Local dev only.
+ *
+ *   Hold Option (Alt) and move: whatever is under the cursor gets an outline.
+ *   Option + click it: a numbered pin drops and a small box asks for the comment. Enter saves, Esc cancels.
+ *   On save the tab is photographed as it is right now, the pin and the outline drawn on the picture,
+ *   and picture + route + element + text go to .review/sessions/<today>/ through the dev server.
+ *   Shift + Option + R: sticky mode (no need to hold Option; every click is a comment) until Esc.
+ *
+ * Pictures: the first save asks once to share this tab (pick the highlighted tab, "Share"); after that every
+ * save grabs a true frame. Decline it and the page is rendered to a canvas instead (close, not pixel exact). */
+
+/* PAGE MODE: served at /__review/, the same panel as the whole page; no app under it, so no pins, no hover, no
+   capture. "Go to" leaves for the app with the comment's id in the hash, and the app's overlay opens it on load. */
+/* TWO HOSTS. On the console the dev server's collector serves this script and answers /__review/… . Anywhere else
+   the browser extension injects it with window.__reviewExt = { project, who, listUrl } and answers the same
+   requests through its bridge (rv() below), with pictures as signed links from the hub. */
+const EXT = window.__reviewExt || null;
+const PAGE_MODE = location.pathname.startsWith("/__review") || (EXT && location.protocol === "chrome-extension:");
+if (!EXT) {
+  /* which session: ?session=_xxx on any page (the page view or the app), kept for the tab so the app's own
+     route changes do not drop it. Nothing given means main, the real review. Until 2026-10-21 only the page view
+     read it, so drives meant for _test wrote into main. */
+  const q = new URLSearchParams(location.search);
+  let s = q.get("session");
+  try {
+    if (s) sessionStorage.setItem("review.session", s);
+    else s = sessionStorage.getItem("review.session");
+  } catch {}
+  if (s && /^_[a-z0-9-]+$/.test(s)) window.__reviewSession = s;
+  if (PAGE_MODE) window.__reviewView = q.get("view") === "resolved" ? "resolved" : "open";
+} else if (PAGE_MODE) window.__reviewView = new URLSearchParams(location.search).get("view") === "resolved" ? "resolved" : "open";
+/* one call, either host: a Response-like answer with json() and text() */
+let rvSeq = 0;
+const rvWaiting = new Map();
+if (EXT) window.addEventListener("message", (e) => {
+  if (e.source !== window || e.data?.type !== "review-api-reply") return;
+  const w = rvWaiting.get(e.data.id);
+  if (!w) return;
+  rvWaiting.delete(e.data.id);
+  w(e.data);
+});
+function rv(path, init = {}) {
+  if (!EXT) return fetch(path, init);
+  const id = ++rvSeq;
+  const [p, qs] = String(path).split("?");
+  return new Promise((resolve) => {
+    rvWaiting.set(id, resolve);
+    window.postMessage({ type: "review-api-request", id, path: p, query: qs || "", method: init.method || "GET", body: init.body || null }, "*");
+    setTimeout(() => {
+      if (rvWaiting.delete(id)) {
+        resolve({ ok: false, status: 504, body: { error: "the extension did not answer" } });
+        /* an extension that was reloaded or updated no longer hears this page: say so, once */
+        if (!window.__reviewStale) {
+          window.__reviewStale = true;
+          try {
+            toast("Review mode was updated: reload this page", true);
+          } catch {}
+        }
+      }
+    }, /\/(save|thumb|links)$/.test(p) ? 90_000 : 8_000); // an upload may take a while; a list should not
+  }).then((r) => {
+    if (r.status === 503 && /reloaded/.test(r.body?.error || "") && !window.__reviewStale) {
+      window.__reviewStale = true;
+      try {
+        toast("Review mode was updated: reload this page", true);
+      } catch {}
+    }
+    return { ok: !!r.ok, status: r.status || (r.ok ? 200 : 500), json: async () => r.body, text: async () => (typeof r.body === "string" ? r.body : JSON.stringify(r.body)) };
+  });
+}
+/* the modifier's name on this machine: ⌥ on a Mac, Alt elsewhere */
+const MOD = /Mac|iPhone|iPad/.test(navigator.platform || "") ? "⌥" : "Alt";
+const HIDE_KEY = MOD === "⌥" ? "⌥⇧H" : "Alt+Shift+H"; // shows or hides the whole review layer
+/* STATUS (2026-10-21): open -> progress (picked up) -> approval (done, for the reviewer) -> approved. Reopen and
+   send back move it back. Approved comments leave the pins and the open list. */
+const STATUS = { open: "Open", progress: "In progress", approval: "For approval", approved: "Approved" };
+const SEVERITIES = [
+  ["must", "Must fix"],
+  ["should", "Should fix"],
+  ["idea", "Idea"],
+  ["question", "Question"],
+];
+
+const state = {
+  alt: false,
+  sticky: false,
+  mouse: { x: -1, y: -1 },
+  hover: null,
+  pending: null, // { el, rect }
+  stream: null,
+  video: null,
+  comments: [], // the server's list for this session, the open ones (resolved ones live in `done`)
+  done: [], // resolved comments: off the pins and the drawer, on the page's Resolved tab
+  pinEls: new Map(), // comment id -> resolved element
+  pinSeen: new Map(), // comment id -> last visibility check
+  declined: false, // the tab share was refused this page load: fall back without asking again
+  trail: [], // the clicks (and the hovers that opened something) on this page since the last route change
+  lastHover: null, // the app element under the pointer (what a hover card would be hanging from)
+  lastClickAt: 0,
+  trailRoute: location.pathname,
+  flash: null, // { id, until }: the pin to pulse after a go-to
+  showPins: (() => { try { return localStorage.getItem("review.pins") !== "off"; } catch { return true; } })(),
+  off: (() => { try { return localStorage.getItem("review.on") === "off"; } catch { return false; } })(), // review hidden: nothing on screen, no ⌥-click
+  count: 0,
+  lastN: 0,
+  route: location.pathname,
+  capturing: false,
+};
+
+/* ---------- host + styles (shadow DOM so the app's CSS and ours never meet) ---------- */
+const host = document.createElement("div");
+host.id = "__review-host";
+/* the UA's popover styles are overridden here (inline beats them): the host is a manual popover so it lives in the
+   browser's top layer, above a page's modal <dialog> or popover, which no z-index can reach */
+host.style.cssText = "position:fixed;inset:0;z-index:2147483000;pointer-events:none;margin:0;border:0;padding:0;width:auto;height:auto;background:transparent;color:inherit;overflow:visible;";
+document.body.appendChild(host);
+/* THE TOP LAYER. A page's modal <dialog> (showModal) sits in the browser's top layer, above everything, and makes
+   the rest of the page inert: the review layer would be blurred under the backdrop and deaf to clicks (a design
+   system's drawer, 2026-10-22). Re-showing a popover does not get above a modal dialog in Chrome, so while a modal
+   is open the host moves INSIDE it (a child of the dialog is neither inert nor behind it); it goes back to the body
+   when the dialog closes. Outside modals the host is a manual popover, in the top layer above z-index-heavy pages
+   and non-modal popovers. Fixed positioning inside a dialog is still the viewport's unless the dialog is
+   transformed (a slide-in mid-animation): a frame or two off, then right. */
+function asPopover(on) {
+  if (!host.showPopover) return;
+  try {
+    if (on) {
+      host.setAttribute("popover", "manual");
+      if (!host.matches(":popover-open")) host.showPopover();
+    } else {
+      if (host.matches(":popover-open")) host.hidePopover();
+      host.removeAttribute("popover");
+    }
+  } catch {}
+}
+asPopover(true);
+/* a dialog with a transform (a drawer slid in), a filter or containment is the reference box for everything fixed
+   inside it, and its overflow then clips our layer: those are switched off on the dialog while we are inside, and
+   put back when we leave. The dialog is already where its animation left it, so nothing moves. */
+const CB_PROPS = { transform: "none", filter: "none", perspective: "none", contain: "none", "will-change": "auto", "backdrop-filter": "none" };
+function pinTo(dlg) {
+  const cs = getComputedStyle(dlg);
+  const kept = {};
+  for (const [prop, off] of Object.entries(CB_PROPS)) {
+    const v = cs.getPropertyValue(prop);
+    if (v && v !== "none" && v !== "auto" && v !== "normal") {
+      kept[prop] = [dlg.style.getPropertyValue(prop), dlg.style.getPropertyPriority(prop)];
+      dlg.style.setProperty(prop, off, "important");
+    }
+  }
+  dlg.__reviewKept = kept;
+}
+function unpin(dlg) {
+  for (const [prop, [v, prio]] of Object.entries(dlg.__reviewKept || {})) {
+    if (v) dlg.style.setProperty(prop, v, prio);
+    else dlg.style.removeProperty(prop);
+  }
+  delete dlg.__reviewKept;
+}
+/* every open modal dialog, in the page and inside open shadow roots (a web component's drawer keeps its <dialog>
+   in its own shadow); the newest one is on top */
+const modalSeen = new WeakMap();
+let modalSeq = 0;
+function modalsIn(root, out, pops) {
+  for (const d of root.querySelectorAll("dialog[open]")) if (d.matches(":modal")) out.push(d);
+  if (pops) for (const el of root.querySelectorAll(":popover-open")) if (el !== host) pops.push(el);
+  for (const el of root.querySelectorAll("*")) if (el.shadowRoot && el !== host) modalsIn(el.shadowRoot, out, pops);
+  return out;
+}
+const popSeen = new WeakSet();
+setInterval(() => {
+  let modal = null;
+  const pops = [];
+  for (const d of modalsIn(document, [], pops)) {
+    if (d.contains(host)) continue;
+    if (!modalSeen.has(d)) modalSeen.set(d, ++modalSeq);
+    if (!modal || modalSeen.get(d) > modalSeen.get(modal)) modal = d;
+  }
+  if (host.parentNode?.matches?.("dialog[open]") && host.parentNode.matches(":modal") && (!modal || modalSeen.get(host.parentNode) >= (modalSeen.get(modal) || 0))) modal = null; // already in the topmost
+  const inside = host.parentNode !== document.body;
+  if (modal) {
+    asPopover(false);
+    if (host.parentNode?.__reviewKept) unpin(host.parentNode);
+    modal.appendChild(host);
+    pinTo(modal);
+  } else if (inside && !(host.parentNode?.matches?.("dialog[open]:modal"))) {
+    if (host.parentNode?.__reviewKept) unpin(host.parentNode);
+    document.body.appendChild(host);
+    asPopover(true);
+  } else if (!inside && host.showPopover && !host.matches(":popover-open")) asPopover(true); // closed by a page's hidePopover-all: back
+  /* a page popover (a menu, a select's list) that opened after us is above us: shown again, we are above it */
+  let newer = false;
+  for (const el of pops) if (!popSeen.has(el)) { popSeen.add(el); newer = true; }
+  if (newer && !inside && host.showPopover) {
+    asPopover(false);
+    asPopover(true);
+  }
+}, 500);
+const root = host.attachShadow({ mode: "open" });
+root.innerHTML = `
+<style>
+  :host { all: initial;
+    --tag-must-ink: var(--mdt-badge-danger-ink, #b51225); --tag-must-dot: var(--mdt-badge-danger-dot, #d92638); --tag-must-fill: var(--mdt-badge-danger-fill, #fde8ec);
+    --tag-should-ink: var(--mdt-badge-warning-ink, #9f6404); --tag-should-dot: var(--mdt-badge-warning-dot, #fdb13f); --tag-should-fill: var(--mdt-badge-warning-fill, #fff3d6);
+    --tag-idea-ink: var(--mdt-badge-info-ink, #1d4ed8); --tag-idea-dot: var(--mdt-badge-info-dot, #2f6fe4); --tag-idea-fill: var(--mdt-badge-info-fill, #e6f1ff);
+    --tag-question-ink: var(--mdt-badge-neutral-ink, #1d2b3e); --tag-question-dot: var(--mdt-badge-neutral-dot, #b6c2d6); --tag-question-fill: var(--mdt-badge-neutral-fill, #eef0f3);
+  }
+  * { box-sizing: border-box; }
+  .ui { font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #1d2b3e; }
+  .hover { position: fixed; pointer-events: none; border: 2px solid #e11d48; border-radius: 4px; box-shadow: 0 0 0 1px #fff, inset 0 0 0 1px #fff; display: none; transition: top .04s, left .04s, width .04s, height .04s; }
+  .hover.on { display: block; }
+  .hover .tag { position: absolute; left: -2px; top: -24px; background: #1d2b3e; color: #fff; font: 500 11px/20px -apple-system, system-ui, sans-serif; padding: 0 7px; border-radius: 4px 4px 0 0; white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
+  .hover.flip .tag { top: auto; bottom: -24px; border-radius: 0 0 4px 4px; }
+  :host([data-composing]) .hover .tag { display: none; } /* the pin's label says it; the outline stays */
+  .pin { position: fixed; pointer-events: auto; cursor: default; width: 22px; height: 22px; border-radius: 50%; background: #e11d48; color: #fff; font: 700 11px/22px -apple-system, system-ui, sans-serif; text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.25); transform: translate(-8px, -8px); }
+  .pin.faded { opacity: .55; }
+  .pin-wrap { position: fixed; inset: 0; pointer-events: none; }
+  .pin-wrap.ghost .pin-box { border-style: dotted; opacity: .5; }
+  .pin-wrap.ghost .pin { opacity: .6; }
+  .pin-box { position: fixed; pointer-events: none; border: 1px dashed rgba(225,29,72,.55); border-radius: 4px; }
+  .pin:hover { opacity: 1; }
+  .pin.flash { opacity: 1; animation: rv-pulse 1s ease-out 3; }
+  .pin-box.flash { border: 2px solid #e11d48; animation: rv-pulse 1s ease-out 3; }
+  @keyframes rv-pulse { 0% { box-shadow: 0 0 0 0 rgba(225,29,72,.55); } 100% { box-shadow: 0 0 0 14px rgba(225,29,72,0); } }
+  .card-n.out { cursor: pointer; }
+  .card-n.out:hover { background: #1d2b3e; color: #fff; }
+  /* the pin's card: the comment under its pin, dressed like the composer (the same dark surface, the same tag pill,
+     the same well for the text). At rest it is the tag and the comment. The hover brings the other tags into the
+     pill, the list arrow and the actions row, each fading or sliding in so nothing already shown moves. */
+  .pin-tip { position: fixed; pointer-events: auto; z-index: 1; width: 300px; background: hsl(var(--mdt-neutral-130, 216 36% 18%)); color: #fff; border-radius: 10px; padding: 12px; font: 13px/1.45 -apple-system, system-ui, sans-serif; box-shadow: 0 16px 40px rgba(0,0,0,.35); display: none; }
+  .pin-tip.on { display: block; }
+  .pin-tip .tip-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  /* the tag pill (the composer's): the picked one named and first, the other three slide in after it on hover; a
+     switch puts the new one first at once (Nirav, 2026-10-21: this over a fixed order and over a glide) */
+  .pin-tip .tip-sev { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 999px; background: hsl(var(--mdt-black, 218 61% 7%) / .45); margin-right: auto; }
+  .pin-tip .tip-sev button { position: relative; height: 24px; width: 24px; padding: 0; margin: 0; border: 0; border-radius: 999px; background: transparent; color: #fff; font: 500 11px/24px -apple-system, system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; white-space: nowrap; transition: width .18s ease, opacity .18s ease, margin .18s ease, padding .2s ease, background-color .2s ease; }
+  /* the name unfolds beside the dot of the picked one and folds away on the one just left, so a switch glides */
+  .pin-tip .tip-sev button .lbl { display: block; max-width: 0; margin-left: 0; overflow: hidden; opacity: 0; transition: max-width .2s ease, margin .2s ease, opacity .15s ease; }
+  .pin-tip .tip-sev button.on { order: -1; width: auto; padding: 0 10px 0 8px; background: rgba(255,255,255,.16); cursor: default; }
+  .pin-tip .tip-sev button.on .lbl { max-width: 90px; margin-left: 6px; opacity: 1; }
+  .pin-tip .tip-sev button:not(.on) { width: 0; margin-left: -2px; opacity: 0; pointer-events: none; }
+  .pin-tip:hover .tip-sev button:not(.on), .pin-tip.held .tip-sev button:not(.on) { width: 24px; margin-left: 0; opacity: 1; pointer-events: auto; }
+  .pin-tip .tip-sev button:not(.on):hover { background: rgba(255,255,255,.08); }
+  .pin-tip .tip-sev button:not(.on):hover .scope-tip { opacity: 1; }
+  .pin-tip .tip-sev .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .pin-tip .tip-sev button[data-k="must"] .dot { background: var(--tag-must-dot); } .pin-tip .tip-sev button[data-k="should"] .dot { background: var(--tag-should-dot); } .pin-tip .tip-sev button[data-k="idea"] .dot { background: var(--tag-idea-dot); } .pin-tip .tip-sev button[data-k="question"] .dot { background: var(--tag-question-dot); }
+  /* the list arrow keeps its slot at rest and fades in */
+  .pin-tip .tip-open { width: 24px; height: 24px; padding: 0; margin-right: -4px; border: 0; border-radius: 6px; background: transparent; color: hsl(var(--mdt-neutral-50, 216 30% 80%)); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .18s ease; }
+  .pin-tip:hover .tip-open, .pin-tip.held .tip-open { opacity: 1; }
+  .pin-tip .tip-open:hover { background: rgba(255,255,255,.1); color: #fff; }
+  /* the text in the composer's well */
+  .pin-tip .tip-text { white-space: pre-wrap; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 6px 10px; background: hsl(var(--mdt-black, 218 61% 7%) / .45); cursor: text; outline: none; transition: border-color .12s, box-shadow .12s; }
+  .pin-tip .tip-text:hover { border-color: rgba(255,255,255,.18); }
+  .pin-tip .tip-note { margin-top: 6px; padding: 4px 10px; border-left: 2px solid hsl(var(--mdt-badge-warning-ink, 36 95% 32%) / .8); font-size: 12px; line-height: 1.4; color: hsl(var(--mdt-neutral-30, 216 30% 88%)); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pin-tip .tip-text[contenteditable="true"] { border-color: hsl(var(--mdt-info, 214 98% 44%)); box-shadow: 0 0 0 1px hsl(var(--mdt-info, 214 98% 44%)); }
+  /* the actions row unfolds under the text */
+  .pin-tip .tip-acts { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .18s ease; }
+  .pin-tip:hover .tip-acts, .pin-tip.held .tip-acts { grid-template-rows: 1fr; }
+  .pin-tip .tip-acts-in { min-height: 0; overflow: hidden; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+  .pin-tip .tip-acts button { height: 28px; margin-top: 10px; border: 0; border-radius: 8px; padding: 0 12px; background: transparent; color: hsl(var(--mdt-neutral-50, 216 30% 80%)); font: 500 12px/28px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .pin-tip .tip-acts button:hover { color: #fff; }
+  .pin-tip .tip-acts .tip-ok { background: hsl(var(--mdt-info, 214 98% 44%)); color: #fff; padding: 0 14px; border-radius: 999px; }
+  .pin-tip .tip-acts .tip-ok:hover { filter: brightness(1.08); }
+  .pin-tip .tip-acts .tip-rm.sure { background: #e11d48; color: #fff; border-radius: 999px; }
+  .pin { cursor: pointer; }
+  /* the card the pin pointed at, once the list opens on it */
+  .card.spot { animation: rv-spot 1.1s ease-out 2; }
+  @keyframes rv-spot { 0% { box-shadow: 0 0 0 0 hsl(var(--mdt-info, 214 98% 44%) / .6); } 100% { box-shadow: 0 0 0 10px hsl(var(--mdt-info, 214 98% 44%) / 0); } }
+  /* the comment box, dark, on the product's own surfaces: the number a pin above it; the place a faint small line;
+     the tags first, then the text on a darker well with the info-blue ring; Cancel plain, Save the info-blue pill */
+  .composer { position: fixed; pointer-events: auto; width: 320px; background: hsl(var(--mdt-neutral-130, 216 36% 18%)); color: #fff; border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.35); padding: 12px 12px 12px; display: none; }
+  .composer.on { display: block; }
+  /* the pin's row, above the box: the blue number, then the place as a small dark label beside it */
+  .composer .pin-row { position: absolute; top: -34px; left: 0; display: flex; align-items: center; gap: 6px; max-width: 100%; }
+  .composer .num { width: 26px; height: 26px; border-radius: 50%; background: hsl(var(--mdt-info, 214 98% 44%)); color: #fff; font-weight: 700; font-size: 12px; line-height: 26px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,.3), 0 0 0 2px #fff; flex: 0 0 auto; }
+  .composer .what { height: 22px; padding: 0 8px; border-radius: 6px; background: hsl(var(--mdt-neutral-130, 216 36% 18%)); color: hsl(var(--mdt-neutral-50, 216 30% 80%)); font: 400 11px/22px -apple-system, system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+  .composer .what b { font-weight: 600; color: #fff; }
+  /* the tags (the Agent Fleet trial's form): the picked one carries its name, the others are dots, named on hover */
+  .composer .sev { margin: 0 0 8px; display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: hsl(var(--mdt-black, 218 61% 7%) / .45); }
+  .composer .sev button { position: relative; height: 24px; width: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 999px; background: transparent; font: 500 11px/24px -apple-system, system-ui, sans-serif; color: #fff; cursor: pointer; white-space: nowrap; transition: width .15s, padding .15s; }
+  .composer .sev button .lbl { display: none; }
+  .composer .sev button.on { width: auto; padding: 0 10px 0 8px; background: rgba(255,255,255,.16); }
+  .composer .sev button.on .lbl { display: inline; }
+  .composer .sev button:not(.on):hover { background: rgba(255,255,255,.08); }
+  .composer .sev button:not(.on) .scope-tip { top: calc(100% + 6px); }
+  .composer .sev button:not(.on):hover .scope-tip { opacity: 1; }
+  .composer .sev .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .composer .sev button[data-k="must"] .dot { background: var(--tag-must-dot); } .composer .sev button[data-k="should"] .dot { background: var(--tag-should-dot); } .composer .sev button[data-k="idea"] .dot { background: var(--tag-idea-dot); } .composer .sev button[data-k="question"] .dot { background: var(--tag-question-dot); }
+  .composer textarea { width: 100%; min-height: 72px; resize: vertical; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 8px 10px; background: hsl(var(--mdt-black, 218 61% 7%) / .45); font: 13px/1.45 -apple-system, system-ui, sans-serif; color: #fff; outline: none; box-sizing: border-box; transition: border-color .12s, box-shadow .12s; }
+  .composer textarea::placeholder { color: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
+  .composer textarea:focus { border-color: hsl(var(--mdt-info, 214 98% 44%)); box-shadow: 0 0 0 1px hsl(var(--mdt-info, 214 98% 44%)); }
+  .actions { display: flex; justify-content: flex-end; gap: 4px; align-items: center; margin-top: 10px; }
+  .btn { height: 28px; border: 0; background: transparent; color: hsl(var(--mdt-neutral-50, 216 30% 80%)); border-radius: 8px; padding: 0 12px; font: 500 12px/28px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .btn:hover { color: #fff; }
+  .btn.primary { background: hsl(var(--mdt-info, 214 98% 44%)); color: #fff; padding: 0 14px; border-radius: 999px; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .bar { position: fixed; left: 0; top: 0; pointer-events: auto; touch-action: none; cursor: grab; user-select: none; display: flex; align-items: center; gap: 6px; height: 38px; background: #1d2b3e; color: #fff; border-radius: 999px; padding: 0 8px 0 14px; box-shadow: 0 6px 20px rgba(0,0,0,.28); white-space: nowrap; }
+  .bar.dragging { cursor: grabbing; box-shadow: 0 10px 28px rgba(0,0,0,.35); }
+  .bar.hidden { display: none; }
+  .bar .dot { width: 8px; height: 8px; border-radius: 50%; background: #e11d48; margin-right: 2px; border: 0; padding: 0; cursor: pointer; }
+  .bar .brand { display: inline-flex; align-items: center; gap: 6px; }
+  /* the two satellites (Nirav, 2026-10-21): hover the bar and a round hide-eye floats out on its left, a round
+     minimise × on its right, each its own disc a little apart from the bar, in the bar's look. While the bar is
+     hovered it grows an invisible reach across the gaps so the pointer can cross to them. */
+  .bar:hover::before { content: ""; position: absolute; inset: -8px -46px; border-radius: 999px; }
+  .bar > * { position: relative; } /* above the reach, so the buttons keep their clicks */
+  .bar .sat { position: absolute; top: 50%; width: 30px; height: 30px; margin-top: -15px; padding: 0; border: 0; border-radius: 50%; background: #1d2b3e; color: #cfd8e6; box-shadow: 0 6px 20px rgba(0,0,0,.28); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease, background-color .12s; }
+  .bar .sat.off { right: calc(100% + 8px); transform: translateX(8px) scale(.9); }
+  .bar .sat.dock { left: calc(100% + 8px); transform: translateX(-8px) scale(.9); }
+  .bar:hover .sat { opacity: 1; transform: none; pointer-events: auto; }
+  .bar .sat:hover { background: #26364d; color: #fff; }
+  .bar .sat .scope-tip { top: auto; bottom: calc(100% + 8px); }
+  .bar .sat:hover .scope-tip { opacity: 1; }
+  /* docked at an edge: a round button with the comment glyph, the status dot and the count */
+  .bar-mini { position: fixed; left: 0; top: 0; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #1d2b3e; color: #fff; display: none; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,.28); pointer-events: auto; cursor: pointer; touch-action: none; user-select: none; padding: 0; }
+  .bar-mini.on { display: inline-flex; animation: rv-pop .28s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes rv-pop { from { transform: scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+  /* the glyph lives a little: the sparkle turns and breathes now and then, and under the pointer; the lines settle in */
+  .bar-mini .glyph { overflow: visible; }
+  .bar-mini .spark { transform-box: fill-box; transform-origin: center; animation: rv-twinkle 6s ease-in-out infinite; }
+  .bar-mini:hover .spark { animation: rv-twinkle 1.2s ease-in-out infinite; }
+  @keyframes rv-twinkle { 0%, 78%, 100% { transform: scale(1) rotate(0deg); opacity: 1; } 86% { transform: scale(1.35) rotate(25deg); opacity: .85; } 93% { transform: scale(.85) rotate(45deg); opacity: 1; } }
+  .bar-mini .l1, .bar-mini .l2, .bar-mini .l3 { stroke-dasharray: 20; stroke-dashoffset: 0; }
+  .bar-mini.on .l1 { animation: rv-draw .5s ease-out both; } .bar-mini.on .l2 { animation: rv-draw .5s .08s ease-out both; } .bar-mini.on .l3 { animation: rv-draw .5s .16s ease-out both; }
+  .bar-mini:hover .l1 { animation: rv-draw .4s ease-out both; } .bar-mini:hover .l2 { animation: rv-draw .4s .06s ease-out both; } .bar-mini:hover .l3 { animation: rv-draw .4s .12s ease-out both; }
+  @keyframes rv-draw { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+  .bar-mini:hover { background: #26364d; }
+  .bar-mini .mini-dot { position: absolute; top: 2px; right: 2px; width: 10px; height: 10px; border-radius: 50%; background: #e11d48; box-shadow: 0 0 0 2px #1d2b3e; }
+  .bar-mini .mini-dot.live { background: #22c55e; }
+  .bar-mini .mini-n { position: absolute; bottom: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: #fff; color: #1d2b3e; font: 600 10px/16px -apple-system, system-ui, sans-serif; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.3); display: none; }
+  .bar-mini .mini-n.on { display: block; }
+  .bar .dot.live { background: #22c55e; cursor: default; }
+  .bar b { font-weight: 600; font-size: 12px; }
+  .bar .k { color: #9fb0c9; font-size: 12px; margin-left: 4px; }
+  .bar .list .count { margin-left: 6px; font-weight: 500; color: #9fb0c9; }
+  .bar .list.on .count { color: #5b6b85; }
+  .bar .sep { width: 1px; height: 18px; background: rgba(255,255,255,.18); margin: 0 4px; }
+  .bar button { border: 0; background: transparent; color: #cfd8e6; border-radius: 999px; height: 26px; padding: 0 10px; font: 500 12px/26px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .bar button:hover { background: rgba(255,255,255,.1); color: #fff; }
+  .bar button.on { background: #fff; color: #1d2b3e; }
+  .bar button.min { width: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #9fb0c9; }
+  .bar button.min:hover { color: #fff; background: rgba(255,255,255,.1); }
+  .bar button.sticky.on { background: #e11d48; color: #fff; }
+  .bar button.share { color: #fff; background: #e11d48; }
+  .bar button.share.live { background: transparent; color: #9fb0c9; }
+  .bar button.share.live::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #22c55e; margin-right: 6px; vertical-align: 1px; }
+  .toast { position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%); pointer-events: none; background: #1d2b3e; color: #fff; border-radius: 8px; padding: 6px 12px; opacity: 0; transition: opacity .15s; }
+  .toast.on { opacity: 1; }
+  .toast.busy::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; margin-right: 10px; vertical-align: -1px; animation: rv-spin .8s linear infinite; }
+  @keyframes rv-spin { to { transform: rotate(360deg); } }
+  /* the product's drawer: a veil over the page, the sheet sliding in from the right */
+  .panel-veil { position: fixed; inset: 0; background: hsl(var(--mdt-black, 218 61% 7%) / .25); pointer-events: auto; opacity: 0; visibility: hidden; transition: opacity .2s ease-out, visibility 0s linear .2s; z-index: 1; }
+  .panel-veil.on { opacity: 1; visibility: visible; transition: opacity .2s ease-out; }
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 100vw; background: #fff; color: #1d2b3e; box-shadow: -12px 0 32px rgba(29,43,62,.18); pointer-events: auto; display: flex; flex-direction: column; z-index: 2; transform: translateX(100%); visibility: hidden; transition: transform .22s cubic-bezier(.32,.72,0,1), visibility 0s linear .22s; }
+  .panel.on { transform: none; visibility: visible; transition: transform .22s cubic-bezier(.32,.72,0,1); }
+  .panel-head { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; }
+  /* the title opens the panel as a page: on hover a dotted underline and the arrow beside it, with the instant tooltip */
+  .panel-title { position: relative; display: inline-flex; align-items: center; gap: 5px; margin-right: auto; font-size: 14px; font-weight: 600; color: inherit; text-decoration: none; cursor: pointer; }
+  .panel-title .txt { text-decoration: underline dotted transparent; text-underline-offset: 3px; text-decoration-thickness: 1px; transition: text-decoration-color .12s; }
+  .panel-title svg { color: hsl(var(--mdt-neutral-70, 216 25% 65%)); opacity: 0; transition: opacity .12s; }
+  .panel-title:hover .txt { text-decoration-color: hsl(var(--mdt-neutral-90, 215 20% 45%)); }
+  .panel-title:hover svg { opacity: 1; }
+  .panel-title .scope-tip { left: 0; transform: none; }
+  .panel-title:hover .scope-tip { opacity: 1; }
+  :host([data-page]) .panel-title { pointer-events: none; }
+  :host([data-page]) .panel-title svg { display: none; }
+  /* the two copy buttons: the products' own marks (Claude's from simple-icons, Loop's own favicon) in a bordered
+     square, so they read as buttons; the instant tooltip names what each does */
+  .panel-copy { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid hsl(var(--mdt-neutral-30, 217 44% 90%)); border-radius: 6px; background: #fff; cursor: pointer; }
+  .panel-copy:hover { border-color: hsl(var(--mdt-neutral-90, 215 20% 45%)); background: hsl(var(--mdt-neutral-10, 210 50% 98%)); }
+  /* the marks rest in the panel's grey and take their own colours on hover */
+  .panel-copy .logo-claude { fill: hsl(var(--mdt-neutral-70, 216 25% 65%)); transition: fill .12s; }
+  .panel-copy:hover .logo-claude, .panel-copy.busy .logo-claude, .panel-copy.done .logo-claude { fill: #D97757; }
+  .panel-copy .logo-loop-rest { fill: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
+  .panel-copy .logo-loop { display: none; }
+  .panel-copy:hover .logo-loop-rest, .panel-copy.busy .logo-loop-rest, .panel-copy.done .logo-loop-rest { display: none; }
+  .panel-copy:hover .logo-loop, .panel-copy.busy .logo-loop, .panel-copy.done .logo-loop { display: block; }
+  .panel-copy:hover .scope-tip, .panel-copy.done .scope-tip { opacity: 1; }
+  .panel-copy.busy .scope-tip { opacity: 0; }
+  .panel-copy .scope-tip { left: auto; right: 0; transform: none; }
+  /* while it copies: the border itself is the loading state, a dash in the product's colour running round the square */
+  .panel-copy .ring { position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); display: none; fill: none; stroke: var(--ring); stroke-width: 1.5; stroke-dasharray: 28 72; stroke-linecap: round; animation: rv-ring .9s linear infinite; }
+  .panel-copy.busy { pointer-events: none; border-color: hsl(var(--mdt-neutral-20, 214 40% 95%)); }
+  .panel-copy.busy .ring { display: block; }
+  .panel-copy[data-kind="prompt"] { --ring: #D97757; }
+  .panel-copy[data-kind="loop"] { --ring: #7B3FE4; }
+  @keyframes rv-ring { to { stroke-dashoffset: -100; } }
+  .panel-copy.done { border-color: hsl(var(--mdt-success, 136 53% 43%)); box-shadow: 0 0 0 2px hsl(var(--mdt-success, 136 53% 43%) / .18); }
+  .panel-copy .more { position: absolute; top: -3px; right: -4px; display: none; padding: 0 3px; border-radius: 6px; background: #1d2b3e; color: #fff; font: 600 9px/12px -apple-system, system-ui, sans-serif; font-style: normal; }
+  .panel-copy .more:not(:empty) { display: block; }
+  /* the head is one plane: title and filter together, white, a soft edge below it that deepens once the list scrolls */
+  .panel-bar { display: flex; align-items: center; gap: 10px; padding: 6px 16px 12px; border-bottom: 1px solid hsl(var(--mdt-neutral-20, 214 40% 95%)); position: relative; z-index: 1; background: #fff; transition: box-shadow .15s, border-color .15s; }
+  /* the edge and the shadow only once something has gone under the head (the scope band's divider rule) */
+  .panel[data-scrolled] .panel-bar { box-shadow: 0 6px 16px -8px rgba(29,43,62,.18); }
+  .panel-scope { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; }
+  /* the Organizations page's switcher (the scope band's variant a): a 28 pill on neutral-20, two words, the picked
+     one lifted white in the primary ink; then the crumb: a 16 mark, the word, a chevron, dotted underline on hover.
+     The library's tokens reach the shadow root (custom properties inherit), with fallbacks for safety. */
+  .scope-switch { display: inline-flex; align-items: center; height: 28px; padding: 2px; gap: 2px; border-radius: 999px; background: hsl(var(--mdt-neutral-20, 214 40% 95%)); flex: 0 0 auto; box-sizing: border-box; }
+  .scope-switch .side { position: relative; width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999px; background: transparent; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); cursor: pointer; }
+  .scope-tip { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1d2b3e; color: #fff; font: 500 11px/16px -apple-system, system-ui, sans-serif; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .08s; z-index: 3; }
+  .scope-switch .side:hover .scope-tip { opacity: 1; }
+  /* hover on any side: the white ground without the pressed side's lift, and the ink darkens */
+  .scope-switch .side:hover { background: hsl(var(--mdt-background, 0 0% 100%) / .7); color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
+  .scope-switch .side[aria-pressed="true"]:hover { background: hsl(var(--mdt-background, 0 0% 100%)); }
+  .tag-switch .tag:hover b { color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
+  .tag-switch .tag:disabled { cursor: default; background: transparent; }
+  .tag-switch .tag:disabled .dot { opacity: .3; }
+  .tag-switch .tag:disabled b { color: hsl(var(--mdt-neutral-50, 216 30% 80%)); }
+  .tag-switch .tag:disabled .scope-tip { display: none; }
+  .scope-switch .side[aria-pressed="true"] { background: hsl(var(--mdt-background, 0 0% 100%)); color: hsl(var(--mdt-primary, 214 98% 44%)); box-shadow: 0 1px 2px rgba(29,43,62,.12); }
+  /* the crumb: its own pill on the neutral-20 ground, 28 like the switcher, no edge at rest; the edge and the darker
+     ink under the pointer or while open. Between the two, the breadcrumb's own "›" in the faint ink */
+  .scope-sep { display: inline-flex; align-items: center; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); margin: 0 4px; flex: 0 0 auto; }
+  .scope-crumb { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 1px solid transparent; border-radius: 999px; background: hsl(var(--mdt-neutral-20, 214 40% 95%)); color: hsl(var(--mdt-neutral-90, 215 20% 45%)); font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; white-space: nowrap; box-sizing: border-box; }
+  .scope-crumb b { font-weight: 500; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
+  .scope-crumb:hover, .scope-crumb[aria-expanded="true"] { border-color: hsl(var(--mdt-neutral-90, 215 20% 45%)); color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
+  .scope-crumb > svg:last-child { color: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
+  .scope-menu { position: absolute; top: calc(100% + 6px); left: 76px; width: 300px; max-height: min(360px, calc(100vh - 160px)); overflow: auto; background: #fff; border: 1px solid #dbe3ef; border-radius: 10px; box-shadow: 0 12px 32px rgba(29,43,62,.18); padding: 6px; z-index: 2; }
+  .scope-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; color: #1d2b3e; outline: none; }
+  .scope-item b { font-weight: 500; color: #8fa0bd; flex: 0 0 auto; }
+  .scope-item:hover, .scope-item:focus { background: #f7fafc; }
+  .scope-item.on { background: #ecf1f9; }
+  /* the two views, drawn as a distinct two-line block above the places */
+  .scope-view { height: 44px; padding: 4px 8px; }
+  .scope-view .lines { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .scope-view .sub { font-size: 11px; color: #8fa0bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scope-view .mark { width: 26px; height: 26px; border-radius: 6px; background: #ecf1f9; color: #1d2b3e; display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; flex: 0 0 auto; }
+  /* on the picked row the tile would sink into the row's own fill: it goes dark, the glyph white (the scope list's
+     inverted view tiles) */
+  .scope-view.on .mark { background: #1d2b3e; color: #fff; }
+  .scope-view:hover .mark { background: #fff; box-shadow: 0 0 0 1px #e4eaf3; }
+  .scope-view.on:hover .mark { background: #1d2b3e; box-shadow: none; }
+  .scope-view .lead { display: flex; align-items: center; min-width: 0; }
+  .scope-rule { height: 1px; background: #ecf1f9; margin: 6px -6px; }
+  .scope-group { font-weight: 600; margin-top: 2px; }
+  .scope-page { padding-left: 22px; }
+  .panel-filter { display: flex; flex-wrap: nowrap; gap: 6px; flex: 0 0 auto; margin-left: auto; }
+  .tag-switch .tag { width: auto; padding: 0 9px 0 8px; gap: 5px; font: 500 12px/24px -apple-system, system-ui, sans-serif; color: hsl(var(--mdt-neutral-90, 215 20% 45%)); }
+  .tag-switch .tag b { font-weight: 500; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
+  .tag-switch .tag[aria-pressed="true"] b { color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
+  .tag-switch .dot { width: 8px; height: 8px; border-radius: 50%; background: #8fa0bd; flex: 0 0 auto; }
+  /* TRIAL (Nirav, 2026-10-20): once a tag is pressed, the ones left out go quiet: dot and count at half strength */
+  .tag-switch[data-narrowed] .tag[aria-pressed="false"] .dot { opacity: .4; }
+  .tag-switch[data-narrowed] .tag[aria-pressed="false"] b { color: hsl(var(--mdt-neutral-50, 216 30% 80%)); }
+  .tag-switch[data-narrowed] .tag[aria-pressed="false"]:hover .dot { opacity: 1; }
+  .tag-switch[data-narrowed] .tag[aria-pressed="false"]:hover b { color: hsl(var(--mdt-neutral-90, 215 20% 45%)); }
+  .tag-switch .tag[data-k="all"] .dot { background: transparent; box-shadow: inset 0 0 0 2px #8fa0bd; }
+  .tag-switch .tag[data-k="all"][aria-pressed="true"] .dot { box-shadow: inset 0 0 0 2px #1d2b3e; }
+  .tag-switch .tag[data-k="must"] .dot { background: var(--tag-must-dot); } .tag-switch .tag[data-k="should"] .dot { background: var(--tag-should-dot); } .tag-switch .tag[data-k="idea"] .dot { background: var(--tag-idea-dot); } .tag-switch .tag[data-k="question"] .dot { background: var(--tag-question-dot); }
+  /* the list is a well: the neutral-10 ground, the cards white on it */
+  .panel-body { overflow: auto; padding: 16px 16px 24px; flex: 1; background: hsl(var(--mdt-neutral-10, 210 50% 98%)); }
+  .panel-empty { color: #8fa0bd; padding: 24px 8px; text-align: center; }
+  .card { border: 1px solid #ecf1f9; border-radius: 10px; padding: 9px 14px 12px; margin-bottom: 16px; background: #fff; }
+  .card.here { border-color: #dbe3ef; }
+  .card-n { width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(29,43,62,.06); color: #1d2b3e; font-weight: 600; font-size: 11px; line-height: 22px; text-align: center; flex: 0 0 auto; }
+  .card-n.away { color: #8fa0bd; }
+  .card-sev { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #ecf1f9; color: #5b6b85; cursor: pointer; border: 0; }
+  .card-sev[data-k="must"] { background: var(--tag-must-fill); color: var(--tag-must-ink); } .card-sev[data-k="should"] { background: var(--tag-should-fill); color: var(--tag-should-ink); } .card-sev[data-k="idea"] { background: var(--tag-idea-fill); color: var(--tag-idea-ink); } .card-sev[data-k="question"] { background: var(--tag-question-fill); color: var(--tag-question-ink); }
+  .card-text { font-size: 14px; line-height: 1.5; color: #1d2b3e; margin: 0 0 10px; white-space: pre-wrap; border-radius: 6px; padding: 2px 4px; margin-left: -4px; box-shadow: 0 0 0 1px transparent; }
+  .card-text:hover { background: hsl(var(--mdt-neutral-10, 210 50% 98%)); box-shadow: 0 0 0 1px #e4eaf3; }
+  .card-text[contenteditable="true"] { background: #fff; outline: 2px solid #2563eb; outline-offset: 0; }
+  .card-shot { display: block; width: 100%; border: 1px solid #ecf1f9; border-radius: 6px; cursor: zoom-in; }
+  .card-c { position: relative; margin-left: 32px; }
+  .card-c .card-pic { position: relative; container-type: inline-size; }
+  /* the number, drawn live over the picture at the badge's own spot (the same geometry the baked ones had, so it
+     covers them exactly); sized in container units so it scales with the picture */
+  .pic-n { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; background: #e11d48; color: #fff; font-weight: 700; text-align: center; box-shadow: 0 0 0 0.15em #fff; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+  /* the tag on the picture: a 22 pill holding the tag's dot; it grows to show its name under the pointer, and a click
+     still cycles it */
+  .card-c .card-sev.on-pic { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 999px; box-shadow: 0 1px 3px rgba(29,43,62,.18); background: #fff; transition: padding .15s; }
+  .card-c .card-sev.on-pic .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .card-c .card-sev.on-pic .lbl { max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; margin-left: 0; transition: max-width .18s ease, opacity .12s ease, margin-left .18s ease; }
+  .card-c .card-sev.on-pic:hover { padding: 0 9px 0 7px; }
+  .card-c .card-sev.on-pic:hover .lbl { max-width: 96px; opacity: 1; margin-left: 6px; }
+  .card-c .card-sev.on-pic[data-k="must"] { background: var(--tag-must-fill); } .card-c .card-sev.on-pic[data-k="must"] .dot { background: var(--tag-must-dot); }
+  .card-c .card-sev.on-pic[data-k="should"] { background: var(--tag-should-fill); } .card-c .card-sev.on-pic[data-k="should"] .dot { background: var(--tag-should-dot); }
+  .card-c .card-sev.on-pic[data-k="idea"] { background: var(--tag-idea-fill); } .card-c .card-sev.on-pic[data-k="idea"] .dot { background: var(--tag-idea-dot); }
+  .card-c .card-sev.on-pic[data-k="question"] { background: var(--tag-question-fill); } .card-c .card-sev.on-pic[data-k="question"] .dot { background: var(--tag-question-dot); }
+  .card-medium .card-text { font-weight: 500; line-height: 1.35; }
+  /* a corner accent in the tag's colour: a fine arc hugging the top-left corner whose two legs fade out,
+     over a faint wash of the same colour in the corner */
+  .card-c.card-rail { --accent: #8fa0bd; }
+  .card-c.card-rail[data-k="must"] { --accent: var(--tag-must-dot); } .card-c.card-rail[data-k="should"] { --accent: var(--tag-should-dot); } .card-c.card-rail[data-k="idea"] { --accent: var(--tag-idea-dot); } .card-c.card-rail[data-k="question"] { --accent: var(--tag-question-dot); }
+  /* the arc is a tapered shape (2px at the corner, nothing at the ends) cut out of the accent colour by an SVG
+     mask that also fades it along both legs */
+  .card-c.card-rail::before { content: ""; position: absolute; top: -1px; left: -1px; width: 56px; height: 56px; pointer-events: none; background: var(--accent); -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 56'><defs><linearGradient id='g' gradientUnits='userSpaceOnUse' x1='0' y1='0' x2='30' y2='30'><stop offset='0' stop-color='%23fff'/><stop offset='1' stop-color='%23fff' stop-opacity='0'/></linearGradient></defs><path d='M0 56 V10 A10 10 0 0 1 10 0 H56 L10 2.2 A7.8 7.8 0 0 0 2.2 10 Z' fill='url(%23g)'/></svg>") no-repeat 0 0 / 56px 56px; mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 56'><defs><linearGradient id='g' gradientUnits='userSpaceOnUse' x1='0' y1='0' x2='30' y2='30'><stop offset='0' stop-color='%23fff'/><stop offset='1' stop-color='%23fff' stop-opacity='0'/></linearGradient></defs><path d='M0 56 V10 A10 10 0 0 1 10 0 H56 L10 2.2 A7.8 7.8 0 0 0 2.2 10 Z' fill='url(%23g)'/></svg>") no-repeat 0 0 / 56px 56px; }
+  .card-c.card-rail::after { content: ""; position: absolute; top: -1px; left: -1px; width: 96px; height: 52px; pointer-events: none; border-top-left-radius: 10px; background: radial-gradient(ellipse 96px 52px at 0 0, color-mix(in srgb, var(--accent) 11%, transparent) 0, transparent 100%); }
+  .card-c.card-rail-right::before { left: auto; right: -1px; transform: scaleX(-1); }
+  /* mirrored with scaleX(-1), so the element's top-LEFT radius lands on the card's top-right corner */
+  .card-c.card-rail-right::after { left: auto; right: -1px; border-top-left-radius: 10px; transform: scaleX(-1); }
+  .card.card-fill, .card.here.card-fill { border-color: transparent; background: #fff; box-shadow: 0 1px 2px rgba(29,43,62,.06); }
+  .card-fill .card-shot { border-color: #e4eaf3; }
+  .card-fill .card-rm { background: transparent; }
+  .card-c .card-line { margin-bottom: 10px; }
+  /* SELECTION (Nirav, 2026-10-21): a check at the card's top-right, seen on hover or once picked; the copies then
+     take the picked cards only. The picked card wears a soft info ring. The count sits in the head, by the copy
+     buttons it narrows. */
+  .card-c .card-line { padding-right: 30px; } /* room for the check at the top-right, so the text never runs under it */
+  .card-pick { position: absolute; z-index: 1; right: 12px; top: 11px; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1.5px solid hsl(var(--mdt-neutral-70, 216 25% 65%)); background: #fff; box-shadow: 0 0 0 2px #fff; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .12s, background-color .12s, border-color .12s; }
+  .card:hover .card-pick, .card.picked .card-pick { opacity: 1; }
+  .card-pick:hover { border-color: hsl(var(--mdt-info, 214 98% 44%)); }
+  .card.picked .card-pick { background: hsl(var(--mdt-info, 214 98% 44%)); border-color: hsl(var(--mdt-info, 214 98% 44%)); }
+  .card-pick svg { opacity: 0; transition: opacity .12s; }
+  .card.picked .card-pick svg { opacity: 1; }
+  .card.card-fill.picked { box-shadow: 0 0 0 2px hsl(var(--mdt-info, 214 98% 44%) / .45), 0 1px 2px rgba(29,43,62,.06); }
+  /* what the list is doing: "Checking…" on open, "Up to date" for a moment, "2 new" until they are seen */
+  .panel-sync { position: absolute; left: 50%; top: 108px; transform: translate(-50%, -6px); z-index: 3; display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px; border-radius: 999px; background: hsl(var(--mdt-neutral-130, 216 36% 18%)); color: #fff; font-size: 12px; font-weight: 500; box-shadow: 0 6px 18px rgba(29,43,62,.18); opacity: 0; transition: opacity .18s ease, transform .18s ease; pointer-events: none; white-space: nowrap; }
+  .panel-sync.on { opacity: 1; transform: translate(-50%, 0); }
+  .panel-sync.new { background: hsl(var(--mdt-info, 214 98% 44%)); pointer-events: auto; cursor: pointer; }
+  .panel-sync .ring { display: none; width: 10px; height: 10px; border: 1.5px solid #fff; border-color: #fff #fff transparent transparent; border-radius: 50%; animation: rv-spin .7s linear infinite; }
+  .panel-sync.checking .ring { display: block; }
+  :host([data-page]) .panel-sync { position: fixed; top: 120px; }
+  /* not seen yet: the number disc in blue, back to its own colour once the card has been in view a moment */
+  .card-n { transition: background-color .5s ease, color .5s ease, box-shadow .5s ease; }
+  .card.unread .card-n { background: hsl(var(--mdt-info, 214 98% 44%)); color: #fff; box-shadow: 0 0 0 3px hsl(var(--mdt-info, 214 98% 44%) / .18); }
+  .pin.unread { box-shadow: 0 0 0 3px hsl(var(--mdt-info, 214 98% 44%) / .35), 0 1px 3px rgba(0,0,0,.25); }
+  .panel-pick { display: inline-flex; align-items: center; height: 26px; padding: 0 4px 0 10px; gap: 6px; margin-right: 4px; border-radius: 999px; background: hsl(var(--mdt-info, 214 98% 44%) / .1); color: hsl(var(--mdt-info, 214 98% 44%)); font-weight: 600; font-size: 12px; flex: 0 0 auto; }
+  .panel-pick .x { position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .panel-pick .x:hover { background: hsl(var(--mdt-info, 214 98% 44%) / .15); }
+  .panel-pick .x:hover .scope-tip { opacity: 1; }
+  .card-c .card-line .card-text { margin: 0 0 0 -4px; padding: 2px 4px; }
+  .card-c .card-n.out { position: absolute; left: -32px; top: 12px; }
+  .card-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 11px; color: #5b6b85; min-height: 26px; }
+  /* the actions show only while the card is under the pointer (or holds the focus) */
+  .card-foot .acts { display: inline-flex; gap: 6px; flex: 0 0 auto; opacity: 0; transition: opacity .12s; }
+  .card:hover .card-foot .acts, .card:focus-within .card-foot .acts { opacity: 1; }
+  .card-ok { border: 1px solid #dbe3ef; background: #fff; color: #5b6b85; border-radius: 6px; padding: 3px 9px; font: 500 11px/1.2 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .card-ok:hover { border-color: hsl(var(--mdt-success, 136 53% 43%)); color: hsl(var(--mdt-feedback-success-icon, 135 59% 32%)); background: hsl(var(--mdt-feedback-success-bg, 140 52% 91%)); }
+  .card-ok.alt:hover { border-color: hsl(var(--mdt-neutral-70, 216 25% 65%)); color: #1d2b3e; background: hsl(var(--mdt-neutral-10, 210 50% 98%)); }
+  /* where it stands, after the place: a dot in the status colour and the words */
+  .card-status { display: none; align-items: center; gap: 5px; flex: 0 0 auto; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .card-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .av { width: 16px; height: 16px; border-radius: 50%; vertical-align: -3px; margin: 0 4px 0 1px; background: #e4eaf3; object-fit: cover; }
+  .av-i { display: inline-flex; align-items: center; justify-content: center; font: 700 9px/1 -apple-system, system-ui, sans-serif; color: #1d2b3e; background: hsl(var(--mdt-neutral-30, 216 30% 88%)); }
+  .pin-tip .av-i { color: #1d2b3e; }
+  .card-status .av { margin-left: 0; }
+  .pin-tip .av { width: 14px; height: 14px; vertical-align: -2px; }
+  .card-status[data-s="progress"] { display: inline-flex; color: hsl(var(--mdt-info, 214 98% 44%)); }
+  .card-status[data-s="approval"] { display: inline-flex; color: hsl(var(--mdt-badge-warning-ink, 36 95% 32%)); }
+  .card-status[data-s="approved"] { display: inline-flex; color: hsl(var(--mdt-feedback-success-icon, 135 59% 32%)); }
+  .card.resolved { opacity: .85; }
+  .card.resolved .card-text { color: #5b6b85; }
+  .card.resolved .card-n.out { background: hsl(var(--mdt-feedback-success-bg, 140 52% 91%)); color: hsl(var(--mdt-feedback-success-icon, 135 59% 32%)); }
+  .panel-end { text-align: center; color: #8fa0bd; font-size: 12px; padding: 14px 0 6px; }
+  .panel-end a { color: #5b6b85; text-decoration: underline dotted; text-underline-offset: 3px; }
+  .end-n { display: inline-block; min-width: 20px; height: 20px; padding: 0 5px; margin: 0 2px; border-radius: 999px; background: hsl(var(--mdt-feedback-success-bg, 140 52% 91%)); color: hsl(var(--mdt-feedback-success-icon, 135 59% 32%)); font: 600 11px/20px -apple-system, system-ui, sans-serif; text-align: center; cursor: pointer; vertical-align: -1px; }
+  .end-n:hover { filter: brightness(.95); }
+  .panel-end a:hover { color: #1d2b3e; }
+  .panel-view { display: none; }
+  /* on the page the Open / Resolved switch sits in the middle of the head, whatever is on either side */
+  :host([data-page]) .panel-view { display: inline-flex; position: absolute; left: 50%; top: 50%; transform: translate(-50%, calc(-50% + 4px)); }
+  .scope-switch.panel-view .side { width: auto; height: 24px; padding: 0 10px; font: 500 12px/24px -apple-system, system-ui, sans-serif; color: hsl(var(--mdt-neutral-90, 215 20% 45%)); }
+  .scope-switch.panel-view .side b { font-weight: 500; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); margin-left: 4px; }
+  .scope-switch.panel-view .side[aria-pressed="true"] b { color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
+  .card-foot .where { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* a button at work: a small ring where its label was, the width kept; its neighbours quiet meanwhile */
+  .card-ok, .card-rm, .tip-acts button { position: relative; transition: opacity .15s ease, border-color .12s, background-color .12s, color .12s; }
+  .card-ok.loading, .card-rm.loading, .tip-acts button.loading { color: transparent !important; pointer-events: none; }
+  .card-ok.loading::after, .card-rm.loading::after, .tip-acts button.loading::after { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -6px 0 0 -6px; border: 1.5px solid currentColor; border-color: #5b6b85 #5b6b85 transparent transparent; border-radius: 50%; animation: rv-spin .7s linear infinite; }
+  .tip-acts button.loading::after { border-color: #fff #fff transparent transparent; }
+  @keyframes rv-spin { to { transform: rotate(360deg); } }
+  .acts.busy > :not(.loading), .tip-acts-in.busy > :not(.loading) { opacity: .4; pointer-events: none; }
+  .card.card-c .card-foot .acts.busy { opacity: 1; }
+  /* the hub's answer arriving: the chip and the buttons fade out, change, fade in */
+  .card-status { transition: opacity .14s ease, transform .14s ease; }
+  .card-status.swap { opacity: 0 !important; transform: translateY(3px); }
+  .card-foot .acts.swap { opacity: 0 !important; }
+  /* on its way up: the picture shimmers */
+  .card.sending .card-pic::after { content: ""; position: absolute; inset: 0; border-radius: 6px; background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%); background-size: 250% 100%; animation: rv-shimmer 1.3s linear infinite; pointer-events: none; }
+  .card.sending .card-pic { position: relative; }
+  @keyframes rv-shimmer { from { background-position: 120% 0; } to { background-position: -130% 0; } }
+  .card-sending { font-size: 11px; color: #8fa0bd; flex: 0 0 auto; }
+  .card.failed { box-shadow: 0 0 0 1px hsl(var(--mdt-destructive, 353 84% 47%) / .5), 0 1px 2px rgba(29,43,62,.06); }
+  .card-foot .acts.on { opacity: 1; }
+  /* the reason a comment came back, under the foot, in the warning ink with a thin rule on its left */
+  .card-note { margin-top: 8px; padding: 6px 10px; border-left: 2px solid hsl(var(--mdt-badge-warning-ink, 36 95% 32%) / .5); font-size: 12px; line-height: 1.4; color: #1d2b3e; background: hsl(var(--mdt-badge-warning-bg, 40 100% 94%) / .55); border-radius: 0 6px 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* the one-line ask in the foot when a comment goes back */
+  .card-foot .note-in { flex: 1; min-width: 0; height: 26px; border: 1px solid #dbe3ef; border-radius: 6px; padding: 0 9px; font: 12px/1.2 -apple-system, system-ui, sans-serif; color: #1d2b3e; background: #fff; outline: none; }
+  .card-foot .note-in:focus { border-color: hsl(var(--mdt-info, 214 98% 44%)); box-shadow: 0 0 0 1px hsl(var(--mdt-info, 214 98% 44%)); }
+  .card-foot .note-in::placeholder { color: #8b99b0; }
+  .card-foot .note-go { flex: 0 0 auto; }
+  .card-rm { border: 1px solid #dbe3ef; background: #fff; color: #5b6b85; border-radius: 6px; padding: 3px 9px; font: 500 11px/1.2 -apple-system, system-ui, sans-serif; cursor: pointer; flex: 0 0 auto; }
+  .card-rm:hover { border-color: hsl(var(--mdt-destructive, 353 84% 47%)); color: hsl(var(--mdt-destructive, 353 84% 47%)); background: hsl(var(--mdt-feedback-danger-bg, 353 82% 94%)); }
+  .card-rm.sure { border-color: hsl(var(--mdt-destructive, 353 84% 47%)); color: #fff; background: hsl(var(--mdt-destructive, 353 84% 47%)); }
+  .lightbox { position: fixed; inset: 0; pointer-events: auto; background: rgba(12,20,32,.8); display: none; align-items: center; justify-content: center; z-index: 4; }
+  .lightbox.on { display: flex; }
+  /* the frame is exactly as wide as the picture: caption and foot share its edges */
+  .lb-frame { display: flex; flex-direction: column; max-width: calc(100vw - 64px); max-height: calc(100vh - 48px); }
+  .lb-top { display: flex; align-items: center; gap: 10px; padding: 0 0 10px; color: #fff; font-size: 13px; min-height: 32px; }
+  .lb-n { width: 22px; height: 22px; border-radius: 50%; background: #fff; color: #1d2b3e; font-weight: 700; font-size: 11px; line-height: 22px; text-align: center; flex: 0 0 auto; }
+  .lb-sev { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #ecf1f9; color: #5b6b85; flex: 0 0 auto; }
+  .lb-sev[data-k="must"] { background: var(--tag-must-fill); color: var(--tag-must-ink); } .lb-sev[data-k="should"] { background: var(--tag-should-fill); color: var(--tag-should-ink); } .lb-sev[data-k="idea"] { background: var(--tag-idea-fill); color: var(--tag-idea-ink); } .lb-sev[data-k="question"] { background: var(--tag-question-fill); color: var(--tag-question-ink); }
+  .lb-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+  .lb-count { color: #9fb0c9; font-size: 12px; margin-right: 2px; flex: 0 0 auto; }
+  .lb-top button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; border: 0; background: rgba(255,255,255,.12); color: #fff; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; padding: 0; }
+  .lb-top button:hover { background: rgba(255,255,255,.22); }
+  .lb-top button:disabled { opacity: .3; cursor: default; }
+  .lb-top .lb-close { margin-left: 6px; }
+  .lb-pic { position: relative; container-type: inline-size; display: flex; justify-content: center; min-height: 0; }
+  .lb-img { display: block; max-width: 100%; max-height: calc(100vh - 48px - 42px - 36px); width: auto; height: auto; object-fit: contain; border-radius: 8px; box-shadow: 0 24px 64px rgba(0,0,0,.5); background: #fff; }
+  .lb-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0 0; color: #9fb0c9; font-size: 12px; min-height: 36px; }
+  .lb-where { color: #cfd8e6; }
+  :host([data-page]) .bar, :host([data-page]) .hover, :host([data-page]) .pins, :host([data-page]) .pin-tip, :host([data-page]) .composer { display: none !important; }
+  :host([data-page]) .panel-veil { display: none; }
+  :host([data-page]) .panel { transform: none; visibility: visible; transition: none; position: static; width: min(880px, 100%); height: 100vh; margin: 0 auto; box-shadow: none; border-left: 1px solid hsl(var(--mdt-neutral-20, 214 40% 95%)); border-right: 1px solid hsl(var(--mdt-neutral-20, 214 40% 95%)); }
+  :host([data-page]) .panel-head { padding-top: 18px; }
+  :host([data-page]) .panel-back { display: inline-flex; }
+  /* the way back to the console, on the page only: a line button at the start of the head, the arrow and the tooltip */
+  .panel-back { position: relative; display: none; align-items: center; justify-content: center; width: 26px; height: 26px; margin-right: 2px; border: 1px solid hsl(var(--mdt-neutral-30, 217 44% 90%)); border-radius: 6px; background: #fff; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); cursor: pointer; text-decoration: none; }
+  .panel-back:hover { border-color: hsl(var(--mdt-neutral-90, 215 20% 45%)); background: hsl(var(--mdt-neutral-10, 210 50% 98%)); color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
+  .panel-back .scope-tip { left: 0; transform: none; }
+  .panel-back:hover .scope-tip { opacity: 1; }
+  :host([data-capturing]) * { visibility: hidden !important; }
+  :host([data-hit]) * { pointer-events: none !important; } /* while targetAt measures what is under a point */
+  /* review hidden (${HIDE_KEY} or the bar's eye button): nothing on screen but the toast that says how to bring it back */
+  :host([data-off]) .bar, :host([data-off]) .bar-mini, :host([data-off]) .hover, :host([data-off]) .pins, :host([data-off]) .pin-tip, :host([data-off]) .composer, :host([data-off]) .panel-veil, :host([data-off]) .panel, :host([data-off]) .lightbox { display: none !important; }
+</style>
+<div class="hover ui"><span class="tag"></span></div>
+<div class="pins"></div>
+<div class="pin-tip ui"></div>
+<div class="composer ui">
+  <div class="pin-row"><span class="num">1</span><span class="what"></span></div>
+  <div class="sev scope-switch"></div>
+  <textarea placeholder="What should change here?" rows="3"></textarea>
+  <div class="actions"><button class="btn cancel">Cancel</button><button class="btn primary save">Save</button></div>
+</div>
+<div class="bar ui"><span class="brand"><button class="dot" title="Pictures: off. Click to share this tab (or load the review extension for silent pictures)"></button><b>Review${window.__reviewSession ? ` · ${window.__reviewSession}` : ""}</b></span><span class="k"></span><span class="sep"></span><button class="pins-toggle on" title="Show or hide the pins of comments already made">Pins</button><button class="list" title="The comments so far, in a panel">List<span class="count"></span></button><button class="sat off" aria-label="Hide review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8M9.9 5.1A10.4 10.4 0 0 1 12 5c6 0 9.5 7 9.5 7a16.5 16.5 0 0 1-3.1 3.9M6.6 6.6C4 8.4 2.5 12 2.5 12s3.5 7 9.5 7c1.5 0 2.8-.4 4-.9"/></svg><span class="scope-tip">Hide review · ${HIDE_KEY} brings it back</span></button><button class="sat dock" aria-label="Minimise to the edge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg><span class="scope-tip">Minimise to the edge</span></button></div>
+<div class="panel-veil"></div>
+<aside class="panel ui" aria-label="Review comments" role="dialog" aria-modal="true">
+  <div class="panel-head"><a class="panel-back" href="/" aria-label="Back to the console"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="scope-tip">Back to the console</span></a><a class="panel-title" href="/__review/" target="_blank" aria-label="Open as a page"><span class="txt">Comments</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="scope-tip">Open as a page</span></a><div class="scope-switch panel-view" role="group"><button type="button" class="side" data-v="open">Open<b></b></button><button type="button" class="side" data-v="resolved">Approved<b></b></button></div><button class="panel-copy" data-kind="prompt" aria-label="Copy a brief for Claude"><svg class="logo-claude" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a brief for Claude</span></button><button class="panel-copy" data-kind="loop" aria-label="Copy a checklist for Loop"><svg class="logo-loop-rest" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z"/></svg><svg class="logo-loop" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"> <path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z" fill="url(#rv-loop-a)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-b)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-c)" fill-opacity=".56"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-d)" fill-opacity=".15"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-e)"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-f)"/> <defs> <radialGradient id="rv-loop-c" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(4 2.75 -4.83318 7.0301 5.5 17.75)"> <stop/> <stop offset=".7" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-d" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.4 4.6 -8.08463 13.0057 4.3 17)"> <stop offset=".33"/> <stop offset=".6" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-f" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(13.40004 -2.3 6.04701 35.2304 .3 8.2)"> <stop stop-color="#6D05E8"/> <stop offset="1" stop-color="#6D05E8" stop-opacity="0"/> </radialGradient> <linearGradient id="rv-loop-a" x1="14.2" y1="9.1" x2="10.9" y2="22.6" gradientUnits="userSpaceOnUse"> <stop stop-color="#9237E3"/> <stop offset="1" stop-color="#48E6F3"/> </linearGradient> <linearGradient id="rv-loop-b" x1="8.5" y1="20.5" x2="17.3" y2="18.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#51E6FF"/> <stop offset="1" stop-color="#71D4FF" stop-opacity="0"/> </linearGradient> <linearGradient id="rv-loop-e" x1="6.1" y1="12.7" x2="11.2" y2="5.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#6E06E9"/> <stop offset="1" stop-color="#AB5ADD" stop-opacity="0"/> </linearGradient> </defs> </svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a checklist for Loop</span><i class="more"></i></button></div>
+  <div class="panel-bar"><div class="panel-scope"></div><div class="panel-filter"></div></div>
+  <div class="panel-sync" hidden><span class="ring"></span><span class="txt"></span></div>
+  <div class="panel-body"></div>
+</aside>
+<div class="lightbox ui" role="dialog" aria-label="Picture">
+  <div class="lb-frame">
+    <div class="lb-top"><span class="lb-n"></span><span class="lb-sev"></span><span class="lb-text"></span><span class="lb-count"></span><button class="lb-prev" title="Previous (←)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button><button class="lb-next" title="Next (→)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button><button class="lb-close" title="Close (Esc)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+    <div class="lb-pic"><img class="lb-img" alt=""></div>
+    <div class="lb-foot"><span class="lb-where"></span><span class="lb-hint">Esc closes · ← → other pictures</span></div>
+  </div>
+</div>
+<button class="bar-mini ui" title="Review (click to expand)"><svg class="glyph" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="l1" d="M4 7h14"/><path class="l2" d="M4 12h9"/><path class="l3" d="M4 17h6"/><path class="spark" d="M17 11.5l1.1 2.6 2.6 1.1-2.6 1.1L17 19l-1.1-2.7-2.6-1.1 2.6-1.1z" fill="currentColor" stroke="none"/></svg><span class="mini-dot"></span><span class="mini-n"></span></button>
+<div class="toast ui"></div>
+`;
+const $ = (s) => root.querySelector(s);
+/* a page may not open an extension page itself (Chrome blocks the link): the extension opens it in a new tab */
+function openExtPage(url) {
+  window.postMessage({ type: "review-open", url }, "*");
+}
+if (EXT) {
+  /* the extension's own list page stands in for /__review/ */
+  const t = $(".panel-title");
+  if (t) {
+    t.href = EXT.listUrl;
+    t.addEventListener("click", (e) => {
+      e.preventDefault();
+      openExtPage(EXT.listUrl);
+    });
+  }
+  if (PAGE_MODE) $(".panel-back")?.remove();
+}
+const hoverBox = $(".hover");
+const hoverTag = $(".hover .tag");
+const pinsEl = $(".pins");
+const composer = $(".composer");
+const ta = $("textarea");
+const sevEl = $(".sev");
+const bar = $(".bar");
+const dot = $(".bar .dot");
+const countEl = $(".bar .count");
+const toastEl = $(".toast");
+let severity = "should";
+
+for (const [k, label] of SEVERITIES) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.dataset.k = k;
+  b.innerHTML = `<span class="dot"></span><span class="lbl">${label}</span><span class="scope-tip">${label}</span>`;
+  b.setAttribute("aria-label", label);
+  b.className = k === severity ? "on" : "";
+  b.addEventListener("click", () => {
+    severity = k;
+    for (const x of sevEl.children) x.classList.toggle("on", x.dataset.k === k);
+    ta.focus();
+  });
+  sevEl.appendChild(b);
+}
+
+/* nothing that happens inside the composer may reach the app: its shortcuts read Shift+letter, and a
+   drawer or popover closes itself when a click or the focus lands outside it (Radix DismissableLayer) */
+for (const t of ["keydown", "keyup", "keypress", "pointerdown", "mousedown", "pointerup", "mouseup", "click", "touchstart", "touchend", "focusin", "focusout"])
+  host.addEventListener(t, (e) => e.stopPropagation());
+/* ...and an open drawer's scroll lock (react-remove-scroll) cancels any wheel or touch event that is not inside the
+   drawer, which would freeze the panel's own scrolling: those events stop at the window before the lock sees them
+   (propagation only; the scroll itself is the default action and still happens) */
+for (const t of ["wheel", "touchmove"])
+  window.addEventListener(
+    t,
+    (e) => {
+      if (e.composedPath().includes(host)) e.stopImmediatePropagation();
+    },
+    { capture: true, passive: true }
+  );
+/* ...and a focus trap (Radix FocusScope on a modal drawer) watches the document for focus leaving it, then pulls it
+   back; that leaves our textarea without focus and Enter lands on the drawer's close button. Hide the move from it. */
+for (const t of ["focusin", "focusout", "focus", "blur"])
+  window.addEventListener(
+    t,
+    (e) => {
+      if (e.composedPath().includes(host) || e.relatedTarget === host) e.stopImmediatePropagation();
+    },
+    true
+  );
+
+/* ---------- describing what was clicked ---------- */
+const txt = (el) => (el ? (el.textContent || "").replace(/\s+/g, " ").trim() : "");
+const KIND = { button: "Button", a: "Link", input: "Field", textarea: "Field", select: "Select", td: "Cell", th: "Column header", tr: "Row", li: "Item", h1: "Heading", h2: "Heading", h3: "Heading", h4: "Heading", img: "Image", svg: "Icon", label: "Label", nav: "Navigation", table: "Table", p: "Text", menuitem: "Menu item", option: "Option", tab: "Tab", checkbox: "Checkbox", radio: "Radio", switch: "Switch", dialog: "Dialog", combobox: "Select", menu: "Menu", tooltip: "Tooltip", link: "Link", listbox: "List", row: "Row", cell: "Cell", columnheader: "Column header", tabpanel: "Tab panel", group: "Group", region: "Section" };
+/* what was pointed at, in words: the kind of thing and its label; a plain box with text is just its text */
+function describe(el) {
+  const role = el.getAttribute("role");
+  const tag = el.tagName.toLowerCase();
+  const kind = KIND[role] || KIND[tag] || "";
+  /* the label: the first visible line (a card's title, not its title run into its subtitle) */
+  const firstLine = (el.innerText || txt(el)).split("\n").map((l) => l.trim()).find(Boolean) || "";
+  const label = el.getAttribute("aria-label") || el.getAttribute("title") || el.getAttribute("placeholder") || el.getAttribute("alt") || firstLine.slice(0, 48);
+  if (kind && label) return `${kind} "${label}"`;
+  if (kind) return kind;
+  return label ? `"${label}"` : "Area";
+}
+/* closest() that climbs out of shadow roots too (a drawer's content lives inside its component) */
+function closestDeep(el, sel) {
+  for (let cur = el, n = 0; cur && n < 20; n++) {
+    const hit = cur.closest?.(sel);
+    if (hit) return hit;
+    if (cur.assignedSlot) cur = cur.assignedSlot; // slotted content: its place is inside the component
+    else {
+      const rootNode = cur.getRootNode();
+      cur = rootNode instanceof ShadowRoot ? rootNode.host : null;
+    }
+  }
+  return null;
+}
+/* "Drawer or dialog: Editing policy from storage.objectsDocs" and "Drawer or dialog: Editing policy from
+   storage.objects" are the same dialog: the first words of the title decide, not what a header link adds */
+function sameDialog(a, b) {
+  const key = (t) => String(t || "").replace(/^Drawer or dialog:\s*/, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").slice(0, 4).join(" ");
+  return key(a) === key(b);
+}
+function contextOf(el) {
+  const dlg = closestDeep(el, "[role=dialog],[role=alertdialog],dialog[open]"); // a native <dialog> too, in a shadow root too
+  if (dlg) {
+    const h = dlg.querySelector("h1,h2,h3,[id$=title],[class*=title]");
+    return `Drawer or dialog: ${txt(h).slice(0, 60) || "untitled"}`;
+  }
+  if (closestDeep(el, "[data-radix-popper-content-wrapper],[role=menu],[role=listbox],[role=tooltip],[role=combobox],:popover-open,[popover]")) return "Popover or menu";
+  if (el.closest("header")) return "Page header";
+  if (el.closest("nav")) return "Navigation";
+  const cell = el.closest("td,th");
+  if (cell) {
+    const table = cell.closest("table");
+    const idx = Array.from(cell.parentElement.children).indexOf(cell);
+    const head = table?.querySelectorAll("thead th")[idx];
+    return `Table${head ? `, column "${txt(head).slice(0, 30)}"` : ""}`;
+  }
+  const sec = el.closest("section,article,[role=region],[role=tabpanel]");
+  if (sec) {
+    const h = sec.querySelector("h1,h2,h3,h4");
+    if (h) return `Section: ${txt(h).slice(0, 60)}`;
+  }
+  return "Page";
+}
+function cssPath(el) {
+  const parts = [];
+  let cur = el;
+  while (cur && cur !== document.body && parts.length < 5) {
+    let s = cur.tagName.toLowerCase();
+    if (cur.id) s += `#${cur.id}`;
+    else if (cur.classList.length) s += "." + Array.from(cur.classList).slice(0, 3).join(".");
+    parts.unshift(s);
+    cur = cur.parentElement;
+  }
+  return parts.join(" > ");
+}
+/* a selector that finds the same element again after a reload or when a drawer reopens: ids are used only
+   when stable (Radix ids like radix-:r1: change on every mount), else tag + nth-of-type up the tree */
+/* an id a framework made up (Radix, Headless UI, MUI, React Aria, Vue, Ember…) changes every mount: not an address */
+const stableId = (id) => !/:/.test(id) && !/^(radix-|headlessui-|react-aria|mui-|cdk-|mat-|v-\d|ember\d|rc_|rc-|ant-|chakra-|downshift-|tippy-)/i.test(id) && !/^[_:]?r[_:]?[0-9a-z]{1,4}[_:]?$/i.test(id);
+/* a selector for one tree; an element inside a web component's shadow root gets "host >>> inner", host first */
+function selectorFor(el) {
+  const parts = [];
+  let cur = el;
+  while (cur && cur !== document.body && parts.length < 12) {
+    if (cur.id && stableId(cur.id)) {
+      parts.unshift(`#${CSS.escape(cur.id)}`);
+      break;
+    }
+    let s = cur.tagName.toLowerCase();
+    const sibs = cur.parentElement ? Array.from(cur.parentElement.children).filter((c) => c.tagName === cur.tagName) : [];
+    if (sibs.length > 1) s += `:nth-of-type(${sibs.indexOf(cur) + 1})`;
+    parts.unshift(s);
+    if (!cur.parentElement) {
+      const rootNode = cur.getRootNode();
+      if (rootNode instanceof ShadowRoot && rootNode.host) return `${selectorFor(rootNode.host)} >>> ${parts.join(" > ")}`;
+    }
+    cur = cur.parentElement;
+  }
+  return parts.join(" > ");
+}
+/* querySelectorAll for such a selector: each ">>>" steps into the matched hosts' shadow roots */
+function queryDeep(selector, root = document) {
+  const [head, ...rest] = String(selector).split(" >>> ");
+  const hits = Array.from(root.querySelectorAll(head));
+  if (!rest.length) return hits;
+  const out = [];
+  for (const h of hits) if (h.shadowRoot) out.push(...queryDeep(rest.join(" >>> "), h.shadowRoot));
+  return out;
+}
+/* the module: the left nav's group label above the active row ("Operations"), and the row itself ("Agent Fleet");
+   for routes the nav is not showing (or older comments) a map of the console's sections */
+const GROUPS = {
+  "People & Access": ["users", "service-accounts", "teams", "roles", "access-profiles"],
+  Administration: ["organizations", "my-organization", "client-organizations", "organization"],
+  Customization: ["user-attributes", "organization-attributes"],
+  Operations: ["agent-fleet", "collector-fleet", "collectors"],
+  Discovery: ["credential-profiles", "secret-stores", "discovery-profiles", "discovery-runs"],
+};
+function moduleOf(route) {
+  const seg = (route || location.pathname).split("?")[0].split("/").filter(Boolean)[0] || "";
+  const on = document.querySelector('.snv-row[data-on="true"]');
+  if (on && (!route || route.split("?")[0] === location.pathname)) {
+    let lab = on.previousElementSibling;
+    while (lab && !lab.classList.contains("snv-label")) lab = lab.previousElementSibling;
+    return { group: lab ? txt(lab) : "", item: txt(on.querySelector(".snv-lbl")) || txt(on), seg };
+  }
+  const group = Object.keys(GROUPS).find((g) => GROUPS[g].includes(seg)) || "";
+  return { group, item: seg.replace(/-/g, " ").replace(/^\w/, (ch) => ch.toUpperCase()), seg };
+}
+/* the page's name: its heading; without one, the first piece of the tab's title ("review_comments | Table Editor |
+   Design Review | Supabase" is the page, a section and the site) */
+function pageTitle() {
+  const h = document.querySelector("main h1, h1");
+  const fromH = txt(h).slice(0, 80);
+  if (fromH) return fromH;
+  const piece = document.title.split(/\s+[|–—·»›]\s+|\s+-\s+|:\s+/).map((p) => p.trim()).find(Boolean) || document.title;
+  return piece.slice(0, 80);
+}
+
+/* ---------- hover outline ---------- */
+function targetAt(x, y) {
+  /* An open Select or menu (Radix) puts pointer-events: none on the body and its layers, so a plain
+     elementFromPoint hits a backdrop or nothing. Make everything hittable for the measurement (never our
+     own host), then dig through any layer that covers the whole screen: a backdrop is not a target. */
+  const lift = document.createElement("style");
+  lift.textContent = "* { pointer-events: auto !important } #__review-host { pointer-events: none !important }";
+  document.head.appendChild(lift);
+  host.setAttribute("data-hit", ""); // our own pins, tip and bar step aside too (a page stylesheet cannot reach them)
+  const hidden = [];
+  let el = null;
+  try {
+    for (let i = 0; i < 6; i++) {
+      el = document.elementFromPoint(x, y);
+      if (!el || el === document.documentElement || el === document.body) {
+        el = null;
+        break;
+      }
+      const r = el.getBoundingClientRect();
+      const layer = r.width * r.height >= 0.85 * window.innerWidth * window.innerHeight;
+      if (!layer) break;
+      hidden.push([el, el.style.getPropertyValue("pointer-events"), el.style.getPropertyPriority("pointer-events")]);
+      el.style.setProperty("pointer-events", "none", "important");
+      el = null;
+    }
+  } finally {
+    for (const [e, v, pr] of hidden) (v ? e.style.setProperty("pointer-events", v, pr) : e.style.removeProperty("pointer-events"));
+    lift.remove();
+    host.removeAttribute("data-hit");
+  }
+  if (!el) return null;
+  /* a web component: hit-testing stops at its boundary; the real element is inside its shadow root */
+  for (let depth = 0; depth < 6 && el.shadowRoot && el !== host; depth++) {
+    const inner = el.shadowRoot.elementFromPoint(x, y);
+    if (!inner || inner === el) break;
+    el = inner;
+  }
+  /* a shape inside an icon means the icon's owner: the button, link or cell it sits in */
+  if (el.namespaceURI === "http://www.w3.org/2000/svg") {
+    const svg = el.closest("svg");
+    el = svg?.closest("button,a,[role],label,td,th") || svg?.parentElement || el;
+  }
+  return el;
+}
+function showHover(el) {
+  state.hover = el;
+  if (!el) {
+    hoverBox.classList.remove("on");
+    return;
+  }
+  const r = el.getBoundingClientRect();
+  hoverBox.style.left = `${r.left - 2}px`;
+  hoverBox.style.top = `${r.top - 2}px`;
+  hoverBox.style.width = `${r.width + 4}px`;
+  hoverBox.style.height = `${r.height + 4}px`;
+  hoverBox.classList.toggle("flip", r.top < 28);
+  hoverTag.textContent = `${describe(el)} · ${contextOf(el)}`;
+  hoverBox.classList.add("on");
+}
+const armed = () => (state.alt || state.sticky) && !state.pending && !state.capturing && !state.off;
+
+window.addEventListener(
+  "mousemove",
+  (e) => {
+    state.mouse = { x: e.clientX, y: e.clientY };
+    state.alt = e.altKey;
+    if (!e.composedPath().includes(host) && e.target instanceof Element && !e.target.closest("[data-radix-popper-content-wrapper],[role=tooltip]")) state.lastHover = e.target;
+    if (armed()) showHover(targetAt(e.clientX, e.clientY));
+    else if (state.hover && !state.pending) showHover(null);
+  },
+  true
+);
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key === "Alt") {
+      state.alt = true;
+      if (armed()) showHover(targetAt(state.mouse.x, state.mouse.y));
+    }
+    /* the one shortcut that works while review is hidden: it brings it back */
+    if (e.shiftKey && e.altKey && e.code === "KeyH" && !PAGE_MODE) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setReview(state.off);
+      return;
+    }
+    if (state.off) return;
+    if (lightbox.classList.contains("on")) {
+      if (e.key === "Escape" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.stopPropagation();
+        e.preventDefault();
+        if (e.key === "Escape") closeLightbox();
+        else stepLightbox(e.key === "ArrowLeft" ? -1 : 1);
+      }
+      return;
+    }
+    if (e.key === "Escape") {
+      const typing = e.composedPath().some((n) => n instanceof HTMLElement && n.getRootNode() === root && (n.matches("input, textarea") || n.isContentEditable));
+      if (state.pending) {
+        e.stopPropagation();
+        e.preventDefault();
+        closeComposer();
+      } else if (state.asking) {
+        e.stopPropagation();
+        e.preventDefault();
+        cancelAsk();
+      } else if (typing) {
+        /* a field of ours (an in-place edit) takes its own Esc; the panel stays */
+      } else if (panel.classList.contains("on")) {
+        openPanel(false);
+      } else if (state.sticky) {
+        setSticky(false);
+      }
+    }
+    if (e.shiftKey && e.altKey && (e.code === "KeyR" || e.key.toLowerCase() === "r" || e.key === "‰")) {
+      e.preventDefault();
+      setSticky(!state.sticky);
+    }
+  },
+  true
+);
+window.addEventListener(
+  "keyup",
+  (e) => {
+    if (e.key === "Alt") {
+      state.alt = false;
+      if (!state.sticky && !state.pending) showHover(null);
+    }
+  },
+  true
+);
+window.addEventListener("blur", () => {
+  state.alt = false;
+  if (!state.sticky && !state.pending) showHover(null);
+});
+
+/* swallow the whole click while armed so the app never sees it (Radix would close its popover on pointerdown) */
+for (const t of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "auxclick", "contextmenu"]) {
+  window.addEventListener(
+    t,
+    (e) => {
+      if (e.composedPath().includes(host)) return;
+      if (!(state.alt || e.altKey || state.sticky) || state.pending || state.capturing || state.off) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (t === "click") beginComment(targetAt(e.clientX, e.clientY));
+    },
+    true
+  );
+}
+
+/* a hover card or tooltip closes when the pointer leaves it; while a comment is being written the app
+   must not hear about the pointer leaving (React builds its leave/enter from these). The same while a pin's
+   card is up: a pin on a tooltip (comment 21) would vanish with the tooltip the moment the pointer steps from
+   the pin onto the card. So the step from the app onto our pin or card is not told (the out/leave whose other
+   side is us), nor is the pointer's movement over us (Radix watches document pointermove for its grace area);
+   the step back onto the app passes, and the app closes its tooltip as usual. */
+const onUs = () => $(".pin-tip").classList.contains("on");
+for (const t of ["pointerover", "pointerout", "mouseover", "mouseout", "pointerenter", "pointerleave", "mouseenter", "mouseleave"])
+  window.addEventListener(
+    t,
+    (e) => {
+      const path = e.composedPath();
+      const leaving = /out|leave/.test(t);
+      if (state.pending && !path.includes(host)) e.stopImmediatePropagation();
+      else if (onUs() && (path.includes(host) || (leaving && e.relatedTarget === host))) e.stopImmediatePropagation();
+    },
+    true
+  );
+window.addEventListener(
+  "pointermove",
+  (e) => {
+    if (onUs() && e.composedPath().includes(host)) e.stopImmediatePropagation();
+  },
+  true
+);
+
+/* ---------- composer ---------- */
+async function beginComment(el) {
+  if (!el || state.pending || busy) return;
+  if (EXT && state.hub && state.hub.signedIn === false) {
+    toast("Sign in first: the Review icon in the toolbar, then Sign in with GitHub", true);
+    return;
+  }
+  /* not sharing yet: the picker would steal the focus and close what was pointed at. Ask now, comment next click. */
+  if (!extHere() && !(state.stream && state.stream.active) && !state.declined && navigator.mediaDevices?.getDisplayMedia) {
+    showHover(null);
+    const ok = await ensureStream();
+    if (ok) toast(`Tab shared. Now ${MOD} + click again to comment.`);
+    else {
+      state.declined = true;
+      toast(`Not shared: pictures will be a rough render. ${MOD} + click again to comment.`);
+    }
+    return;
+  }
+  const r0 = el.getBoundingClientRect();
+  const rect = { x: r0.left, y: r0.top, w: r0.width, h: r0.height };
+  state.pending = { el, rect, shot: null, how: "none" };
+  /* the number first (from the server, so it matches whatever was removed meanwhile), then the picture:
+     taken NOW, before the box appears, so it is exactly what was pointed at (a hover card, an open menu) */
+  await loadComments();
+$(".bar .k").textContent = `${MOD} + click to comment`;
+  const n = state.lastN + 1;
+  try {
+    state.capturing = true;
+    host.setAttribute("data-capturing", "");
+    const shot = await grabFrame();
+    drawMarker(shot.canvas, shot.sx, shot.sy, rect, n);
+    state.pending.shot = shot.canvas.toDataURL("image/png");
+    state.pending.how = shot.how;
+    /* the box in picture pixels, and the picture's size: the live number is placed from these */
+    state.pending.mark = { x: rect.x * shot.sx, y: rect.y * shot.sy, w: rect.w * shot.sx, h: rect.h * shot.sy, cw: shot.canvas.width, ch: shot.canvas.height, s: shot.sx };
+  } catch (e) {
+    console.warn("[review] no picture:", e);
+  } finally {
+    host.removeAttribute("data-capturing");
+    state.capturing = false;
+  }
+  if (!state.pending) return; // cancelled meanwhile
+  showHover(el);
+  $(".composer .num").textContent = n;
+  const what = $(".composer .what");
+  what.innerHTML = "<b></b><span></span>";
+  what.querySelector("b").textContent = describe(el);
+  what.querySelector("span").textContent = ` · ${pageTitle()} · ${contextOf(el)}${state.pending.shot ? "" : " · no picture"}`;
+  ta.value = "";
+  const W = 320;
+  const H = 230;
+  let left = Math.min(Math.max(8, rect.x), window.innerWidth - W - 8);
+  let top = rect.y + rect.h + 44; // room for the pin above the box
+  if (top + H > window.innerHeight - 8) top = Math.max(42, rect.y - H - 10);
+  if (rect.h > window.innerHeight * 0.7) {
+    /* a huge target (whole page or drawer): float the box beside the cursor instead */
+    left = Math.min(state.mouse.x + 12, window.innerWidth - W - 8);
+    top = Math.min(state.mouse.y + 12, window.innerHeight - H - 8);
+  }
+  composer.style.left = `${left}px`;
+  composer.style.top = `${top}px`;
+  composer.classList.add("on");
+  host.setAttribute("data-composing", "");
+  setTimeout(() => ta.focus(), 0);
+}
+function closeComposer() {
+  state.pending = null;
+  composer.classList.remove("on");
+  host.removeAttribute("data-composing");
+  showHover(null);
+}
+$(".cancel").addEventListener("click", closeComposer);
+$(".save").addEventListener("click", save);
+ta.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    save();
+  }
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeComposer();
+  }
+});
+
+/* ---------- pictures ---------- */
+async function ensureStream() {
+  if (state.stream && state.stream.active) return state.stream;
+  if (!navigator.mediaDevices?.getDisplayMedia) return null;
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { displaySurface: "browser", frameRate: 30, cursor: "never" },
+      audio: false,
+      preferCurrentTab: true,
+      selfBrowserSurface: "include",
+      surfaceSwitching: "exclude",
+      monitorTypeSurfaces: "exclude",
+    });
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+    video.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-10px;top:-10px";
+    document.body.appendChild(video);
+    await video.play();
+    await new Promise((r) => (video.videoWidth ? r() : (video.onloadedmetadata = r)));
+    state.stream = stream;
+    state.video = video;
+    stream.getVideoTracks()[0].addEventListener("ended", () => {
+      state.stream = null;
+      video.remove();
+      state.video = null;
+      dot.classList.remove("live");
+      dot.title = "Pictures: off. Click to share this tab";
+    });
+    dot.classList.add("live");
+    dot.title = "Pictures: on (sharing this tab)";
+    return stream;
+  } catch {
+    return null;
+  }
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const twoFrames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+/* the dev extension (next-gen-ui/review-extension), when loaded: a silent, pixel-exact picture of the tab, no picker */
+const extHere = () => document.documentElement.hasAttribute("data-review-ext");
+function extCapture() {
+  return new Promise((resolve) => {
+    const id = Math.random().toString(36).slice(2);
+    const t = setTimeout(() => {
+      window.removeEventListener("message", on);
+      console.warn("[review] extension did not answer in time");
+      toast("The extension did not answer in time", true);
+      resolve(null);
+    }, 2500);
+    const on = (e) => {
+      if (e.source !== window || e.data?.type !== "review-capture-reply" || e.data.id !== id) return;
+      clearTimeout(t);
+      window.removeEventListener("message", on);
+      if (!e.data.ok) {
+        console.warn("[review] extension could not take the picture:", e.data.error);
+        toast(`The extension could not take the picture: ${e.data.error || "no reply"}`, true);
+      }
+      resolve(e.data.ok ? e.data.dataUrl : null);
+    };
+    window.addEventListener("message", on);
+    window.postMessage({ type: "review-capture-request", id }, "*");
+  });
+}
+async function grabFrame() {
+  if (extHere()) {
+    await twoFrames(); // the hide is painted
+    const url = await extCapture();
+    if (url) {
+      const img = new Image();
+      await new Promise((res, rej) => {
+        img.onload = res;
+        img.onerror = rej;
+        img.src = url;
+      });
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      c.getContext("2d").drawImage(img, 0, 0);
+      return { canvas: c, sx: c.width / window.innerWidth, sy: c.height / window.innerHeight, how: "ext" };
+    }
+  }
+  /* true frame of the tab, if the user let us */
+  const had = !!(state.stream && state.stream.active);
+  const stream = await ensureStream();
+  if (stream && state.video?.videoWidth) {
+    if (!had) await sleep(400); // let the picker close and the page settle
+    await twoFrames();
+    const v = state.video;
+    /* the frame must be newer than the moment our overlay was hidden: twoFrames() above painted the hide,
+       so accept only a video frame captured after that instant (requestVideoFrameCallback metadata), or
+       two fresh callbacks when the capture time is not reported; a time cap in case the tab sits idle */
+    await new Promise((done) => {
+      const t0 = performance.now();
+      let seen = 0;
+      const cap = setTimeout(done, 600);
+      const tick = (now, meta) => {
+        seen++;
+        const captured = meta?.captureTime ?? meta?.receiveTime ?? now;
+        if (captured >= t0 || seen >= 2) {
+          clearTimeout(cap);
+          done();
+        } else v.requestVideoFrameCallback(tick);
+      };
+      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(tick);
+      else setTimeout(done, 250);
+    });
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0);
+    return { canvas: c, sx: c.width / window.innerWidth, sy: c.height / window.innerHeight, how: "tab" };
+  }
+  /* else render the DOM with html2canvas: close, not exact (text sits low and clips a little) */
+  const scale = Math.min(2, window.devicePixelRatio || 1);
+  const W = window.innerWidth, H = window.innerHeight;
+  const load = (src) =>
+    new Promise((res, rej) => {
+      const el = document.createElement("script");
+      el.src = src;
+      el.onload = res;
+      el.onerror = rej;
+      document.head.appendChild(el);
+    });
+  if (!window.html2canvas) await load("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+  /* html2canvas cannot read color(...) values (the library's newer tokens compute to them): hand the clone
+     every colour as plain rgb, converted through a canvas */
+  const COLOR_PROPS = ["color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "outline-color", "text-decoration-color", "fill", "stroke", "caret-color"];
+  const STRING_PROPS = ["box-shadow", "background-image", "text-shadow"];
+  const cv = document.createElement("canvas").getContext("2d");
+  const toRgb = (v) => {
+    if (!v || !/color\(|lab\(|lch\(|oklab\(|oklch\(|color-mix\(/.test(v)) return null;
+    cv.fillStyle = "#000";
+    cv.fillStyle = v; // canvas resolves color-mix and friends, but keeps the color(srgb ...) form
+    const out = cv.fillStyle;
+    const m = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+%?))?\)$/.exec(out);
+    if (!m) return out;
+    const ch = (x) => Math.round(Math.min(1, Math.max(0, parseFloat(x))) * 255);
+    const a = m[4] == null ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+    return `rgba(${ch(m[1])}, ${ch(m[2])}, ${ch(m[3])}, ${a})`;
+  };
+  const fixString = (v) => (v && /color\(|lab\(|lch\(|oklab\(|oklch\(|color-mix\(/.test(v) ? v.replace(/(?:color|lab|lch|oklab|oklch|color-mix)\((?:[^()]|\([^()]*\))*\)/g, (m) => toRgb(m) || "rgba(0,0,0,0)") : null);
+  const live = Array.from(document.querySelectorAll("*"));
+  live.forEach((e, i) => e.setAttribute("data-rv-i", i));
+  const onclone = (doc) => {
+    for (const ce of doc.querySelectorAll("[data-rv-i]")) {
+      const le = live[+ce.getAttribute("data-rv-i")];
+      if (!le) continue;
+      const cs = getComputedStyle(le);
+      for (const p of COLOR_PROPS) {
+        const r = toRgb(cs.getPropertyValue(p));
+        if (r) ce.style.setProperty(p, r, "important");
+      }
+      for (const p of STRING_PROPS) {
+        const r = fixString(cs.getPropertyValue(p));
+        if (r) ce.style.setProperty(p, r, "important");
+      }
+      ce.removeAttribute("data-rv-i");
+    }
+  };
+  let c;
+  try {
+    c = await window.html2canvas(document.documentElement, {
+    onclone,
+    scale,
+    useCORS: true,
+    logging: false,
+    x: window.scrollX,
+    y: window.scrollY,
+    width: W,
+    height: H,
+    windowWidth: W,
+    windowHeight: H,
+    ignoreElements: (el) => el === host || el === state.video,
+    });
+  } finally {
+    for (const e of live) e.removeAttribute("data-rv-i");
+  }
+  return { canvas: c, sx: scale, sy: scale, how: "dom" };
+}
+
+function drawMarker(canvas, sx, sy, rect, n, withNumber = false) {
+  const g = canvas.getContext("2d");
+  g.setTransform(1, 0, 0, 1, 0, 0); // html2canvas leaves its context scaled
+  const x = rect.x * sx, y = rect.y * sy, w = rect.w * sx, h = rect.h * sy;
+  const lw = Math.max(2, 2 * sx);
+  g.lineJoin = "round";
+  /* white halo, then the red */
+  g.strokeStyle = "rgba(255,255,255,.95)";
+  g.lineWidth = lw + 2 * sx;
+  g.strokeRect(x - lw, y - lw, w + 2 * lw, h + 2 * lw);
+  g.strokeStyle = "#e11d48";
+  g.lineWidth = lw;
+  g.strokeRect(x - lw, y - lw, w + 2 * lw, h + 2 * lw);
+  if (!withNumber) return;
+  /* the number badge, top-left, outside the box */
+  const r = 11 * sx;
+  let cx = x - lw - r * 0.3, cy = y - lw - r * 0.3;
+  if (cy - r < 0) cy = y + r + lw;
+  if (cx - r < 0) cx = x + r + lw;
+  g.beginPath();
+  g.arc(cx, cy, r + 1.5 * sx, 0, Math.PI * 2);
+  g.fillStyle = "#fff";
+  g.fill();
+  g.beginPath();
+  g.arc(cx, cy, r, 0, Math.PI * 2);
+  g.fillStyle = "#e11d48";
+  g.fill();
+  g.fillStyle = "#fff";
+  g.font = `700 ${Math.round(12 * sx)}px -apple-system, system-ui, sans-serif`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(String(n), cx, cy + 0.5 * sx);
+}
+
+/* the scroll positions that put the target where it is: the window and every scrolling ancestor */
+function scrollsOf(el) {
+  const out = [{ selector: "window", top: window.scrollY, left: window.scrollX }];
+  let nearest = true;
+  for (let cur = el.parentElement; cur && cur !== document.body; cur = cur.parentElement) {
+    const cs = getComputedStyle(cur);
+    const scrolls = /(auto|scroll)/.test(cs.overflowY + cs.overflowX) && (cur.scrollHeight > cur.clientHeight + 2 || cur.scrollWidth > cur.clientWidth + 2);
+    if (!scrolls) continue;
+    /* the nearest pane always (a ghost pin follows it later, scrolled or not); farther ones when scrolled */
+    if (nearest || cur.scrollTop || cur.scrollLeft) out.push({ selector: selectorFor(cur), top: cur.scrollTop, left: cur.scrollLeft, pane: nearest || undefined });
+    nearest = false;
+  }
+  return out;
+}
+/* the app's own remembered choices (org view, theme, sidebar...) at the time of the comment */
+function appSnapshot() {
+  const out = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("merged-ui.") && !/session|toast|onboarding/.test(k)) out[k] = localStorage.getItem(k);
+    }
+  } catch {}
+  return out;
+}
+
+/* ---------- save ---------- */
+let busy = false;
+async function save() {
+  if (busy || !state.pending) return;
+  const text = ta.value.trim();
+  if (!text) {
+    ta.focus();
+    return;
+  }
+  busy = true;
+  $(".save").disabled = true;
+  const { el, rect } = state.pending;
+  const meta = {
+    route: location.pathname + location.search,
+    pageTitle: pageTitle(),
+    module: moduleOf(),
+    docTitle: document.title,
+    theme: document.documentElement.getAttribute("data-theme") || "light",
+    element: describe(el),
+    context: contextOf(el),
+    path: cssPath(el),
+    selector: selectorFor(el),
+    textKey: txt(el).slice(0, 80),
+    rect,
+    viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio },
+    severity,
+    text,
+    trail: state.trail.slice(-20),
+    overlay: host.parentNode !== document.body || !!closestDeep(el, "dialog[open],:popover-open,[popover],[role=dialog],[role=alertdialog],[role=menu],[role=listbox],[role=tooltip],[data-radix-popper-content-wrapper]"),
+    mark: state.pending.mark || null,
+    scrolls: scrollsOf(el),
+    app: appSnapshot(),
+  };
+  const png = state.pending.shot;
+  const how = state.pending.how;
+  /* the comment is on the page the moment Save is pressed: a pin with its number and a card with the picture
+     already on screen, shimmering while the picture goes up; the hub's record replaces it when it arrives */
+  const tmp = { id: `tmp-${Date.now().toString(36)}`, n: state.lastN + 1, ts: Date.now(), by: state.me, ...meta, shotHow: how, status: "open", shot: png ? "pending" : null, thumb: null, localShot: png, pending: true, resolved: false };
+  state.comments.push(tmp);
+  state.count = state.comments.length;
+  state.lastN = tmp.n;
+  state.pinEls.set(tmp.id, el);
+  updateBar();
+  closeComposer();
+  busy = false;
+  $(".save").disabled = false;
+  renderPanel();
+  sendComment(tmp, el);
+}
+async function sendComment(tmp, el) {
+  const { id, n, localShot, pending, resolved, ...meta } = tmp;
+  try {
+    const thumb = localShot ? await makeThumb(localShot).catch(() => null) : null;
+    const res = await rv("/__review/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...meta, shot: undefined, png: localShot, thumb, session: window.__reviewSession }) });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || "save failed");
+    state.pinEls.delete(id);
+    state.pinEls.set(j.entry.id, el);
+    state.mine.add(j.entry.id);
+    state.comments = state.comments.filter((c) => c.id !== id);
+    listSeen = "";
+    await loadComments();
+    toast(`Saved #${j.entry.n}${localShot ? "" : " (no picture)"}`);
+    const card = panelBody.querySelector(`.card[data-id="${id}"]`);
+    if (card) renderPanel();
+  } catch (e) {
+    tmp.failed = e.message;
+    toast(`Could not save #${n}: ${e.message}`);
+    renderPanel();
+  }
+}
+
+/* ---------- pins: every comment of this session, on its element, wherever it is on screen ---------- */
+const listUrl = () => `/__review/list${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`;
+let listSeen = ""; // the last list as text: a poll that brings the same thing changes nothing
+state.known = null; // ids the page has had; null until the first list
+state.mine = new Set(); // ids this page created: never "new"
+state.unread = new Set(); // arrived from others, not yet seen in the list
+let syncTimer = null;
+/* the pill over the list */
+function syncNote(kind, text) {
+  const el = $(".panel-sync");
+  clearTimeout(syncTimer);
+  if (!kind) {
+    el.classList.remove("on");
+    return;
+  }
+  el.hidden = false;
+  el.className = `panel-sync on ${kind}`;
+  el.querySelector(".txt").textContent = text;
+  if (kind === "fresh") syncTimer = setTimeout(() => el.classList.remove("on"), 1400);
+}
+function updateUnread() {
+  const n = state.unread.size;
+  if (n) syncNote("new", `${n} new`);
+  else if ($(".panel-sync").classList.contains("new")) syncNote(null);
+  for (const card of panelBody.querySelectorAll(".card")) card.classList.toggle("unread", state.unread.has(card.dataset.id));
+  watchUnread();
+}
+/* a card that has been in view for a moment is seen */
+const seenTimers = new Map();
+const unreadWatch = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    const id = e.target.dataset.id;
+    if (e.intersectionRatio >= 0.6 && state.unread.has(id)) {
+      if (!seenTimers.has(id)) seenTimers.set(id, setTimeout(() => {
+        seenTimers.delete(id);
+        state.unread.delete(id);
+        updateUnread();
+      }, 900));
+    } else if (seenTimers.has(id)) {
+      clearTimeout(seenTimers.get(id));
+      seenTimers.delete(id);
+    }
+  }
+}, { threshold: [0, 0.6, 1] });
+function watchUnread() {
+  unreadWatch.disconnect();
+  for (const card of panelBody.querySelectorAll(".card.unread")) unreadWatch.observe(card);
+}
+window.__reviewWhy = (id) => { /* read-only, for drives: why a pin is or is not drawn */
+  const c = state.comments.find((x) => x.id === id);
+  if (!c) return "no such comment";
+  const here = location.pathname;
+  const el = resolve(c, performance.now(), true);
+  const r = el?.getBoundingClientRect();
+  const out = { onRoute: (c.route || "").split("?")[0] === here, resolved: !!el, tag: el?.tagName, rect: r && [r.left, r.top, r.width, r.height].map(Math.round), ghost: !el && !!(c.rect && ghostRect(c)), context: c.context };
+  if (el) {
+    state.pinSeen.delete(c.id);
+    out.visible = visible(c, el, r, performance.now());
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const hit = targetAt(cx, cy);
+    out.hit = hit && (hit.id || hit.tagName);
+    out.clip = clipFor(portalOf(el));
+  }
+  return out;
+};
+window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: pollTick }); // read-only, for drives
+$(".panel-sync").addEventListener("click", () => {
+  const first = panelBody.querySelector(".card.unread");
+  if (first) first.scrollIntoView({ block: "center", behavior: "smooth" });
+});
+let loadComments = async function () {
+  try {
+    const text = await (await rv(listUrl())).text();
+    const changed = text !== listSeen;
+    listSeen = text;
+    const all = JSON.parse(text);
+    if (state.known) {
+      for (const c of all) if (!state.known.has(c.id) && !state.mine.has(c.id) && c.status !== "approved") state.unread.add(c.id);
+    }
+    state.known = new Set(all.map((c) => c.id));
+    for (const id of [...state.unread]) if (!state.known.has(id)) state.unread.delete(id);
+    state.done = all.filter((c) => c.status === "approved");
+    const l = all.filter((c) => c.status !== "approved");
+    for (const c of state.comments) if (c.pending) l.push(c); // still on their way to the hub: kept until they arrive
+    state.comments = l;
+    state.count = l.length;
+    state.lastN = all.length ? Math.max(...all.map((c) => c.n)) : 0;
+    for (const id of state.pinEls.keys()) if (!l.some((c) => c.id === id)) state.pinEls.delete(id);
+    updateBar();
+    return changed;
+  } catch {
+    /* server away: keep what we have */
+    return false;
+  }
+};
+/* following the others: the list is asked for every 10 seconds while the tab is visible, and the panel is
+   redrawn only when something actually changed and nobody is mid-edit in it (a note being typed, a text being
+   edited, a "sure?" pending, a menu open) */
+/* every 10 s while something on screen follows the list (the drawer open, or pins showing on the page); once a
+   minute otherwise, for the count on the bar; not at all in a background tab or while review is hidden */
+let pollTick = 0;
+setInterval(async () => {
+  if (document.hidden || state.off) return;
+  pollTick++;
+  const watching = panel.classList.contains("on") || state.showPins || PAGE_MODE;
+  if (!watching && pollTick % 6) return;
+  const before = state.unread.size;
+  await loadComments(); // redraws only when the list changed and nobody is mid-edit
+  if (state.unread.size !== before) {
+    if (panel.classList.contains("on")) updateUnread();
+    else toast(`${state.unread.size} new comment${state.unread.size > 1 ? "s" : ""}`);
+  }
+}, 10_000);
+/* where the comments live: on the hub (shared) or on this machine; the page view shows the hub's meter */
+state.hub = null;
+rv(`/__review/hub${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`).then((r) => r.json()).then((h) => {
+  state.hub = h;
+  state.me = h.who || "";
+  if (PAGE_MODE) renderPanel();
+}).catch(() => {});
+let lastResolve = 0;
+function resolve(c, now, force) {
+  const cached = state.pinEls.get(c.id);
+  if (cached && cached.isConnected) {
+    const cr = cached.getBoundingClientRect();
+    if (cr.width || cr.height) return cached;
+    state.pinEls.delete(c.id); // still in the page but not shown (a closed modal's content): find it afresh
+  }
+  if (!c.selector || (!force && now - (c._tried || 0) < 500)) return null;
+  c._tried = now;
+  let found = [];
+  try {
+    found = queryDeep(c.selector);
+  } catch {
+    return null;
+  }
+  /* the same selector can land on another element once portals reorder: ask for the same text, a similar size,
+     and the same kind of place (a drawer comment resolves inside a drawer, a menu comment inside a menu) */
+  const near = (a, b) => Math.abs(a - b) <= Math.max(40, 0.4 * Math.max(a, b));
+  const norm = (t) => String(t || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const sameText = (e) => {
+    if (!c.textKey) return true;
+    const a = norm(txt(e).slice(0, 80)), b = norm(c.textKey);
+    if (a === b) return true;
+    /* a live figure in the text (a counter "25/63", a time, a count): the first words decide */
+    return b.length >= 24 && a.slice(0, 24) === b.slice(0, 24) && /\d/.test(b);
+  };
+  const fits = (e) => {
+    if (!sameText(e)) return false;
+    const r = e.getBoundingClientRect();
+    if (!r.width && !r.height) return false;
+    /* about the same size; a wide block (a form row, a section) follows its container's width, so only its
+       height counts, and a window of another size is not a different element */
+    if (c.rect) {
+      const wide = c.rect.w > 400;
+      if (!near(r.height, c.rect.h)) return false;
+      if (!wide && !near(r.width, c.rect.w)) return false;
+    }
+    if (/^Drawer or dialog/.test(c.context || "")) {
+      /* the same dialog, not a lookalike: "Adding new policy" and "Editing policy" share one form */
+      if (!closestDeep(e, "[role=dialog],[role=alertdialog],dialog[open]")) return false;
+      if (!sameDialog(contextOf(e), c.context)) return false;
+    }
+    if (/^Popover or menu/.test(c.context || "") && !closestDeep(e, "[data-radix-popper-content-wrapper],[role=menu],[role=listbox],[role=tooltip],[role=combobox],:popover-open")) return false;
+    return true;
+  };
+  let el = found.find(fits) || null;
+  if (!el && c.textKey) {
+    /* the address failed (an id that changed, a layer rebuilt): the same kind of element with the same words and
+       about the same size, anywhere on the page, open shadow roots included */
+    const tag = (c.selector.split(/[\s>]+/).pop() || "*").replace(/[:#.[].*$/, "") || "*";
+    const walk = (root, out, depth) => {
+      for (const e of root.querySelectorAll(tag)) if (e !== host && fits(e)) out.push(e);
+      if (depth < 4) for (const e of root.querySelectorAll("*")) if (e.shadowRoot && e !== host) walk(e.shadowRoot, out, depth + 1);
+      return out;
+    };
+    el = walk(document, [], 0)[0] || null;
+  }
+  if (el) state.pinEls.set(c.id, el);
+  return el;
+}
+/* the body-level root an element lives in: the app's #root, or the portal a Radix layer was rendered into */
+function portalOf(el) {
+  let e = el;
+  while (e && e.parentElement && e.parentElement !== document.body) e = e.parentElement;
+  return e;
+}
+/* LAYERING. Every pin is drawn in our one layer above the app, so a pin on the page would float over an open
+   popover, menu or drawer that covers its spot. Layers rendered later into the body (portals) sit above
+   everything before them, so a pin is clipped by the surfaces of every portal after its own: it shows where the
+   page shows, and a pin inside the popover is clipped by nothing. */
+function surfacesOf(node, out, depth) {
+  /* the fixed or absolute boxes a portal paints: the popper wrapper, a dialog's overlay and its content */
+  for (const ch of node.children) {
+    if (ch === host) continue;
+    const r = ch.getBoundingClientRect();
+    if (!r.width || !r.height) {
+      if (depth < 4) surfacesOf(ch, out, depth + 1);
+      continue;
+    }
+    const pos = getComputedStyle(ch).position;
+    if (pos === "fixed" || pos === "absolute") out.push(r);
+    else if (depth < 4) surfacesOf(ch, out, depth + 1);
+  }
+}
+let layersAt = 0, layersCache = [];
+function layersAbove(portal) {
+  const now = performance.now();
+  if (now - layersAt > 120) {
+    layersAt = now;
+    layersCache = [];
+    for (const ch of document.body.children) {
+      if (ch === host || ch.tagName === "SCRIPT" || ch.tagName === "STYLE") continue;
+      const out = [];
+      const r = ch.getBoundingClientRect();
+      const pos = r.width && r.height ? getComputedStyle(ch).position : "";
+      if (pos === "fixed" || pos === "absolute") out.push(r); // the layer is the body child itself (a popper wrapper)
+      else surfacesOf(ch, out, 0);
+      layersCache.push({ el: ch, rects: out });
+    }
+  }
+  const i = layersCache.findIndex((l) => l.el === portal);
+  return layersCache.slice(i + 1).flatMap((l) => l.rects);
+}
+/* rects as a set that does not overlap (a grid over their edges), so an evenodd polygon can cut them all out */
+function disjoint(rects) {
+  const xs = [...new Set(rects.flatMap((r) => [r.left, r.right]))].sort((a, b) => a - b);
+  const ys = [...new Set(rects.flatMap((r) => [r.top, r.bottom]))].sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < xs.length - 1; i++)
+    for (let j = 0; j < ys.length - 1; j++) {
+      const cx = (xs[i] + xs[i + 1]) / 2, cy = (ys[j] + ys[j + 1]) / 2;
+      if (rects.some((r) => cx > r.left && cx < r.right && cy > r.top && cy < r.bottom)) out.push({ left: xs[i], right: xs[i + 1], top: ys[j], bottom: ys[j + 1] });
+    }
+  return out;
+}
+function clipFor(portal) {
+  const holes = layersAbove(portal);
+  if (!holes.length) return "";
+  const W = window.innerWidth, H = window.innerHeight;
+  const cells = disjoint(holes.map((r) => ({ left: Math.max(0, r.left), right: Math.min(W, r.right), top: Math.max(0, r.top), bottom: Math.min(H, r.bottom) })).filter((r) => r.right > r.left && r.bottom > r.top));
+  if (!cells.length) return "";
+  const pt = (x, y) => `${x}px ${y}px`;
+  const ring = cells.map((r) => `${pt(r.left, r.top)},${pt(r.right, r.top)},${pt(r.right, r.bottom)},${pt(r.left, r.bottom)},${pt(r.left, r.top)}`);
+  return `polygon(evenodd, 0 0, ${W}px 0, ${W}px ${H}px, 0 ${H}px, 0 0, ${ring.join(",")})`;
+}
+function visible(c, el, r, now) {
+  const seen = state.pinSeen.get(c.id);
+  if (seen && now - seen.at < 250) return seen.ok;
+  const cx = Math.min(window.innerWidth - 1, Math.max(0, r.left + r.width / 2));
+  const cy = Math.min(window.innerHeight - 1, Math.max(0, r.top + r.height / 2));
+  const hit = targetAt(cx, cy);
+  const ok = !!hit && (el === hit || el.contains(hit) || hit.contains(el));
+  state.pinSeen.set(c.id, { at: now, ok });
+  return ok;
+}
+const tip = $(".pin-tip");
+/* where a comment's element was, in today's viewport: its box at capture, moved by how far the page has scrolled
+   since (the window only; an inner scroller is not followed) */
+/* the page's main scrolling pane, for comments made before panes were recorded: the tallest scroller that fills
+   most of the window (the window itself when it is the one that scrolls); looked up twice a second */
+let mainPane = { at: 0, el: null };
+function mainScroller() {
+  if (performance.now() - mainPane.at < 500) return mainPane.el;
+  let best = null;
+  const se = document.scrollingElement;
+  if (se && se.scrollHeight > se.clientHeight + 2) best = null; // the window scrolls: nothing inner to follow
+  else {
+    for (const el of document.querySelectorAll("main, [class*=scroll], [style*=overflow], div")) {
+      if (el.clientHeight < window.innerHeight * 0.5 || el.scrollHeight <= el.clientHeight + 2) continue;
+      const cs = getComputedStyle(el);
+      if (!/(auto|scroll)/.test(cs.overflowY)) continue;
+      if (!best || el.scrollHeight > best.scrollHeight) best = el;
+    }
+  }
+  mainPane = { at: performance.now(), el: best };
+  return best;
+}
+function ghostRect(c) {
+  /* only for things of the page itself: inside a drawer, dialog, menu or hover card the element is simply not
+     open right now, and a ghost would float over nothing */
+  if (c.overlay || /drawer|dialog|menu|popover|hover|tooltip|dropdown/i.test(c.context || "")) return null;
+  if (/dialog|modal|drawer|popover|menu|dropdown|tooltip|sheet/i.test(c.path || "")) return null; // older comments: the path names the layer
+  if (!(c.rect.w > 8 && c.rect.h > 8) || (c.rect.x === 0 && c.rect.y === 0)) return null;
+  const win = (c.scrolls || []).find((s) => s.selector === "window") || { top: 0, left: 0 };
+  let dx = (win.left || 0) - window.scrollX;
+  let dy = (win.top || 0) - window.scrollY;
+  let clip = null;
+  const inner = (c.scrolls || []).filter((s) => s.selector !== "window");
+  let followed = false;
+  for (const sc of inner) {
+    let el = null;
+    try {
+      el = queryDeep(sc.selector)[0] || null;
+    } catch {}
+    if (!el) continue;
+    dx += (sc.left || 0) - el.scrollLeft;
+    dy += (sc.top || 0) - el.scrollTop;
+    if (sc.pane || !clip) clip = el.getBoundingClientRect();
+    followed = true;
+  }
+  if (!followed) {
+    /* no pane on record (an older comment): the page's main pane, taken as sitting at the top when the picture was made */
+    const el = mainScroller();
+    if (el) {
+      dx -= el.scrollLeft;
+      dy -= el.scrollTop;
+      clip = el.getBoundingClientRect();
+    }
+  }
+  const left = c.rect.x + dx;
+  const top = c.rect.y + dy;
+  if (top + c.rect.h < -200 || top > window.innerHeight + 200) return null; // far off screen: nothing to show
+  if (clip && (top + c.rect.h < clip.top || top > clip.bottom)) return null; // scrolled out of its pane
+  return { left, top, width: c.rect.w, height: c.rect.h, right: left + c.rect.w, bottom: top + c.rect.h, clip };
+}
+function renderPins() {
+  pinsEl.innerHTML = "";
+  const now = performance.now();
+  const here = location.pathname;
+  let over = null;
+  /* pins hidden: only the one a go-to just landed on is drawn, until the next click on the app clears it */
+  const only = state.showPins ? null : state.flash?.id;
+  if (!state.showPins && !only) {
+    tip.classList.remove("on");
+    return;
+  }
+  const rects = new Map(); // comment id -> its pin's anchor this frame, for the tip that stays open
+  for (const c of state.comments) {
+    if (only && c.id !== only) continue;
+    if ((c.route || "").split("?")[0] !== here) continue;
+    const el = resolve(c, now);
+    /* the element is gone or changed (a chart redrawn, a figure that moved on): the pin where it was taken,
+       dimmed and dashed, so the place is still shown and the comment still reachable */
+    const ghost = !el && c.rect && ghostRect(c);
+    if (!el && !ghost) continue;
+    const r = el ? el.getBoundingClientRect() : ghost;
+    if (!r.width && !r.height) continue;
+    if (el && !visible(c, el, r, now)) continue;
+    rects.set(c.id, { c, r });
+    const wrap = document.createElement("div");
+    wrap.className = "pin-wrap" + (ghost ? " ghost" : "");
+    if (el) wrap.style.clipPath = clipFor(portalOf(el));
+    else if (ghost.clip) wrap.style.clipPath = `inset(${Math.max(0, ghost.clip.top)}px ${Math.max(0, window.innerWidth - ghost.clip.right)}px ${Math.max(0, window.innerHeight - ghost.clip.bottom)}px ${Math.max(0, ghost.clip.left)}px)`;
+    pinsEl.appendChild(wrap);
+    const box = document.createElement("div");
+    box.className = "pin-box";
+    box.style.left = `${r.left - 2}px`;
+    box.style.top = `${r.top - 2}px`;
+    box.style.width = `${r.width + 4}px`;
+    box.style.height = `${r.height + 4}px`;
+    wrap.appendChild(box);
+    const d = document.createElement("div");
+    const hot = state.flash && state.flash.id === c.id && now < state.flash.until;
+    d.className = "pin ui" + (hot ? " flash" : " faded") + (state.unread.has(c.id) ? " unread" : "");
+    if (hot) box.classList.add("flash");
+    d.style.left = `${r.left}px`;
+    d.style.top = `${r.top}px`;
+    d.textContent = c.n;
+    d.dataset.id = c.id;
+    wrap.appendChild(d);
+    /* the tip follows the mouse, not events: pins are redrawn every frame, so a "mouse left" would never fire */
+    const { x, y } = state.mouse;
+    if (x >= r.left - 9 && x <= r.left + 15 && y >= r.top - 9 && y <= r.top + 15) over = { c, r };
+    /* just arrived by go-to: the comment reads itself out for the flash's time, no hover needed */
+    if (hot && !over) over = { c, r };
+  }
+  /* the tip already up stays while something is pending on it (an edit, a "sure?") or the pointer is on it */
+  if (!over && tip.classList.contains("on") && rects.has(tip.dataset.id)) {
+    const t = tip.getBoundingClientRect();
+    const { x, y } = state.mouse;
+    if (tipHold === tip.dataset.id || (x >= t.left - 8 && x <= t.right + 8 && y >= t.top - 10 && y <= t.bottom + 8)) over = rects.get(tip.dataset.id);
+  }
+  if (over && !state.pending && !$(".panel").classList.contains("on")) {
+    if (tip.dataset.id !== over.c.id) buildTip(over.c);
+    if (tipHold === over.c.id) tip.classList.add("held");
+    tip.style.left = `${Math.min(over.r.left, window.innerWidth - 310)}px`;
+    tip.style.top = `${over.r.top + 18}px`;
+    tip.classList.add("on");
+  } else {
+    tip.classList.remove("on", "held");
+    delete tip.dataset.id;
+    tipHold = null;
+  }
+}
+let tipHold = null; // the comment id whose tip must stay up whatever the pointer does
+function buildTip(c) {
+  tip.dataset.id = c.id;
+  const sev = SEVERITIES.map(([k, label]) => `<button type="button" data-k="${k}" class="${k === c.severity ? "on" : ""}" aria-label="${label}"><span class="dot"></span><span class="lbl">${label}</span><span class="scope-tip">${label}</span></button>`).join("");
+  tip.innerHTML = `<div class="tip-head"><span class="tip-sev">${sev}</span><button class="tip-open" title="Show it in the list" aria-label="Show it in the list"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 15l3 3 3-3M18 11v7"/></svg></button></div><div class="tip-text" aria-label="Comment, click to edit"></div>${c.note?.text ? '<div class="tip-note"></div>' : ""}<div class="tip-acts"><div class="tip-acts-in"><button class="tip-rm">Remove</button><button class="tip-ok" data-to="${c.status === "progress" ? "approval" : c.status === "approval" ? "approved" : "progress"}">${c.status === "progress" ? "Done" : c.status === "approval" ? "Approve" : "Pick up"}</button></div></div>`;
+  tip.querySelector(".tip-text").textContent = c.text;
+  if (c.note?.text) tip.querySelector(".tip-note").innerHTML = noteHtml(c);
+}
+tip.addEventListener("click", async (e) => {
+  const c = state.comments.find((x) => x.id === tip.dataset.id);
+  if (!c) return;
+  const t = e.target.closest("button, .tip-text");
+  if (!t) return;
+  if (c.pending && !t.classList.contains("tip-open")) return; // still on its way to the hub: nothing to act on yet
+  tip.classList.add("held"); // keep the hover state through the reload the action causes
+  setTimeout(() => tip.classList.remove("held"), 800);
+  if (t.classList.contains("tip-open")) return showInList(c);
+  if (t.closest(".tip-sev")) {
+    const k = t.dataset.k;
+    if (k === c.severity) return;
+    /* the pill changes at once, the save follows */
+    for (const b of tip.querySelectorAll(".tip-sev button")) b.classList.toggle("on", b.dataset.k === k);
+    c.severity = k;
+    await applyUpdate({ id: c.id, severity: k });
+    return;
+  }
+  if (t.classList.contains("tip-ok")) {
+    const to = t.dataset.to;
+    await applyUpdate({ id: c.id, status: to }, t);
+    const fresh = state.comments.find((x) => x.id === c.id);
+    if (fresh) buildTip(fresh);
+    else {
+      tip.classList.remove("on");
+      delete tip.dataset.id;
+      tipHold = null;
+    }
+    toast(`#${c.n} ${statusToast[to]}`);
+    return;
+  }
+  if (t.classList.contains("tip-rm")) {
+    if (!t.classList.contains("sure")) {
+      t.classList.add("sure");
+      t.textContent = "Remove, sure?";
+      tipHold = c.id;
+      setTimeout(() => {
+        t.classList.remove("sure");
+        t.textContent = "Remove";
+        if (tipHold === c.id && t.isConnected) tipHold = null;
+      }, 2500);
+      return;
+    }
+    await api("delete", { id: c.id });
+    await loadComments();
+    tip.classList.remove("on");
+    delete tip.dataset.id;
+    tipHold = null;
+    renderPanel();
+    toast(`Removed #${c.n}`);
+    return;
+  }
+  if (t.classList.contains("tip-text") && t.contentEditable !== "true") {
+    tipHold = c.id;
+    editInPlace(t, c, () => {
+      tipHold = null;
+      const fresh = state.comments.find((x) => x.id === c.id);
+      if (fresh) buildTip(fresh); // the saved text, the tip still up under the pointer
+      renderPanel();
+    });
+  }
+});
+/* a click on a pin opens the list on that comment. Pins are redrawn every frame, so the pressed element may be
+   gone by the release and no click would fire: the press is noted, the release on the same pin acts. */
+let pinDown = null;
+pinsEl.addEventListener("pointerdown", (e) => {
+  pinDown = e.target.closest(".pin")?.dataset.id || null;
+});
+pinsEl.addEventListener("pointerup", (e) => {
+  const up = e.target.closest(".pin")?.dataset.id;
+  const c = pinDown && up === pinDown && state.comments.find((x) => x.id === pinDown);
+  pinDown = null;
+  if (c) showInList(c);
+});
+/* the list, opened and scrolled to one comment; a scope or tag that would hide it is widened first */
+async function showInList(c) {
+  if (state.filter.size && !state.filter.has(c.severity)) state.filter.clear();
+  const sc = state.scope;
+  const group = (c.module && c.module.group) || moduleOf(c.route).group || "Other";
+  if ((sc.kind === "route" && sc.route !== (c.route || "").split("?")[0]) || (sc.kind === "group" && sc.group !== group)) state.scope = { kind: "all" }; // "here" follows the page and needs no widening
+  state.spot = { id: c.id, until: performance.now() + 2400 };
+  tip.classList.remove("on");
+  delete tip.dataset.id;
+  tipHold = null;
+  openPanel(true);
+}
+/* edit a comment's text where it stands: Enter or a click elsewhere keeps it, Escape puts the old text back */
+function editInPlace(el, c, after) {
+  el.contentEditable = "true";
+  el.focus();
+  /* a caret at the end: inside a shadow root, focus() alone leaves the editable without one */
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch {}
+  let finished = false;
+  const done = async (keep) => {
+    if (finished) return;
+    finished = true;
+    window.removeEventListener("pointerdown", outside, true);
+    el.contentEditable = "false";
+    const text = el.textContent.trim();
+    if (keep && text && text !== c.text) {
+      await applyUpdate({ id: c.id, text });
+      toast(`#${c.n} updated`);
+    } else el.textContent = c.text; // dropped or unchanged: the saved words back
+    after();
+  };
+  /* a click anywhere else ends the edit (the focus guard above keeps blur from reaching us) */
+  const outside = (ev) => {
+    if (!ev.composedPath().includes(el)) done(true);
+  };
+  window.addEventListener("pointerdown", outside, true);
+  el.addEventListener("blur", () => done(true), { once: true });
+  el.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.shiftKey) {
+      ev.preventDefault();
+      done(true);
+    }
+    if (ev.key === "Escape") {
+      ev.stopPropagation();
+      el.textContent = c.text;
+      done(false);
+    }
+  });
+}
+/* keep the pins on their elements through any layout change, not only scroll and resize */
+(function track() {
+  if (!state.capturing && !state.off) renderPins();
+  requestAnimationFrame(track);
+})();
+function setPins(on) {
+  if (on && !state.showPins) loadComments().then(() => { if (state.unread.size && !panel.classList.contains("on")) toast(`${state.unread.size} new comment${state.unread.size > 1 ? "s" : ""}`); }); // fresh the moment they come back
+  state.showPins = on;
+  $(".pins-toggle").classList.toggle("on", on);
+  tip.classList.remove("on");
+  try {
+    localStorage.setItem("review.pins", on ? "on" : "off");
+  } catch {}
+}
+$(".pins-toggle").addEventListener("click", () => setPins(!state.showPins));
+setPins(state.showPins);
+
+function setSticky(on) {
+  state.sticky = on;
+  $(".bar .k").textContent = on ? "every click comments · Esc stops" : `${MOD} + click to comment`;
+  if (!on) showHover(null);
+  else showHover(targetAt(state.mouse.x, state.mouse.y));
+}
+/* the whole review layer on or off: off hides the bar, the pins, the panel and the composer, and ⌥-click goes back to
+   the app. Remembered across reloads; the shortcut is the way back since nothing is left on screen. */
+function setReview(on, quiet) {
+  state.off = !on;
+  host.toggleAttribute("data-off", !on);
+  if (!on) {
+    if (state.pending) closeComposer();
+    if (panel.classList.contains("on")) openPanel(false);
+    if (lightbox.classList.contains("on")) closeLightbox();
+    if (state.sticky) setSticky(false);
+    showHover(null);
+    tip.classList.remove("on");
+  }
+  try {
+    localStorage.setItem("review.on", on ? "on" : "off");
+  } catch {}
+  if (!quiet) toast(on ? "Review is back" : `Review hidden · ${HIDE_KEY} shows it again`, on ? 2200 : 4000);
+}
+$(".bar .off").addEventListener("click", () => setReview(false));
+
+$(".bar .dot").addEventListener("click", async () => {
+  if (extHere() || state.stream?.active) return toast("Pictures are on");
+  toast("The review extension is not in this page. Loaded in chrome://extensions? Then reload this tab. Asking to share instead…", true);
+  await sleep(1800);
+  state.declined = false;
+  const ok = await ensureStream();
+  toast(ok ? "Pictures on: every save grabs a true frame" : "Not shared: pictures fall back to a rough render");
+});
+const markExt = () => {
+  if (!extHere()) return;
+  dot.classList.add("live");
+  dot.title = "Pictures: on (review extension)";
+};
+window.addEventListener("message", (e) => {
+  if (e.source === window && e.data?.type === "review-ext-ready") markExt();
+});
+markExt();
+let updateBar = function () {
+  countEl.textContent = state.count ? String(state.count) : "";
+};
+let toastTimer;
+function toast(msg, hold) {
+  /* hold: true keeps the toast up (busy, until the next toast); a number keeps it that many ms */
+  toastEl.textContent = msg;
+  toastEl.classList.toggle("busy", hold === true);
+  toastEl.classList.add("on");
+  clearTimeout(toastTimer);
+  if (hold !== true) toastTimer = setTimeout(() => toastEl.classList.remove("on"), typeof hold === "number" ? hold : 2200);
+}
+
+loadComments();
+$(".bar .k").textContent = `${MOD} + click to comment`;
+
+/* where the number sits on a picture, as fractions of the picture: drawMarker's badge geometry. New comments carry
+   the box in picture pixels (mark); older ones are placed from the picture's own size, the way they were baked. */
+function badgeSpot(c, natW, natH) {
+  let x, y, s, cw, ch;
+  if (c.mark) ({ x, y, s, cw, ch } = c.mark);
+  else {
+    const v = c.viewport || { w: 1920, h: 1080 };
+    const r = c.rect || { x: 0, y: 0 };
+    s = natW / v.w;
+    cw = natW;
+    ch = natH;
+    x = r.x * s;
+    y = r.y * s;
+  }
+  const lw = Math.max(2, 2 * s), rad = 11 * s;
+  let cx = x - lw - rad * 0.3, cy = y - lw - rad * 0.3;
+  if (cy - rad < 0) cy = y + rad + lw;
+  if (cx - rad < 0) cx = x + rad + lw;
+  return { left: (cx / cw) * 100, top: (cy / ch) * 100, size: ((2 * rad) / cw) * 100 };
+}
+function liveBadge(c, img) {
+  const el = document.createElement("span");
+  el.className = "pic-n";
+  el.textContent = c.n;
+  const place = () => {
+    if (!c.mark && !(img && img.naturalWidth)) return;
+    const b = badgeSpot(c, img?.naturalWidth || 0, img?.naturalHeight || 0);
+    el.style.left = `${b.left}%`;
+    el.style.top = `${b.top}%`;
+    el.style.width = `${b.size}cqw`;
+    el.style.height = `${b.size}cqw`;
+    el.style.fontSize = `${b.size * 0.55}cqw`;
+    el.style.visibility = "visible";
+  };
+  el.style.visibility = "hidden";
+  if (img && !img.complete) img.addEventListener("load", place, { once: true });
+  place();
+  return el;
+}
+
+/* ---------- the panel: every comment so far, editable, removable ---------- */
+const panel = $(".panel");
+const panelBody = $(".panel-body");
+const shotUrl = (c) => c.localShot || c.urls?.shot || `/__review/shot/${c.shot}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`;
+/* THUMBNAILS (2026-10-21): the list shows a small JPEG (720 wide), the full PNG is fetched only for the lightbox and
+   the copies. Made in the browser at save time; older comments get theirs the first time the list shows them. */
+const thumbUrl = (c) => (c.localShot ? c.localShot : c.urls?.thumb ? c.urls.thumb : c.thumb ? `/__review/shot/${c.thumb}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}` : shotUrl(c));
+async function makeThumb(src, maxW = 720) {
+  const img = await loadImage(src);
+  const scale = Math.min(1, maxW / img.naturalWidth);
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(img.naturalWidth * scale);
+  cv.height = Math.round(img.naturalHeight * scale);
+  const g = cv.getContext("2d");
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, cv.width, cv.height);
+  g.drawImage(img, 0, 0, cv.width, cv.height);
+  return cv.toDataURL("image/jpeg", 0.82);
+}
+let thumbing = false;
+async function backfillThumbs() {
+  if (thumbing) return;
+  thumbing = true;
+  try {
+    for (const c of [...state.comments, ...state.done]) {
+      if (c.thumb || !c.shot) continue;
+      const jpg = await makeThumb(shotUrl(c));
+      const r = await api("thumb", { id: c.id, jpg });
+      if (r.ok) c.thumb = `${c.id}.t.jpg`;
+    }
+  } catch {
+    /* next time */
+  } finally {
+    thumbing = false;
+  }
+}
+/* a write's answer put straight into what we hold and onto the card, so a button answers at once; the list is
+   fetched again only when the comment changes list (to or from Approved) */
+function applyEntry(entry) {
+  if (!entry?.id) return false;
+  const wasDone = state.done.some((c) => c.id === entry.id);
+  const isDone = entry.status === "approved";
+  state.comments = state.comments.filter((c) => c.id !== entry.id);
+  state.done = state.done.filter((c) => c.id !== entry.id);
+  (isDone ? state.done : state.comments).push(entry);
+  state.comments.sort((a, b) => a.n - b.n);
+  state.done.sort((a, b) => a.n - b.n);
+  state.count = state.comments.length;
+  updateBar();
+  return wasDone !== isDone; // crossed between the lists: the panel needs a rebuild
+}
+function refreshCard(c, animate = false) {
+  const card = panelBody.querySelector(`.card[data-id="${c.id}"]`);
+  if (!card) return false;
+  card.querySelector(".card-text").textContent = c.text;
+  const sev = card.querySelector(".card-sev");
+  const sevLabel = SEVERITIES.find(([k]) => k === c.severity)?.[1] || c.severity;
+  if (sev) {
+    sev.dataset.k = c.severity;
+    sev.setAttribute("aria-label", sevLabel);
+    const lbl = sev.querySelector(".lbl");
+    if (lbl) lbl.textContent = sevLabel;
+    else sev.textContent = sevLabel;
+  }
+  const rail = c.severity === "must" || c.severity === "should";
+  card.classList.toggle("card-rail", rail);
+  card.classList.toggle("card-rail-right", rail);
+  if (rail) card.dataset.k = c.severity;
+  else delete card.dataset.k;
+  const st = card.querySelector(".card-status");
+  const acts = card.querySelector(".card-foot .acts");
+  const chip = () => {
+    st.dataset.s = c.status;
+    st.innerHTML = statusHtml(c);
+  };
+  const buttons = () => {
+    if (acts && !c.pending) acts.innerHTML = `${statusActions(c)}<button class="card-rm">Remove</button>`;
+  };
+  if (!st || state.asking?.id === c.id) {
+    /* the box is in the foot: the words are kept in state and shown when it closes */
+  } else if (animate && (st.textContent.trim() !== statusLine(c).trim() || st.dataset.s !== c.status)) {
+    swapIn(st, chip);
+    swapIn(acts, buttons);
+  } else {
+    chip();
+    buttons();
+  }
+  let note = card.querySelector(".card-note");
+  if (c.note?.text) {
+    if (!note) {
+      note = document.createElement("div");
+      note.className = "card-note";
+      card.appendChild(note);
+    }
+    note.innerHTML = noteHtml(c);
+  } else note?.remove();
+  return true;
+}
+/* one write; the pressed button shows it is working and its neighbours go quiet; the hub's answer then crossfades
+   into the chip and the buttons. A refusal puts the buttons back and says so. A rebuild only when the comment
+   changed list (to or from Approved). */
+async function applyUpdate(body, btn) {
+  const card = panelBody.querySelector(`.card[data-id="${body.id}"]`);
+  const acts = btn?.closest(".acts, .tip-acts-in");
+  btn?.classList.add("loading");
+  acts?.classList.add("busy");
+  let r = null;
+  try {
+    r = await api("update", body);
+  } catch {}
+  btn?.classList.remove("loading");
+  acts?.classList.remove("busy");
+  if (!r?.entry) {
+    toast(`Could not save that: ${r?.error || "the hub did not answer"}`);
+    return null;
+  }
+  if (applyEntry(r.entry) || !refreshCard(r.entry, !!card)) renderPanel();
+  return r.entry;
+}
+/* a part of the card fades out, changes, fades in */
+function swapIn(el, change) {
+  if (!el) return;
+  el.classList.add("swap");
+  setTimeout(() => {
+    change();
+    el.classList.remove("swap");
+  }, 140);
+}
+const api = (path, body) => rv(`/__review/${path}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+state.filter = new Set(); // the tags pressed; none pressed = every tag
+state.selected = new Set(); // comment ids picked in the list; while any shown one is picked, the copies take those only
+state.scope = { kind: "all" };
+let scopeAway = null; // the scope menu's outside-click listener, one at a time
+/* the scope: { kind: "all" } | { kind: "group", group } | { kind: "route", route, title } (a place picked from the
+   list, fixed) | { kind: "here" } ("This page": whatever page the app is on when the list is drawn) */
+const scopeNow = () => (state.scope.kind === "here" ? { kind: "route", route: location.pathname, title: pageTitle(), here: true } : state.scope);
+/* the foot's buttons for where a comment stands: the next step first, the way back second */
+function statusActions(c) {
+  const b = (to, label, alt) => `<button class="card-ok card-st${alt ? " alt" : ""}" data-to="${to}">${label}</button>`;
+  if (c.status === "progress") return b("approval", "Done") + b("open", "Put back", true);
+  if (c.status === "approval") return b("approved", "Approve") + b("progress", "Send back", true);
+  if (c.status === "approved") return b("open", "Reopen", true);
+  return b("progress", "Pick up") + b("approved", "Approve", true);
+}
+/* "In progress · Nirav", "For approval · Pranjal", "Approved · Nirav"; nothing while open */
+/* a name with its picture before it, when the hub knows one: a 16 px circle, the name after */
+function personHtml(c, name) {
+  if (!name) return "";
+  const url = c.avatars && c.avatars[name];
+  const initial = esc(String(name).trim()[0].toUpperCase());
+  return url ? `<img class="av" src="${esc(url)}" alt="" data-i="${initial}">${esc(name)}` : `<span class="av av-i">${initial}</span>${esc(name)}`;
+}
+/* a picture that fails to load becomes the initial (no inline handlers: a page's CSP may forbid them) */
+root.addEventListener("error", (e) => {
+  const img = e.target;
+  if (img?.classList?.contains("av") && img.tagName === "IMG") {
+    const sp = document.createElement("span");
+    sp.className = "av av-i";
+    sp.textContent = img.dataset.i || "?";
+    img.replaceWith(sp);
+  }
+}, true);
+function statusHtml(c) {
+  const who = c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : c.status === "approved" ? c.approvedBy : null;
+  const label = c.status === "progress" ? STATUS.progress : c.status === "approval" ? STATUS.approval : c.status === "approved" ? STATUS.approved : "";
+  if (!label) return "";
+  return who ? `${esc(label)} · ${personHtml(c, who)}` : esc(label);
+}
+function noteHtml(c) {
+  if (!c.note?.text) return "";
+  const what = c.note.from === "approved" ? "Reopened" : c.note.to === "open" ? "Put back" : "Sent back";
+  return `${esc(what)}${c.note.by ? ` · ${personHtml(c, c.note.by)}` : ""}: ${esc(c.note.text)}`;
+}
+function statusLine(c) {
+  if (c.status === "progress") return `${STATUS.progress}${c.assignee ? ` · ${c.assignee}` : ""}`;
+  if (c.status === "approval") return `${STATUS.approval}${c.doneBy ? ` · ${c.doneBy}` : ""}`;
+  if (c.status === "approved") return `${STATUS.approved}${c.approvedBy ? ` · ${c.approvedBy}` : ""}`;
+  return "";
+}
+const statusToast = { progress: "picked up", approval: "done, for approval", approved: "approved", open: "reopened" };
+const backToast = { progress: "sent back", open: "put back" };
+/* "Sent back · Nirav: the hover colour is still the old one"; the reason a comment came back, under the foot */
+function noteLine(c) {
+  if (!c.note?.text) return "";
+  const what = c.note.from === "approved" ? "Reopened" : c.note.to === "open" ? "Put back" : "Sent back";
+  return `${what}${c.note.by ? ` · ${c.note.by}` : ""}: ${c.note.text}`;
+}
+/* a move back (Send back, Put back, Reopen) asks why, in the card's foot: one line, Enter sends, Esc keeps the comment
+   where it is. The box is state (state.asking), so a redraw of the list puts it back with the words typed so far;
+   it closes on Esc, on a click outside the card, or when sent. The reason travels with the status. */
+state.asking = null; // { id, to, label, text, focused }
+function askNote(card, c, to, label) {
+  if (state.asking?.id === c.id) return;
+  state.asking = { id: c.id, to, label, text: "", focused: true };
+  mountAsk(card, c);
+}
+function cancelAsk() {
+  const a = state.asking;
+  if (!a) return;
+  state.asking = null;
+  const card = panelBody.querySelector(`.card[data-id="${a.id}"]`);
+  const c = state.comments.find((x) => x.id === a.id) || state.done.find((x) => x.id === a.id);
+  if (card && c) card.querySelector(".card-foot").innerHTML = footHtml(c);
+  if (state.stale && !panelBusy()) {
+    state.stale = false;
+    renderPanel(); // what arrived while the box was open
+  }
+}
+function mountAsk(card, c) {
+  const a = state.asking;
+  const foot = card.querySelector(".card-foot");
+  if (!a || !foot) return;
+  foot.innerHTML = `<input class="note-in" type="text" maxlength="600" placeholder="Why? Enter sends it, Esc keeps it here"><button class="card-ok note-go">${a.label}</button>`;
+  const input = foot.querySelector(".note-in");
+  const btn = foot.querySelector(".note-go");
+  input.value = a.text;
+  input.addEventListener("input", () => (a.text = input.value));
+  const go = async () => {
+    if (state.asking !== a) return;
+    const note = input.value.trim();
+    input.disabled = true;
+    btn.classList.add("loading");
+    const r = await api("update", { id: c.id, status: a.to, note }).catch(() => null);
+    if (state.asking === a) state.asking = null;
+    if (!r?.entry) {
+      input.disabled = false;
+      btn.classList.remove("loading");
+      state.asking = a;
+      toast(`Could not save that: ${r?.error || "the hub did not answer"}`);
+      return;
+    }
+    const crossed = applyEntry(r.entry);
+    if (crossed) renderPanel();
+    else {
+      foot.innerHTML = footHtml(r.entry);
+      settle(card, r.entry);
+    }
+    toast(`#${c.n} ${a.to === "open" && c.status === "approved" ? "reopened" : backToast[a.to]}${note ? " with a note" : ""}`);
+  };
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") go();
+    if (e.key === "Escape") cancelAsk();
+  });
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    go();
+  });
+  if (a.focused) input.focus({ preventScroll: true });
+}
+/* a click outside the card with the box closes it */
+window.addEventListener("pointerdown", (e) => {
+  if (!state.asking) return;
+  const card = panelBody.querySelector(`.card[data-id="${state.asking.id}"]`);
+  if (card && !e.composedPath().includes(card)) cancelAsk();
+}, true);
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+/* the foot's normal content: where, the status chip, the actions */
+function footHtml(c) {
+  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${c.status}">${statusHtml(c)}</span>${c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${statusActions(c)}<button class="card-rm">Remove</button></span>`}`;
+}
+/* the note under the foot, added, changed or removed to match the comment */
+function settle(card, c) {
+  let note = card.querySelector(".card-note");
+  if (c.note?.text) {
+    if (!note) {
+      note = document.createElement("div");
+      note.className = "card-note";
+      card.appendChild(note);
+    }
+    note.innerHTML = noteHtml(c);
+  } else note?.remove();
+}
+function renderPanel() {
+  if (!panel.classList.contains("on")) return;
+  if (renderPanel.skipWhileMenu && $(".scope-menu")) return; // a background refresh never rebuilds an open menu
+  if (state.asking) state.asking.focused = !!root.activeElement?.classList?.contains("note-in"); // before the rebuild takes it
+  const scrollWas = panelBody.scrollTop;
+  const view = PAGE_MODE ? window.__reviewView || "open" : "open";
+  for (const b of $(".panel-view").querySelectorAll("button")) {
+    b.setAttribute("aria-pressed", b.dataset.v === view ? "true" : "false");
+    b.querySelector("b").textContent = b.dataset.v === "open" ? state.comments.length : state.done.length;
+  }
+  const pool = view === "resolved" ? state.done : state.comments;
+  const here = location.pathname;
+  const groupOf = (c) => (c.module && c.module.group) || moduleOf(c.route).group || "Other";
+  const routeOf = (c) => (c.route || "").split("?")[0];
+  const sc = scopeNow();
+  const inScope = (c) => (sc.kind === "route" ? routeOf(c) === sc.route : sc.kind === "group" ? groupOf(c) === sc.group : true);
+  const scoped = pool.filter(inScope);
+  /* the scope: everywhere, a module picked from a list of every group and page that has comments, this page */
+  const tree = new Map(); // group -> Map(route -> { title, n })
+  for (const c of pool) {
+    const g = groupOf(c);
+    if (!tree.has(g)) tree.set(g, new Map());
+    const pages = tree.get(g);
+    const r = routeOf(c);
+    if (!pages.has(r)) pages.set(r, { title: c.pageTitle || r, n: 0 });
+    pages.get(r).n++;
+  }
+  const scopeEl = $(".panel-scope");
+  const wasOpen = !!scopeEl.querySelector(".scope-menu");
+  scopeEl.innerHTML = "";
+  const closeMenu = () => {
+    scopeEl.querySelector(".scope-menu")?.remove();
+    scopeEl.querySelector("[aria-haspopup]")?.setAttribute("aria-expanded", "false");
+    if (scopeAway) window.removeEventListener("pointerdown", scopeAway, true);
+    scopeAway = null;
+  };
+  const pick = (scope) => {
+    state.scope = scope;
+    closeMenu();
+    renderPanel();
+  };
+  const svg = (path) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  const LAYERS = '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>';
+  const PAGE = '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>';
+  const pill = document.createElement("div");
+  pill.className = "scope-switch";
+  pill.setAttribute("role", "group");
+  /* icons on the pill (variant c's sides on variant a's pill), a compressed tip on hover */
+  const GLOBE = '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/>';
+  const word = (icon, tip, pressed, onClick) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "side";
+    b.innerHTML = svg(icon) + `<span class="scope-tip"></span>`;
+    b.querySelector(".scope-tip").textContent = tip;
+    b.setAttribute("aria-label", tip);
+    b.setAttribute("aria-pressed", pressed ? "true" : "false");
+    b.addEventListener("click", onClick);
+    pill.appendChild(b);
+    return b;
+  };
+  word(GLOBE, `Everywhere · ${pool.length}`, sc.kind === "all", () => pick({ kind: "all" }));
+  word(PAGE, sc.kind === "all" ? (PAGE_MODE ? "A place" : `This page · ${pool.filter((c) => routeOf(c) === here).length}`) : "A place", sc.kind !== "all", () => {
+    if (sc.kind !== "all") return;
+    if (PAGE_MODE) {
+      /* no "this page" here: open the list of places instead */
+      const first = [...tree.entries()][0];
+      if (first) pick({ kind: "group", group: first[0] });
+      return;
+    }
+    pick({ kind: "here" });
+  });
+  scopeEl.appendChild(pill);
+  let crumb = null;
+  if (sc.kind !== "all") {
+    crumb = document.createElement("button");
+    crumb.type = "button";
+    crumb.className = "scope-crumb";
+    crumb.setAttribute("aria-haspopup", "listbox");
+    crumb.setAttribute("aria-expanded", "false");
+    const label = sc.kind === "group" ? sc.group : sc.here || (sc.route === here && !PAGE_MODE) ? "This page" : sc.title;
+    crumb.innerHTML = `<span class="lbl"></span><b>${scoped.length}</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>`;
+    crumb.querySelector(".lbl").textContent = label;
+    const sep = document.createElement("span");
+    sep.className = "scope-sep";
+    sep.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+    scopeEl.appendChild(sep);
+    scopeEl.appendChild(crumb);
+  }
+  let openT, closeT;
+  const openMenu = () => {
+    if (scopeEl.querySelector(".scope-menu")) return;
+    const m = document.createElement("div");
+    m.className = "scope-menu";
+    m.setAttribute("role", "listbox");
+    const item = (cls, html, on, onPick) => {
+      const d = document.createElement("div");
+      d.className = `scope-item ${cls}` + (on ? " on" : "");
+      d.setAttribute("role", "option");
+      d.tabIndex = -1;
+      d.innerHTML = html;
+      d.addEventListener("click", onPick);
+      m.appendChild(d);
+      return d;
+    };
+    const ico = (path) => `<span class="mark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+    const hereN = pool.filter((c) => routeOf(c) === here).length;
+    if (!PAGE_MODE) item("scope-view", `<span class="lead">${ico('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>')}<span class="lines"><span>This page</span><span class="sub"></span></span></span><b>${hereN}</b>`, sc.kind === "route" && sc.route === here, () => pick({ kind: "here" })).querySelector(".sub").textContent = pageTitle();
+    if (tree.size && !PAGE_MODE) {
+      const rule = document.createElement("div");
+      rule.className = "scope-rule";
+      m.appendChild(rule);
+    }
+    for (const [g, pages] of [...tree.entries()].sort((x, y) => x[0].localeCompare(y[0]))) {
+      const gn = [...pages.values()].reduce((a, p) => a + p.n, 0);
+      item("scope-group", `<span></span><b>${gn}</b>`, sc.kind === "group" && sc.group === g, () => pick({ kind: "group", group: g })).querySelector("span").textContent = g;
+      for (const [r, p] of [...pages.entries()].sort((x, y) => x[1].title.localeCompare(y[1].title)))
+        item("scope-page", `<span></span><b>${p.n}</b>`, sc.kind === "route" && sc.route === r, () => pick({ kind: "route", route: r, title: p.title })).querySelector("span").textContent = p.title;
+    }
+    /* keyboard: arrows walk the rows, Enter picks, Esc closes */
+    m.addEventListener("keydown", (e) => {
+      const rows = Array.from(m.querySelectorAll(".scope-item"));
+      const i = rows.indexOf(m.shadowRoot?.activeElement || root.activeElement);
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))]?.focus();
+      } else if (e.key === "Home" || e.key === "End") {
+        e.preventDefault();
+        rows[e.key === "Home" ? 0 : rows.length - 1]?.focus();
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        (root.activeElement?.classList.contains("scope-item") ? root.activeElement : rows[0])?.click();
+      } else if (e.key === "Escape") {
+        e.stopPropagation();
+        closeMenu();
+        crumb.focus();
+      }
+    });
+    m.addEventListener("mouseenter", () => clearTimeout(closeT));
+    m.addEventListener("mouseleave", () => (closeT = setTimeout(closeMenu, 180)));
+    scopeEl.appendChild(m);
+    crumb?.setAttribute("aria-expanded", "true");
+    /* one outside-click listener at a time: a stale one from an earlier copy of the menu would close this one */
+    if (scopeAway) window.removeEventListener("pointerdown", scopeAway, true);
+    scopeAway = (ev) => {
+      if (!ev.composedPath().includes(m) && !(crumb && ev.composedPath().includes(crumb))) closeMenu();
+    };
+    setTimeout(() => scopeAway && window.addEventListener("pointerdown", scopeAway, true), 0);
+  };
+  if (crumb) {
+  crumb.addEventListener("mouseenter", () => {
+    clearTimeout(closeT);
+    openT = setTimeout(openMenu, 120);
+  });
+  crumb.addEventListener("mouseleave", () => {
+    clearTimeout(openT);
+    closeT = setTimeout(closeMenu, 180);
+  });
+  crumb.addEventListener("click", () => (scopeEl.querySelector(".scope-menu") ? closeMenu() : openMenu()));
+  crumb.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openMenu();
+      scopeEl.querySelector(".scope-item.on, .scope-item")?.focus();
+    }
+  });
+  }
+  if (wasOpen && crumb) openMenu();
+  /* the tags: a pill like the scope's, one side per tag with its colour dot and count; pressed sides narrow the list,
+     several at once add up, none pressed means every tag */
+  const counts = {};
+  for (const c of scoped) counts[c.severity] = (counts[c.severity] || 0) + 1;
+  const filt = $(".panel-filter");
+  filt.innerHTML = "";
+
+  const tagPill = document.createElement("div");
+  tagPill.className = "scope-switch tag-switch";
+  tagPill.setAttribute("role", "group");
+  tagPill.setAttribute("aria-label", "Tags");
+  if (state.filter.size) tagPill.dataset.narrowed = "";
+  /* All first: a hollow dot and the whole count, pressed while no tag is; pressing it releases every tag */
+  {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "side tag";
+    b.dataset.k = "all";
+    b.innerHTML = `<span class="dot"></span><b>${scoped.length}</b><span class="scope-tip"></span>`;
+    b.querySelector(".scope-tip").textContent = `All tags · ${scoped.length}`;
+    b.setAttribute("aria-label", `All tags · ${scoped.length}`);
+    b.setAttribute("aria-pressed", state.filter.size ? "false" : "true");
+    b.addEventListener("click", () => {
+      state.filter.clear();
+      renderPanel();
+    });
+    tagPill.appendChild(b);
+  }
+  for (const [k, label] of SEVERITIES) {
+    const n = counts[k] || 0;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "side tag";
+    b.dataset.k = k;
+    b.innerHTML = `<span class="dot"></span><b>${n}</b><span class="scope-tip"></span>`;
+    b.querySelector(".scope-tip").textContent = `${label} · ${n}`;
+    b.setAttribute("aria-label", `${label} · ${n}`);
+    b.setAttribute("aria-pressed", state.filter.has(k) ? "true" : "false");
+    /* nothing to show: not a choice. Disabled, and released if it was pressed before the scope emptied it */
+    if (!n) {
+      b.disabled = true;
+      state.filter.delete(k);
+      b.setAttribute("aria-pressed", "false");
+    }
+    b.addEventListener("click", () => {
+      if (state.filter.has(k)) state.filter.delete(k);
+      else state.filter.add(k);
+      renderPanel();
+    });
+    tagPill.appendChild(b);
+  }
+  filt.appendChild(tagPill);
+  panelBody.innerHTML = "";
+  const shown = scoped.filter((c) => !state.filter.size || state.filter.has(c.severity));
+  if (!shown.length) {
+    panelBody.innerHTML = `<div class="panel-empty">${pool.length ? (scoped.length ? "Nothing with this tag here." : "Nothing here yet.") : view === "resolved" ? "Nothing approved yet." : `No comments yet.<br>Hold ${MOD} and click anything.`}</div>`;
+    if (view === "open" && state.done.length) panelBody.appendChild(endLine());
+    return;
+  }
+  for (const c of shown) {
+    /* THE CARD (Nirav, 2026-10-19, picked from seven trials): a soft fill, no border; the number outside in the
+       left gutter; the note first, 500, tight; the tag riding on the picture's top-right; a corner accent in the
+       tag's colour on the top-right for Must fix and Should fix only; the foot: where it was, and Remove */
+    const onPage = (c.route || "").split("?")[0] === here;
+    const card = document.createElement("div");
+    card.className = "card card-c card-fill card-medium" + (onPage ? " here" : "") + (c.resolved ? " resolved" : "") + (state.selected.has(c.id) ? " picked" : "") + (c.pending ? (c.failed ? " failed" : " sending") : "") + (state.unread.has(c.id) ? " unread" : "");
+    if (c.severity === "must" || c.severity === "should") {
+      card.classList.add("card-rail", "card-rail-right");
+      card.dataset.k = c.severity;
+    }
+    card.dataset.id = c.id;
+    const sevLabel = SEVERITIES.find(([k]) => k === c.severity)?.[1] || c.severity;
+    card.innerHTML = `
+      <div class="card-line"><span class="card-n out${onPage ? "" : " away"}" title="Show it on the page">${c.n}</span><div class="card-text" title="Click to edit"></div></div>
+      <button class="card-pick" aria-label="Select for copying" aria-pressed="${state.selected.has(c.id)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></button>
+      ${c.shot ? `<div class="card-pic"><img class="card-shot" data-id="${c.id}" src="${thumbUrl(c)}" alt="" title="Open the picture"><button class="card-sev on-pic" data-k="${c.severity}" title="Click to change" aria-label="${sevLabel}"><span class="dot"></span><span class="lbl">${sevLabel}</span></button></div>` : `<button class="card-sev" data-k="${c.severity}" title="Click to change">${sevLabel}</button>`}
+      <div class="card-foot">${footHtml(c)}</div>${c.note?.text ? `<div class="card-note"></div>` : ""}`;
+    card.querySelector(".card-text").textContent = c.text;
+    if (c.note?.text) card.querySelector(".card-note").innerHTML = noteHtml(c);
+    if (c.shot && c.rect) card.querySelector(".card-pic").appendChild(liveBadge(c, card.querySelector(".card-shot")));
+    panelBody.appendChild(card);
+    if (state.asking?.id === c.id) mountAsk(card, c); // the note box back, once the card is on the page
+  }
+  if (view === "open" && state.done.length) panelBody.appendChild(endLine());
+  if (PAGE_MODE && state.hub?.on) panelBody.appendChild(hubLine());
+  if (scrollWas) panelBody.scrollTop = scrollWas; // a redraw is not a reason to move
+  renderPickPill();
+  watchUnread();
+  backfillThumbs();
+  /* opened from a pin: that card scrolled into view once and ringed for a moment (a refresh keeps the ring) */
+  if (state.spot && performance.now() < state.spot.until) {
+    const card = panelBody.querySelector(`.card[data-id="${state.spot.id}"]`);
+    if (card) {
+      card.classList.add("spot");
+      /* centred on every render in that moment (the list is rebuilt once the comments reload), and again as the
+         pictures above it load and push it down; the user's own scroll ends it */
+      const spot = state.spot;
+      card.scrollIntoView({ block: "center" });
+      for (const img of panelBody.querySelectorAll(".card-shot"))
+        if (!img.complete)
+          img.addEventListener("load", () => {
+            if (state.spot === spot && performance.now() < spot.until && card.isConnected) card.scrollIntoView({ block: "center" });
+          }, { once: true });
+    }
+  }
+  refreshCopyLabels();
+}
+/* the selection pill in the bar: how many of the shown cards are picked, and a clear */
+function renderPickPill() {
+  const head = $(".panel-head");
+  const n = panelBody.querySelectorAll(".card.picked").length;
+  let pick = head.querySelector(".panel-pick");
+  if (!n) {
+    pick?.remove();
+    return;
+  }
+  if (!pick) {
+    pick = document.createElement("span");
+    pick.className = "panel-pick";
+    pick.innerHTML = `<span class="n"></span><button type="button" class="x" aria-label="Clear the selection"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg><span class="scope-tip">Clear the selection</span></button>`;
+    pick.querySelector(".x").addEventListener("click", () => {
+      state.selected.clear();
+      for (const card of panelBody.querySelectorAll(".card.picked")) {
+        card.classList.remove("picked");
+        card.querySelector(".card-pick")?.setAttribute("aria-pressed", "false");
+      }
+      renderPickPill();
+      refreshCopyLabels();
+    });
+    head.insertBefore(pick, head.querySelector(".panel-copy"));
+  }
+  pick.querySelector(".n").textContent = `${n} selected`;
+}
+/* the drawer's last line: how many are resolved, and where to see them */
+/* "Shared on the hub · next-gen-console · pictures 120 MB of 1 GB" */
+function hubLine() {
+  const d = document.createElement("div");
+  d.className = "panel-end hub-line";
+  const u = state.hub.usage;
+  const mb = (b) => (b >= 1024 * 1024 * 1024 ? `${+(b / 1024 / 1024 / 1024).toFixed(2)} GB` : `${Math.max(1, Math.round(b / 1024 / 1024))} MB`);
+  d.textContent = `Shared on the hub · ${state.hub.project}${u ? ` · pictures ${mb(u.bytes)}${u.total !== u.bytes ? ` (${mb(u.total)} with other projects)` : ""} of ${mb(u.limit)}, kept 14 days after approval` : ""}`;
+  return d;
+}
+function endLine() {
+  const d = document.createElement("div");
+  d.className = "panel-end";
+  const nums = [...state.done].sort((a, b) => a.n - b.n).map((c) => `<span class="end-n" data-id="${c.id}" title="${(c.text || "").replace(/"/g, "&quot;")}">${c.n}</span>`).join("");
+  const href = EXT ? `${EXT.listUrl}&view=resolved` : `/__review/?view=resolved${window.__reviewSession ? `&session=${window.__reviewSession}` : ""}`;
+  d.innerHTML = `Approved ${nums} · <a href="${href}" target="_blank">See them on the page</a>`;
+  if (EXT && !PAGE_MODE) d.querySelector("a").addEventListener("click", (e) => {
+    e.preventDefault();
+    openExtPage(href);
+  });
+  if (PAGE_MODE) {
+    d.innerHTML = `Approved ${nums} · <a href="#" class="to-resolved">Show</a>`;
+    d.querySelector("a").addEventListener("click", (e) => {
+      e.preventDefault();
+      window.__reviewView = "resolved";
+      renderPanel();
+    });
+  }
+  /* a number opens the page on that comment's Resolved tab */
+  for (const el of d.querySelectorAll(".end-n"))
+    el.addEventListener("click", () => {
+      if (PAGE_MODE) {
+        window.__reviewView = "resolved";
+        renderPanel();
+      } else window.open(href, "_blank");
+    });
+  return d;
+}
+for (const t of ["wheel", "touchmove"]) panelBody.addEventListener(t, () => (state.spot = null), { passive: true });
+panelBody.addEventListener("scroll", () => {
+  if (panelBody.scrollTop > 4) panel.setAttribute("data-scrolled", "");
+  else panel.removeAttribute("data-scrolled");
+});
+function openPanel(on) {
+  panel.classList.toggle("on", on);
+  $(".panel-veil").classList.toggle("on", on && !PAGE_MODE);
+  $(".list").classList.toggle("on", on);
+  if (on) {
+    renderPanel();
+    syncNote("checking", "Checking…");
+    loadComments().then(() => {
+      renderPanel();
+      if (state.unread.size) updateUnread();
+      else syncNote("fresh", "Up to date");
+    }).catch(() => syncNote(null));
+  } else syncNote(null);
+}
+$(".list").addEventListener("click", () => openPanel(!panel.classList.contains("on")));
+for (const b of $(".panel-view").querySelectorAll("button"))
+  b.addEventListener("click", () => {
+    window.__reviewView = b.dataset.v;
+    renderPanel();
+  });
+$(".panel-veil").addEventListener("click", () => openPanel(false));
+panelBody.addEventListener("click", async (e) => {
+  const card = e.target.closest(".card");
+  if (!card) return;
+  const c = state.comments.find((x) => x.id === card.dataset.id) || state.done.find((x) => x.id === card.dataset.id);
+  if (!c) return;
+  if (e.target.classList.contains("card-retry")) {
+    delete c.failed;
+    renderPanel();
+    sendComment(c, state.pinEls.get(c.id));
+    return;
+  }
+  if (e.target.classList.contains("card-drop")) {
+    state.comments = state.comments.filter((x) => x.id !== c.id);
+    state.pinEls.delete(c.id);
+    state.count = state.comments.length;
+    updateBar();
+    renderPanel();
+    return;
+  }
+  if (e.target.classList.contains("card-st")) {
+    const to = e.target.dataset.to;
+    const order = ["open", "progress", "approval", "approved"];
+    if (order.indexOf(to) < order.indexOf(c.status)) return askNote(card, c, to, e.target.textContent);
+    await applyUpdate({ id: c.id, status: to }, e.target);
+    toast(`#${c.n} ${statusToast[to]}`);
+    return;
+  }
+  if (e.target.closest(".card-pick")) {
+    /* in place, no rebuild: the pictures would reload for a tick */
+    const on = !state.selected.has(c.id);
+    if (on) state.selected.add(c.id);
+    else state.selected.delete(c.id);
+    card.classList.toggle("picked", on);
+    card.querySelector(".card-pick").setAttribute("aria-pressed", String(on));
+    renderPickPill();
+    refreshCopyLabels();
+    return;
+  }
+  if (e.target.classList.contains("card-shot")) {
+    openLightbox(c.id);
+    return;
+  }
+  if (e.target.classList.contains("card-n")) {
+    goTo(c);
+    return;
+  }
+  if (e.target.closest(".card-sev")) {
+    const i = SEVERITIES.findIndex(([k]) => k === c.severity);
+    const next = SEVERITIES[(i + 1) % SEVERITIES.length][0];
+    await applyUpdate({ id: c.id, severity: next });
+    return;
+  }
+  if (e.target.classList.contains("card-rm")) {
+    if (!e.target.classList.contains("sure")) {
+      e.target.classList.add("sure");
+      e.target.textContent = "Remove, sure?";
+      setTimeout(() => {
+        e.target.classList.remove("sure");
+        e.target.textContent = "Remove";
+      }, 2500);
+      return;
+    }
+    await api("delete", { id: c.id });
+    await loadComments();
+$(".bar .k").textContent = `${MOD} + click to comment`;
+    renderPanel();
+    toast(`Removed #${c.n}`);
+    return;
+  }
+  if (e.target.classList.contains("card-text") && e.target.contentEditable !== "true") editInPlace(e.target, c, () => {});
+});
+/* keep the panel current when comments come and go (never rebuilding a menu that is open under the pointer) */
+const _load = loadComments;
+/* nobody is in the middle of something in the panel: a note being typed, a text edited, a "sure?" pending, a menu */
+const panelBusy = () => !!(state.asking || root.querySelector('[contenteditable="true"]') || $(".card-rm.sure") || $(".scope-menu") || state.pending);
+loadComments = async function () {
+  const changed = await _load();
+  if (changed && panelBusy()) state.stale = true; // drawn once the panel is free again
+  else if (changed || (state.stale && !panelBusy())) {
+    state.stale = false;
+    renderPanel.skipWhileMenu = true;
+    try {
+      renderPanel();
+    } finally {
+      renderPanel.skipWhileMenu = false;
+    }
+  }
+  return changed;
+};
+
+/* ---------- copying: a brief for Claude, a checklist for Loop ---------- */
+function shownComments() {
+  /* what the panel shows right now: the scope and the tags applied, open or resolved as the view says; and when
+     some of those are picked, those only */
+  const shown = Array.from(panelBody.querySelectorAll(".card")).map((el) => state.comments.find((c) => c.id === el.dataset.id) || state.done.find((c) => c.id === el.dataset.id)).filter(Boolean);
+  const picked = shown.filter((c) => state.selected.has(c.id));
+  return picked.length ? picked : shown;
+}
+const loadImage = (src) =>
+  new Promise((res, rej) => {
+    const img = new Image();
+    if (/^https?:/.test(src)) img.crossOrigin = "anonymous"; // a picture from the hub: the canvas may read it back
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = src;
+  });
+/* the picture with its number drawn on, at full size (for the export) or downsized (for the clipboard) */
+async function numberedPicture(c, maxW) {
+  const img = await loadImage(shotUrl(c));
+  const scale = maxW && img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(img.naturalWidth * scale);
+  cv.height = Math.round(img.naturalHeight * scale);
+  const g = cv.getContext("2d");
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, cv.width, cv.height);
+  g.drawImage(img, 0, 0, cv.width, cv.height);
+  if (c.rect) {
+    const b = badgeSpot(c, img.naturalWidth, img.naturalHeight);
+    const cx = (b.left / 100) * cv.width, cy = (b.top / 100) * cv.height, r = ((b.size / 100) * cv.width) / 2;
+    g.beginPath();
+    g.arc(cx, cy, r * 1.14, 0, Math.PI * 2);
+    g.fillStyle = "#fff";
+    g.fill();
+    g.beginPath();
+    g.arc(cx, cy, r, 0, Math.PI * 2);
+    g.fillStyle = "#e11d48";
+    g.fill();
+    g.fillStyle = "#fff";
+    g.font = `700 ${Math.round(r * 1.1)}px -apple-system, system-ui, sans-serif`;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(String(c.n), cx, cy + r * 0.05);
+  }
+  return cv;
+}
+const sevName = (k) => SEVERITIES.find(([x]) => x === k)?.[1] || k;
+const trailWords = (c) =>
+  (c.trail || [])
+    .filter((t) => !/^(html|body)$/.test(t.selector || "") && !/[{};]|^import /.test(t.textKey || ""))
+    .map((t) => (t.kind === "hover" ? `hover "${(t.textKey || "").slice(0, 30)}"` : t.kind === "type" ? `type "${t.value}"` : t.kind === "key" ? `press ${t.key}` : `click "${(t.textKey || "").slice(0, 30)}"`))
+    .join(" > ");
+const groupBy = (list) => {
+  const m = new Map();
+  for (const c of list) {
+    const g = (c.module && c.module.group) || moduleOf(c.route).group || "Other";
+    const pg = c.pageTitle || c.route;
+    const k = `${g} · ${pg}`;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(c);
+  }
+  return m;
+};
+async function buildPrompt(list) {
+  const lines = [];
+  lines.push(`# Design review: ${list.length} comment${list.length === 1 ? "" : "s"} on the console`);
+  lines.push("");
+  lines.push("Running at http://localhost:4178 (Functional/next-gen-ui, the staging build). Each comment below points at one thing on one page; its picture shows the page as I saw it, with a red box around the element and the comment's number beside the box. Open the pictures with Read to see them.");
+  lines.push("");
+  lines.push("How to work through them:");
+  lines.push(`1. Read every comment and its picture first${EXT ? " (each Picture line is a curl command: run it, then open the saved file)" : ""}. Group the ones that share a cause (the same component, the same rule, the same copy pattern) and tell me the groups before changing anything.`);
+  lines.push("2. Make the changes one group at a time. After each group, say which comment numbers it closes and what moved.");
+  lines.push("3. Stay on the design system's tokens and components (node_modules/@mtdt/nextgen-design-system/AGENTS.md, and the rules in Functional/next-gen-ui/CLAUDE.md). Never remove functionality.");
+  lines.push("4. If a comment is ambiguous, ask with its number rather than guessing.");
+  lines.push("5. Keep the review's statuses moving, with the `review` skill (.claude/skills/review) or the commands below: the moment you start on a comment set it to In progress; once its change is in and I have confirmed it in this chat, set it to For approval. I approve from the review panel. A comment with a \"Sent back\" line came back from approval: that line says what was still wrong, fix that first.");
+  lines.push("");
+  lines.push("```sh");
+  if (EXT) {
+    lines.push(`node Functional/next-gen-ui/.review/hub/cli.mjs status <id> progress   # started (project ${EXT.project})`);
+    lines.push(`node Functional/next-gen-ui/.review/hub/cli.mjs status <id> approval   # done, confirmed`);
+  } else {
+    const base = `${location.origin}/__review/update${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`;
+    lines.push(`curl -s -X POST '${base}' -H 'Content-Type: application/json' -d '{"id":"<id>","status":"progress"}'   # started`);
+    lines.push(`curl -s -X POST '${base}' -H 'Content-Type: application/json' -d '{"id":"<id>","status":"approval"}'   # done, confirmed`);
+  }
+  lines.push("```");
+  lines.push("");
+  /* links to the full pictures, good for seven days: from any machine, no repo needed */
+  let links = {};
+  try {
+    const r = await (await rv("/__review/links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: list.map((c) => c.id), days: 7 }) })).json();
+    if (r && !r.error) links = r;
+  } catch {}
+  let i = 0;
+  for (const [k, items] of groupBy(list)) {
+    lines.push(`## ${k}`);
+    lines.push("");
+    for (const c of items) {
+      i++;
+      let pic = "";
+      if (c.shot && EXT) pic = links[c.id] ? `curl -sL -o review-${String(c.n).padStart(2, "0")}.png "${links[c.id]}"   # saves the picture (link good for 7 days), then read the file` : "on the hub, no link right now";
+      else if (c.shot) {
+        try {
+          const cv = await numberedPicture(c);
+          const r = await (await rv(`/__review/export${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id, n: c.n, png: cv.toDataURL("image/png") }) })).json();
+          pic = r.path || "";
+        } catch {}
+      }
+      lines.push(`### ${c.n} · ${sevName(c.severity)}${c.status !== "open" ? ` · ${statusLine(c)}` : ""}`);
+      lines.push(c.text);
+      lines.push("");
+      lines.push(`- Id: ${c.id}`);
+      if (c.note?.text) lines.push(`- ${noteLine(c)}`);
+      lines.push(`- Where: ${c.pageTitle || c.route} · ${c.context || "Page"} · route ${c.route}`);
+      lines.push(`- Element: ${c.element || "?"}`);
+      const tw = trailWords(c);
+      if (tw) lines.push(`- How to get there: ${tw}`);
+      if (c.theme && c.theme !== "light") lines.push(`- Theme: ${c.theme}`);
+      if (pic) lines.push(`- Picture: ${pic}`);
+      if (!EXT && links[c.id]) lines.push(`- Picture link (7 days, from any machine): ${links[c.id]}`);
+      lines.push("");
+    }
+  }
+  return lines.join("\n");
+}
+async function buildLoop(list) {
+  /* the shapes Loop itself puts on the clipboard (read back through the paste inspector): a checklist is a <ul> with a
+     scriptor-listid whose items carry scriptor-listItem-marker-value-unchecked; a paragraph is a scriptor-paragraph
+     div; an empty one is the gap between points. Loop keeps <b> and <i>, and drops sizes and margins.
+     Loop takes about 16 MB in one paste and drops whatever comes after (the last picture of a 19-comment review went
+     missing), so the review is cut into parts of at most PART MB, each pasted on its own; the pictures stay full size. */
+  const PART = 12 * 1048576;
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+  const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2) + "-" + Date.now().toString(16));
+  const para = (inner) => `<div class="scriptor-paragraph"><span>${inner}</span></div>`;
+  /* one empty line between points: an empty paragraph; with a <br> inside, Loop showed it as two lines */
+  const gap = () => `<div class="scriptor-paragraph"><span></span></div>`;
+  /* the module heading in Loop's own Blue (its font colour menu), read back from a paste */
+  const heading = (k) => `<h3><span style="color: var(--ms-themeColorPaletteFontColorBlue, #006cbf);">${esc(k)}</span></h3>`;
+  const open = "<meta charset='utf-8'><html><head></head><body><span><!--ScriptorStartFragment-->";
+  const close = "<!--ScriptorEndFragment--></span></body></html>";
+  const parts = [];
+  let html = [], text = [], size = 0, group = null;
+  const start = (first) => {
+    html = [open]; text = []; size = open.length + close.length;
+    /* no title of its own: the page in Loop has one. A later part is pasted right under the one before, so it
+       continues without repeating the module heading */
+    size += html.join("").length;
+  };
+  /* Loop drops the last picture of a paste on import (seen on 2026-10-20, confirmed with a two-comment trial), so the
+     last gap of each part carries a 1 px picture instead: that is the one it loses */
+  const decoy = () => { const dot = document.createElement("canvas"); dot.width = dot.height = 1; return `<div class="scriptor-paragraph"><img alt="" width="1" height="1" src="${dot.toDataURL("image/png")}" style="display: block;"></div>`; };
+  const finish = () => { if (html[html.length - 1] === gap()) html[html.length - 1] = decoy(); html.push(close); parts.push({ html: html.join(""), text: text.join("\n"), size }); };
+  start(true);
+  for (const [k, items] of groupBy(list)) {
+    group = k;
+    html.push(heading(k)); text.push(`## ${k}`, ""); size += heading(k).length;
+    for (const c of items) {
+      const lid = `list!list-${uuid()}`;
+      /* Loop's own shapes, read back from a paste: the item's text as styled spans; under it, paragraphs indented
+         with margin-left: 27px; the picture crisp at its full size but shown at the width/height it carries */
+      const chunk = [`<ul class="" scriptor-listid="${lid}"><li class="scriptor-listItem${lid} scriptor-listItem-marker-value-unchecked" placeholder="placeholder!addItem"><span style="font-weight: 600;">${c.n} · ${esc(c.text)}</span></li></ul>`];
+      if (c.shot) {
+        try {
+          /* the picture at its full capture size, PNG, shown at 560 wide. Width and height both given, from the
+             picture's own proportions: a frame that agrees with its content. Loop draws an 8 px rest under every
+             picture inside its frame, its own shapes included (nine variants measured on 2026-10-20, all the same);
+             nothing in this markup changes that. */
+          const cv = await numberedPicture(c);
+          const w = 560, h = Math.round((cv.height / cv.width) * 560);
+          chunk.push(`<div class="scriptor-paragraph" style="margin-left: 27px;"><img alt="Comment ${c.n}" width="${w}" height="${h}" src="${cv.toDataURL("image/png")}" style="display: block;"></div>`);
+        } catch {}
+      }
+      /* the place line, with the tag, in Loop's own Gray (its font colour menu), read back from a paste; Loop drops <small> */
+      chunk.push(`<div class="scriptor-paragraph" style="margin-left: 27px;"><span style="font-style: italic; color: var(--ms-themeColorPaletteFontColorGray, #757575);">${esc(c.pageTitle || c.route)} · ${esc(c.context || "Page")} · ${esc(sevName(c.severity))}</span></div>`);
+      chunk.push(gap());
+      const len = chunk.join("").length;
+      if (size + len > PART && size > open.length + close.length + 400) { finish(); start(false); }
+      html.push(...chunk); size += len;
+      text.push(`- [ ] ${c.n} · ${c.text}`);
+      text.push(`  ${c.pageTitle || c.route} · ${c.context || "Page"} · ${sevName(c.severity)}`, "");
+    }
+  }
+  finish();
+  return parts;
+}
+/* the parts of the last Loop copy: pressed again, the button hands out the next one */
+let loopParts = null;
+/* the copy buttons' tooltips say what a press takes: the comments shown, with the scope and tags that narrow them */
+function copyLabel(kind) {
+  const n = panelBody.querySelectorAll(".card").length;
+  const picked = panelBody.querySelectorAll(".card.picked").length;
+  const what = kind === "prompt" ? "Copy a brief for Claude" : "Copy a checklist for Loop";
+  if (picked) return `${what} · ${picked} selected`;
+  const narrow = [];
+  if (state.scope.kind === "group") narrow.push(state.scope.group);
+  if (scopeNow().kind === "route") narrow.push(scopeNow().title || scopeNow().route);
+  if (state.filter.size) narrow.push([...state.filter].map(sevName).join(", "));
+  return `${what} · ${n} shown${narrow.length ? ` (${narrow.join(" · ")})` : ""}`;
+}
+function refreshCopyLabels() {
+  for (const b of root.querySelectorAll(".panel-copy")) if (!b.classList.contains("busy") && !b.classList.contains("done")) b.querySelector(".scope-tip").textContent = copyLabel(b.dataset.kind);
+}
+async function copyOut(kind, btn) {
+  const list = shownComments();
+  if (!list.length) return toast("Nothing shown to copy");
+  btn.classList.add("busy");
+  const tip = btn.querySelector(".scope-tip");
+  const label = copyLabel(kind);
+  tip.textContent = "Working…";
+  try {
+    if (kind === "prompt") {
+      const md = await buildPrompt(list);
+      await navigator.clipboard.writeText(md);
+      toast(`Copied a brief for ${list.length} comment${list.length === 1 ? "" : "s"}, pictures written to .review/sessions/${window.__reviewSession || "main"}/export`);
+    } else {
+      /* the same list again while parts remain: the next part; anything else starts over from part 1 */
+      const key = list.map((c) => `${c.id}:${c.status}`).join(",");
+      if (!loopParts || loopParts.key !== key || loopParts.next >= loopParts.parts.length) loopParts = { key, parts: await buildLoop(list), next: 0 };
+      const { parts } = loopParts;
+      const i = loopParts.next++;
+      const { html, text } = parts[i];
+      await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+      if (parts.length === 1) toast(`Copied ${list.length} comment${list.length === 1 ? "" : "s"} for Loop, pictures included`);
+      else if (i + 1 < parts.length) toast(`Part ${i + 1} of ${parts.length} copied. Paste it in Loop, then press Loop again for part ${i + 2}.`, 6000);
+      else toast(`Part ${i + 1} of ${parts.length} copied, the last one. Paste it under the others.`, 6000);
+    }
+    btn.classList.add("done");
+    tip.textContent = "Copied";
+    setTimeout(() => {
+      btn.classList.remove("done");
+      const more = kind === "loop" && loopParts && loopParts.next < loopParts.parts.length;
+      tip.textContent = more ? `Copy part ${loopParts.next + 1} of ${loopParts.parts.length} for Loop` : label;
+      if (kind === "loop") btn.querySelector(".more").textContent = more ? `${loopParts.next + 1}/${loopParts.parts.length}` : "";
+    }, 1800);
+  } catch (e) {
+    toast(`Could not copy: ${e.message}`);
+    tip.textContent = label;
+  } finally {
+    btn.classList.remove("busy");
+  }
+}
+for (const b of root.querySelectorAll(".panel-copy")) b.addEventListener("click", () => copyOut(b.dataset.kind, b));
+
+/* ---------- the picture viewer ---------- */
+const lightbox = $(".lightbox");
+let lbId = null;
+function openLightbox(id) {
+  const withPics = state.comments.filter((c) => c.shot);
+  const i = withPics.findIndex((c) => c.id === id);
+  if (i < 0) return;
+  const c = withPics[i];
+  lbId = id;
+  $(".lb-n").textContent = c.n;
+  const sev = $(".lb-sev");
+  sev.dataset.k = c.severity;
+  sev.textContent = SEVERITIES.find(([k]) => k === c.severity)?.[1] || c.severity;
+  $(".lb-text").textContent = c.text;
+  $(".lb-count").textContent = `${i + 1} of ${withPics.length}`;
+  $(".lb-where").textContent = `${c.pageTitle || c.route} · ${c.context || "Page"}`;
+  $(".lb-prev").disabled = i === 0;
+  $(".lb-next").disabled = i === withPics.length - 1;
+  $(".lb-img").src = shotUrl(c);
+  $(".lb-pic").querySelector(".pic-n")?.remove();
+  if (c.rect) $(".lb-pic").appendChild(liveBadge(c, $(".lb-img")));
+  lightbox.classList.add("on");
+}
+function closeLightbox() {
+  lightbox.classList.remove("on");
+  $(".lb-img").removeAttribute("src");
+  lbId = null;
+}
+function stepLightbox(d) {
+  const withPics = state.comments.filter((c) => c.shot);
+  const i = withPics.findIndex((c) => c.id === lbId);
+  const next = withPics[i + d];
+  if (next) openLightbox(next.id);
+}
+$(".lb-close").addEventListener("click", closeLightbox);
+$(".lb-prev").addEventListener("click", () => stepLightbox(-1));
+$(".lb-next").addEventListener("click", () => stepLightbox(1));
+lightbox.addEventListener("click", (e) => {
+  if (e.target === lightbox) closeLightbox(); // the backdrop closes; the picture itself stays put
+});
+
+/* ---------- go to a comment: its page, its state (the recorded clicks replayed), its pin pulsing ---------- */
+window.addEventListener(
+  "pointerdown",
+  (e) => {
+    /* record how a state is reached: plain clicks on the app (the review's own clicks never get here).
+       At pointerdown, not click: Radix opens on pointerdown and then cuts pointer events on the body, so by
+       the time the click arrives its target is the html element */
+    if (e.composedPath().includes(host) || e.button !== 0 || state.alt || state.sticky) return;
+    if (!state.showPins) state.flash = null; // the go-to pin shown over hidden pins goes on the next click
+    if (location.pathname !== state.trailRoute) {
+      state.trailRoute = location.pathname;
+      state.trail = [];
+    }
+    const el = e.target instanceof Element ? e.target.closest("button,a,[role],tr,td,th,label,summary,input,select,li") || e.target : null;
+    if (!el || el === document.body || el === document.documentElement) return;
+    state.lastClickAt = performance.now();
+    pushStep({ kind: "click", selector: selectorFor(el), textKey: txt(el).slice(0, 80) });
+  },
+  true
+);
+const pushStep = (step) => {
+  if (location.pathname !== state.trailRoute) {
+    state.trailRoute = location.pathname;
+    state.trail = [];
+  }
+  const last = state.trail.at(-1);
+  /* typing into the same field: keep one step with the final value */
+  if (step.kind === "type" && last && last.kind === "type" && last.selector === step.selector) last.value = step.value;
+  else state.trail.push(step);
+  if (state.trail.length > 20) state.trail.shift();
+};
+const fieldOf = (t) => (t instanceof Element ? t.closest("input, textarea, select, [contenteditable=true]") : null);
+/* typing: the field and what it ends up holding */
+window.addEventListener(
+  "input",
+  (e) => {
+    if (e.composedPath().includes(host)) return;
+    const f = fieldOf(e.target);
+    if (!f) return;
+    const value = f.isContentEditable ? f.textContent : f.type === "checkbox" || f.type === "radio" ? String(f.checked) : f.value;
+    pushStep({ kind: f.tagName === "SELECT" ? "select" : "type", selector: selectorFor(f), textKey: f.getAttribute("placeholder") || f.getAttribute("aria-label") || f.name || "", value });
+  },
+  true
+);
+/* keys that do something: shortcuts (with ⌘ or Ctrl), and Enter / Escape / arrows / Tab anywhere */
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.composedPath().includes(host) || state.pending) return;
+    const chord = e.metaKey || e.ctrlKey;
+    const special = ["Enter", "Escape", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Tab", " ", "Home", "End", "PageDown", "PageUp"].includes(e.key);
+    if (!chord && !special) return;
+    if (["Alt", "Meta", "Control", "Shift"].includes(e.key)) return;
+    const t = e.target instanceof Element && e.target !== document.body ? e.target : null;
+    pushStep({ kind: "key", key: e.key, code: e.code, meta: e.metaKey, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, selector: t ? selectorFor(t) : "", textKey: t ? txt(t).slice(0, 80) : "" });
+  },
+  true
+);
+for (const kind of ["contextmenu", "dblclick"])
+  window.addEventListener(
+    kind,
+    (e) => {
+      if (e.composedPath().includes(host) || state.alt || state.sticky) return;
+      const el = e.target instanceof Element ? e.target.closest("button,a,[role],tr,td,th,label,li,input,textarea") || e.target : null;
+      if (!el || el === document.body) return;
+      state.lastClickAt = performance.now();
+      pushStep({ kind, selector: selectorFor(el), textKey: txt(el).slice(0, 80) });
+    },
+    true
+  );
+/* a popover that appears with no click just before it was opened by hovering: record its trigger as a hover step */
+new MutationObserver((muts) => {
+  for (const m of muts)
+    for (const n of m.addedNodes) {
+      if (!(n instanceof Element)) continue;
+      const pop = n.matches("[data-radix-popper-content-wrapper],[role=tooltip]") ? n : n.querySelector("[data-radix-popper-content-wrapper],[role=tooltip]");
+      if (!pop || performance.now() - state.lastClickAt < 400 || !state.lastHover?.isConnected) continue;
+      const trig = state.lastHover.closest("button,a,[role],td,th,[data-state],label,span") || state.lastHover;
+      if (host.contains(trig)) continue;
+      const last = state.trail.at(-1);
+      const step = { kind: "hover", selector: selectorFor(trig), textKey: txt(trig).slice(0, 80) };
+      if (last && last.kind === "hover" && last.selector === step.selector) continue;
+      pushStep(step);
+    }
+}).observe(document.body, { childList: true, subtree: true });
+setInterval(() => {
+  if (location.pathname !== state.trailRoute) {
+    state.trailRoute = location.pathname;
+    state.trail = [];
+    if (state.scope.kind === "here" && panel.classList.contains("on") && !panelBusy()) renderPanel();
+  }
+}, 250);
+const waitFor = async (fn, ms) => {
+  const end = performance.now() + ms;
+  for (;;) {
+    const v = fn();
+    if (v) return v;
+    if (performance.now() > end) return null;
+    await sleep(80);
+  }
+};
+function findStep(step) {
+  let found = [];
+  const diag = { byAddress: 0, byText: 0, first: "" };
+  findStep.last = diag;
+  try {
+    found = queryDeep(step.selector);
+  } catch (e) {
+    diag.first = "bad address";
+  }
+  diag.byAddress = found.length;
+  /* visible AND hittable: a docked, clipped copy of a button has a size but cannot be clicked. What comes back is
+     the thing to click: the element, or the invisible layer a page stretches over a row to make it clickable
+     (Supabase's div.absolute over each policy row), since that is what a real click would land on. */
+  const clickable = (e) => {
+    let r = e.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return null;
+    if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) {
+      /* there, but scrolled away (a row far down a table): brought into view, then checked */
+      try {
+        e.scrollIntoView({ block: "center", inline: "nearest" });
+      } catch {}
+      r = e.getBoundingClientRect();
+    }
+    const hit = targetAt(r.left + r.width / 2, r.top + r.height / 2);
+    if (!hit) return null;
+    if (e === hit || e.contains(hit) || hit.contains(e)) return e;
+    const h = hit.getBoundingClientRect();
+    const covers = h.left <= r.left + 1 && h.top <= r.top + 1 && h.right >= r.right - 1 && h.bottom >= r.bottom - 1;
+    return covers ? hit : null;
+  };
+  const vis = (e) => !!clickable(e);
+  const norm = (t) => String(t || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const same = (e) => !step.textKey || norm(txt(e).slice(0, 80)) === norm(step.textKey);
+  const byPath = found.find((e) => same(e) && vis(e));
+  if (byPath) return clickable(byPath);
+  /* the structure moved (a banner, a wrapper), or the address now points at a neighbour (a list reordered): find it
+     by its text among the clickable things, or the text itself inside something clickable (a name in a row); the
+     bare address only when there is no text to go by */
+  if (!step.textKey || step.textKey.length < 3) {
+    const bare = found.find(vis);
+    return bare ? clickable(bare) : null;
+  }
+  const tag = (step.selector.split(">").pop() || "").trim().split(":")[0].split(".")[0].split("#")[0] || "*";
+  const pool = Array.from(document.querySelectorAll(`${tag}, button, a, [role], tr, td, th, li, label, summary, p, span, div`));
+  const texted = pool.filter(same);
+  diag.byText = texted.length;
+  if (texted[0]) {
+    const r = texted[0].getBoundingClientRect();
+    const h = r.width && r.height ? targetAt(r.left + r.width / 2, r.top + r.height / 2) : null;
+    diag.first = `${texted[0].tagName.toLowerCase()} ${Math.round(r.width)}×${Math.round(r.height)} at ${Math.round(r.top)}, hit ${h ? h.tagName.toLowerCase() + (h.className && typeof h.className === "string" ? "." + h.className.split(" ")[0].slice(0, 16) : "") : "nothing"}`;
+  }
+  const hit = texted.find(vis) || null;
+  if (!hit) return null;
+  const target = clickable(hit);
+  if (target !== hit) return target; // the layer over it
+  return hit.matches("p, span") ? hit.closest("button, a, [role=button], [role=menuitem], tr, [role=row], li, td") || hit : hit;
+}
+function realHover(el) {
+  const r = el.getBoundingClientRect();
+  const o = { bubbles: true, cancelable: true, composed: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, pointerId: 1, isPrimary: true, pointerType: "mouse" };
+  el.dispatchEvent(new PointerEvent("pointerover", o));
+  el.dispatchEvent(new PointerEvent("pointerenter", { ...o, bubbles: false }));
+  el.dispatchEvent(new MouseEvent("mouseover", o));
+  el.dispatchEvent(new MouseEvent("mouseenter", { ...o, bubbles: false }));
+  el.dispatchEvent(new PointerEvent("pointermove", o));
+  el.dispatchEvent(new MouseEvent("mousemove", o));
+}
+/* React only hears a value set through the native setter, then an input event */
+function realType(el, value) {
+  if (el.isContentEditable) {
+    el.focus();
+    el.textContent = value;
+    el.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: value }));
+    return;
+  }
+  const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : el.tagName === "SELECT" ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  if (el.type === "checkbox" || el.type === "radio") {
+    if (String(el.checked) !== value) el.click();
+    return;
+  }
+  el.focus();
+  Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
+  el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+}
+function realKey(step, el) {
+  const target = el || document.activeElement || document.body;
+  const o = { bubbles: true, cancelable: true, composed: true, key: step.key, code: step.code, metaKey: !!step.meta, ctrlKey: !!step.ctrl, shiftKey: !!step.shift, altKey: !!step.alt };
+  target.dispatchEvent(new KeyboardEvent("keydown", o));
+  target.dispatchEvent(new KeyboardEvent("keyup", o));
+}
+/* a replayed click must never change data for the reviewer: a submit, or anything named like a destructive act */
+const RISKY = /\b(delete|remove|revoke|suspend|offboard|disable|reset|wipe|purge|destroy|submit|send|approve|reject|deploy|rollout|roll out|upgrade now|push)\b/i;
+/* a step that would change data: a submit button in a form, or an action control (button, menu item, link that
+   acts) whose label IS a destructive phrase: "Remove", "Delete monitor…". A row or a name that merely contains
+   such a word ("review shots: team remove") is a thing to open, not an action. */
+const risky = (el) => {
+  if (el.matches?.("button[type=submit]") && el.closest("form")) return true;
+  const label = txt(el).slice(0, 80).trim();
+  if (!RISKY.test(label)) return false;
+  const control = el.matches?.("button, [role=button], [role=menuitem], input[type=button], input[type=submit], a[href='#'], a:not([href])") || !!el.closest?.("button, [role=button], [role=menuitem]");
+  const short = label.split(/\s+/).length <= 3;
+  return control && short;
+};
+function realClick(el) {
+  const r = el.getBoundingClientRect();
+  const o = { bubbles: true, cancelable: true, composed: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0, buttons: 1, pointerId: 1, isPrimary: true, pointerType: "mouse", detail: 1 }; // detail 1: a mouse click, not a keyboard one (some handlers ignore detail 0)
+  el.dispatchEvent(new PointerEvent("pointermove", { ...o, buttons: 0 })); // a Radix item wants the pointer on it first
+  el.dispatchEvent(new PointerEvent("pointerdown", o));
+  el.dispatchEvent(new MouseEvent("mousedown", o));
+  el.dispatchEvent(new PointerEvent("pointerup", { ...o, buttons: 0 }));
+  el.dispatchEvent(new MouseEvent("mouseup", { ...o, buttons: 0 }));
+  el.dispatchEvent(new MouseEvent("click", { ...o, buttons: 0 }));
+}
+/* every open dialog on the page (in open shadow roots too) */
+function openDialogs() {
+  const out = [];
+  const walk = (root, depth) => {
+    for (const d of root.querySelectorAll("[role=dialog],[role=alertdialog],dialog[open]")) if (d.getBoundingClientRect().width > 0) out.push(d);
+    if (depth < 4) for (const e of root.querySelectorAll("*")) if (e.shadowRoot && e !== host) walk(e.shadowRoot, depth + 1);
+  };
+  walk(document, 0);
+  return out;
+}
+/* a popover comment with no recorded trigger: the popover's own text names what it hangs from (an id like
+   maria-32-0031, a name), so find that row, then hover its likely triggers until the popover appears; a menu
+   that only opens on a click gets a click on the things that declare a popup, never on anything risky */
+async function guessPopover(c, here) {
+  const text = `${c.textKey || ""} ${c.element || ""}`;
+  const ids = [...new Set(text.match(/[a-z]+-\d+(?:-\d+)*|\b\d{2,}(?:\.\d+)+\b/gi) || [])];
+  let scopes = [];
+  const rows = Array.from(document.querySelectorAll("tr, li, [role=row], article, section, [role=listitem]"));
+  for (const id of ids) {
+    /* the text may run the id straight into the next figure (node-32-0029 + 75%): shed trailing digits until a row has it */
+    for (let probe = id; probe.length >= 6 && /\d$/.test(probe); probe = probe.slice(0, -1)) {
+      const hit = rows.filter((e) => txt(e).includes(probe));
+      if (hit.length) {
+        scopes.push(...hit);
+        break;
+      }
+    }
+  }
+  scopes = scopes.filter((e, i, a) => a.indexOf(e) === i && !a.some((o) => o !== e && o.contains(e)));
+  const hittable = (e) => {
+    const r = e.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return false;
+    const h = targetAt(r.left + r.width / 2, r.top + r.height / 2);
+    return !!h && (e === h || e.contains(h) || h.contains(e));
+  };
+  let cands = [];
+  let menuFirst = false;
+  if (scopes.length) {
+    for (const sc of scopes) cands.push(...Array.from(sc.querySelectorAll("[data-state], [aria-haspopup], button, a, [role=button]")).filter(hittable));
+  } else {
+    /* no id to anchor on (a menu, a plain popover): its trigger is a control whose label is in the popover's
+       text, or the chevron beside such a control (a split button) */
+    const low = (c.textKey || "").toLowerCase();
+    /* never a tab or a link: those change the page instead of opening something */
+    const all = Array.from(document.querySelectorAll("[aria-haspopup], [data-state], button, [role=button]")).filter((e) => !host.contains(e) && !e.matches("[role=tab], a[href], [role=tab] *") && hittable(e));
+    const label = (e) => txt(e).slice(0, 40).toLowerCase();
+    /* the popover's text usually begins with its trigger's label (a menu repeats its button's name first) */
+    const leads = all.filter((e) => label(e).length >= 3 && low.startsWith(label(e)));
+    const whole = all.filter((e) => label(e).length >= 3 && new RegExp(`(^|[^a-z0-9])${label(e).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(low));
+    const beside = [];
+    for (const e of leads) for (const sib of Array.from(e.parentElement?.children || [])) if (sib !== e && sib.matches("[aria-haspopup], [data-state], button") && hittable(sib)) beside.push(sib);
+    cands = [...beside, ...leads, ...all.filter((e) => e.matches("[aria-haspopup]")), ...whole].filter((e, i, a) => a.indexOf(e) === i);
+    menuFirst = true;
+  }
+  if (!cands.length) return null;
+  const leave = (t) => {
+    const r = t.getBoundingClientRect();
+    const o = { bubbles: true, composed: true, clientX: r.left - 40, clientY: r.top - 40, pointerId: 1, pointerType: "mouse" };
+    t.dispatchEvent(new PointerEvent("pointerout", o));
+    t.dispatchEvent(new PointerEvent("pointerleave", { ...o, bubbles: false }));
+    t.dispatchEvent(new MouseEvent("mouseout", o));
+    t.dispatchEvent(new MouseEvent("mouseleave", { ...o, bubbles: false }));
+  };
+  const tryHover = async (t) => {
+    t.scrollIntoView({ block: "center" });
+    await sleep(100);
+    realHover(t);
+    const el = await waitFor(here, 1400);
+    if (!el) leave(t);
+    return el;
+  };
+  const tryClick = async (t) => {
+    if (risky(t)) return null;
+    realClick(t);
+    const el = await waitFor(here, 1200);
+    if (!el) {
+      realKey({ key: "Escape", code: "Escape" });
+      await sleep(150);
+    }
+    return el;
+  };
+  const clickable = (e) => e.matches("[aria-haspopup], [data-state], button, [role=button]");
+  const deadline = performance.now() + 10000; // ten seconds of guessing, then an honest answer
+  const left = () => performance.now() < deadline;
+  if (menuFirst) for (const t of cands.filter(clickable).slice(0, 10)) { if (!left()) break; const el = await tryClick(t); if (el) return el; }
+  for (const t of cands.slice(0, 14)) { if (!left()) break; const el = await tryHover(t); if (el) return el; }
+  if (!menuFirst) for (const t of cands.filter(clickable).slice(0, 8)) { if (!left()) break; const el = await tryClick(t); if (el) return el; }
+  return null;
+}
+let going = false;
+let goRun = 0; // each go-to gets a number; an older run stops at its next wait once a newer one has started
+async function goTo(c) {
+  if (PAGE_MODE && EXT) {
+    /* the extension's list page: over to the site, the comment's id in the hash for the overlay there */
+    if (!EXT.siteOrigin) return toast("Switch the site on first, then come back here");
+    location.href = `${EXT.siteOrigin}${(c.route || "/").split("#")[0]}#review-goto=${c.id}`;
+    return;
+  }
+  if (PAGE_MODE) {
+    /* over to the app: it opens the comment once it has loaded (sessionStorage survives a login redirect) */
+    try {
+      sessionStorage.setItem("review.goto", c.id);
+    } catch {}
+    location.href = (c.route || "/").split("#")[0];
+    return;
+  }
+  const run = ++goRun;
+  const stale = () => run !== goRun;
+  going = true;
+  try {
+    openPanel(false);
+    toast(`Opening #${c.n}…`, true);
+    const route = (c.route || "").split("?")[0];
+    if (EXT && location.pathname !== route) {
+      /* another site's router will not hear a history push: a real navigation, the id in the hash */
+      going = false;
+      location.href = `${(c.route || "/").split("#")[0]}#review-goto=${c.id}`;
+      return;
+    }
+    if (location.pathname !== route) {
+      toast(`Opening #${c.n}: going to ${c.pageTitle || route}…`, true);
+      history.pushState(null, "", c.route);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      await waitFor(() => location.pathname === route, 2000);
+      await sleep(500);
+      if (stale()) return;
+    }
+    const here = () => resolve(c, performance.now(), true);
+    const restoreScrolls = () => {
+      for (const sc of c.scrolls || []) {
+        if (sc.selector === "window") window.scrollTo(sc.left, sc.top);
+        else {
+          let e = null;
+          try {
+            e = queryDeep(sc.selector)[0] || null;
+          } catch {}
+          if (e) {
+            e.scrollTop = sc.top;
+            e.scrollLeft = sc.left;
+          }
+        }
+      }
+    };
+    restoreScrolls();
+    let el = await waitFor(here, 600);
+    if (stale()) return;
+    /* not on the page as it is, but its place is known: there, without guessing (a chart redrawn, a figure moved) */
+    if (!el && c.rect && ghostRect(c)) {
+      const win = (c.scrolls || []).find((x) => x.selector === "window");
+      if (win) window.scrollTo({ left: win.left || 0, top: win.top || 0, behavior: "smooth" });
+      state.flash = { id: c.id, until: performance.now() + 3200 };
+      toast(`#${c.n}: the element has changed since; shown where it was`);
+      return;
+    }
+    const skipped = [];
+    const junk = (step) => /^(html|body)$/.test(step.selector || "") || /[{};]|^import /.test(step.textKey || "");
+    const stepName = (step) => {
+      const label = junk(step) ? "" : (step.textKey || "").slice(0, 24).trim();
+      const q = label ? ` "${label}${(step.textKey || "").length > 24 ? "…" : ""}"` : "";
+      if (step.kind === "key") return `pressing ${[step.meta && "⌘", step.ctrl && "Ctrl", step.shift && "⇧", step.alt && "⌥"].filter(Boolean).join("")}${step.key === " " ? "Space" : step.key}`;
+      if (step.kind === "type" || step.kind === "select") return `entering "${step.value}"`;
+      if (step.kind === "hover") return label ? `hovering${q}` : "hovering the trigger";
+      if (step.kind === "contextmenu") return `right-clicking${q}`;
+      if (step.kind === "dblclick") return `double-clicking${q}`;
+      return label ? `clicking${q}` : "clicking a button";
+    };
+    /* one step of the trail: find its target, act, see whether the comment's element appeared */
+    const tried = []; // what the replay did, for an honest answer when it fails
+    const runStep = async (step, patience) => {
+      if (junk(step)) return null; // a stray step on the page itself: nothing to do
+      toast(`Opening #${c.n}: ${stepName(step)}…`, true);
+      if (step.kind === "key") {
+        const t = step.selector ? await waitFor(() => findStep(step), 300) : null;
+        realKey(step, t);
+        return waitFor(here, 900);
+      }
+      const t = await waitFor(() => findStep(step), patience);
+      if (!t) {
+        const d = findStep.last || {};
+        tried.push(`could not find ${stepName(step)}: ${d.byAddress} by address, ${d.byText} by text${d.first ? `, first ${d.first}` : ""}`);
+        return null; // not there: the app already took this step for us (a remembered selection)
+      }
+      if (step.kind === "hover") {
+        t.scrollIntoView({ block: "center" });
+        await sleep(100);
+        realHover(t);
+        return waitFor(here, 2200); // hover cards open after a delay
+      }
+      if (step.kind === "type" || step.kind === "select") {
+        realType(t, step.value);
+        return waitFor(here, 1200);
+      }
+      if (step.kind === "contextmenu" || step.kind === "dblclick") {
+        const r = t.getBoundingClientRect();
+        const o = { bubbles: true, cancelable: true, composed: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: step.kind === "contextmenu" ? 2 : 0 };
+        if (step.kind === "dblclick") {
+          realClick(t);
+          realClick(t);
+        }
+        t.dispatchEvent(new MouseEvent(step.kind, o));
+        return waitFor(here, 1200);
+      }
+      if (risky(t)) {
+        skipped.push(txt(t).slice(0, 30) || "a submit");
+        return null;
+      }
+      const dialogsBefore = openDialogs().length;
+      realClick(t);
+      /* a moment for the element; if a dialog did appear, more time for its content to load (another site's drawer
+         fills itself after opening); if nothing at all appeared, on to the alternatives quickly */
+      let got = await waitFor(here, 1500);
+      if (!got && openDialogs().length > dialogsBefore) got = await waitFor(here, EXT ? 3000 : 1000);
+      if (!got && openDialogs().length === dialogsBefore) {
+        /* nothing happened: some rows answer only a real click on their content, or the keyboard. The text
+           itself, then the row around it, then Enter on whatever can take focus. */
+        const r = t.getBoundingClientRect();
+        const inner = document.elementsFromPoint(r.left + Math.min(40, r.width / 2), r.top + r.height / 2).find((e) => e !== t && !t.contains(e) && !host.contains(e) && e.getRootNode() === document && txt(e).length);
+        const row = t.closest("tr, [role=row], li, [role=listitem]") || inner?.closest("tr, [role=row], li, [role=listitem]");
+        for (const alt of [inner, row].filter(Boolean)) {
+          realClick(alt);
+          got = await waitFor(here, 1500);
+          if (got || openDialogs().length > dialogsBefore) break;
+        }
+        if (!got && openDialogs().length === dialogsBefore) {
+          const focusable = [t, inner, row].find((e) => e && (e.tabIndex >= 0 || e.matches("a, button, [role=button], [role=link]")));
+          if (focusable) {
+            focusable.focus();
+            realKey({ key: "Enter", code: "Enter" }, focusable);
+            got = await waitFor(here, 1500);
+          }
+        }
+      }
+      if (!got) {
+        const now = openDialogs();
+        const titles = now.map((d) => contextOf(d.querySelector("h1,h2,h3,[id$=title],[class*=title]") || d)).join(" / ");
+        tried.push(`${stepName(step)} ${now.length > dialogsBefore ? `opened "${titles}" but #${c.n}'s element was not in it` : "did nothing I could see"}`);
+      }
+      return got;
+    };
+    const trail = c.trail || [];
+    if (!el && trail.length) {
+      /* the last step is usually the one that opens the thing: if its target is on screen, that is the whole job;
+         else the last two, then three, in order, before everything from the start (which would replay the
+         opening of other things seen on the way) */
+      for (let k = 1; k <= 3 && !el && k <= trail.length; k++) {
+        const tail = trail.slice(-k);
+        if (tail[0].kind === "key" || !findStep(tail[0])) continue;
+        for (const step of tail) {
+          el = await runStep(step, 0);
+          if (stale()) return;
+          if (!el && step !== tail[tail.length - 1]) continue;
+        }
+      }
+    }
+    if (!el && trail.length) {
+      /* otherwise from the start; a missing step waits briefly, the first one longer (the page may be loading) */
+      let first = true;
+      for (const step of trail) {
+        el = await runStep(step, first ? (EXT ? 6000 : 1500) : EXT ? 1200 : 500);
+        if (stale()) return;
+        first = false;
+        if (el) {
+          restoreScrolls();
+          break;
+        }
+      }
+    }
+    if (!el && /^Popover or menu/.test(c.context || "")) toast(`Opening #${c.n}: finding what opens it…`, true);
+    if (!el && /^Popover or menu/.test(c.context || "")) el = await guessPopover(c, here);
+    if (stale()) return;
+    if (!el) {
+      /* no trail, or it did not get there: a drawer nearly always opens from a button carrying its name */
+      const m = /^Drawer or dialog: (.+)$/.exec(c.context || "");
+      if (m) {
+        const name = m[1].trim().toLowerCase();
+        const opener = () => {
+          const e = Array.from(document.querySelectorAll("button, a, [role=button]")).find((b) => txt(b).toLowerCase() === name);
+          return e ? findStep({ selector: "button, a, [role=button]", textKey: txt(e).slice(0, 80) }) : null; // the hittable copy
+        };
+        const t = await waitFor(opener, 1500);
+        if (t) {
+          realClick(t);
+          el = await waitFor(here, 1800);
+        }
+      }
+    }
+    if (stale()) return;
+    if (!el) {
+      toast(skipped.length ? `#${c.n}: stopped before "${skipped[0]}", a step that would change data. Open the rest by hand.` : `#${c.n} is on this page, but its state must be opened by hand: ${c.context || "see the picture"}${tried.length ? ` (${tried.join("; ")})` : ""}`);
+      return;
+    }
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    state.flash = { id: c.id, until: performance.now() + 3200 };
+    /* the surroundings: a different org view, theme or window size changes what the picture shows */
+    const notes = [];
+    const snap = appSnapshot();
+    for (const k of ["merged-ui.orgview", "merged-ui.scenario.admin"]) if (c.app && c.app[k] != null && snap[k] !== c.app[k]) notes.push("a different org view");
+    if (c.theme && c.theme !== (document.documentElement.getAttribute("data-theme") || "light")) notes.push(`the ${c.theme} theme`);
+    if (c.viewport && Math.abs(c.viewport.w - window.innerWidth) > c.viewport.w * 0.3) notes.push(`a ${c.viewport.w}px wide window`);
+    toast(notes.length ? `#${c.n}: here. It was made in ${[...new Set(notes)].join(", ")}.` : `#${c.n}: here`);
+  } finally {
+    going = false;
+  }
+}
+
+/* page mode: a paste inspector (?inspect=1): paste something copied from Loop, its clipboard HTML is saved for study */
+if (PAGE_MODE && new URLSearchParams(location.search).get("inspect")) {
+  const box = document.createElement("div");
+  box.className = "ui";
+  box.style.cssText = "position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);width:520px;background:#fff;border-radius:12px;box-shadow:0 12px 32px rgba(29,43,62,.25);padding:16px;z-index:9;pointer-events:auto;font:13px/1.5 -apple-system,system-ui,sans-serif;color:#1d2b3e";
+  box.innerHTML = `<b>Paste inspector</b><p style="margin:6px 0 10px;color:#5b6b85">Copy a one-item Checklist in Loop, click below, press ⌘V.</p><div class="sink" contenteditable="true" style="min-height:90px;border:1px dashed #cfd8e6;border-radius:8px;padding:10px;outline:none"></div><p class="out" style="margin:10px 0 0;color:#5b6b85"></p><p style="margin:12px 0 0;display:flex;gap:8px;flex-wrap:wrap"><button class="trial" style="font:inherit;padding:6px 12px;border:1px solid #cfd8e6;border-radius:8px;background:#fff;cursor:pointer">Copy picture trial (9 variants)</button><button class="endtrial" data-decoy="0" style="font:inherit;padding:6px 12px;border:1px solid #cfd8e6;border-radius:8px;background:#fff;cursor:pointer">Copy end trial 1 (plain)</button><button class="endtrial" data-decoy="1" style="font:inherit;padding:6px 12px;border:1px solid #cfd8e6;border-radius:8px;background:#fff;cursor:pointer">Copy end trial 2 (decoy at the end)</button></p>`;
+  host.shadowRoot.appendChild(box);
+  /* the end trial: two comments exactly as the real copy writes them; trial 2 adds a 1 px picture at the very end,
+     to learn whether Loop drops the last picture of a paste whatever it is */
+  for (const b of box.querySelectorAll(".endtrial")) b.addEventListener("click", async () => {
+    const out = box.querySelector(".out");
+    const list = (await (await rv(`/__review/list${location.search.includes("session=") ? location.search : ""}`)).json()).filter((x) => x.shot && !x.resolved).slice(0, 2);
+    if (list.length < 2) return (out.textContent = "Needs two open comments with pictures.");
+    out.textContent = "Working…";
+    const [part] = await buildLoop(list);
+    let html = part.html;
+    if (b.dataset.decoy === "1") {
+      const dot = document.createElement("canvas"); dot.width = dot.height = 1;
+      html = html.replace("<!--ScriptorEndFragment-->", `<div class="scriptor-paragraph"><img alt="" width="1" height="1" src="${dot.toDataURL("image/png")}" style="display: block;"></div><!--ScriptorEndFragment-->`);
+    }
+    await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([part.text], { type: "text/plain" }) })]);
+    out.textContent = `End trial ${b.dataset.decoy === "1" ? 2 : 1} copied: comments ${list.map((c) => c.n).join(" and ")}. Paste into Loop; does the second picture show?`;
+  });
+  /* the trial: one picture written five ways, labelled, so one paste into Loop shows which frame is clean */
+  box.querySelector(".trial").addEventListener("click", async (e) => {
+    const out = box.querySelector(".out");
+    const list = await (await rv(`/__review/list${location.search.includes("session=") ? location.search : ""}`)).json();
+    const c = (list.comments || list).find((x) => x.shot);
+    if (!c) return (out.textContent = "No comment with a picture.");
+    out.textContent = "Working…";
+    const full = await numberedPicture(c);
+    const half = await numberedPicture(c, 1120);
+    const small = await numberedPicture(c, 560);
+    const ratio = full.height / full.width;
+    const h560 = Math.round(ratio * 560);
+    const png = (cv) => cv.toDataURL("image/png");
+    const para = (inner) => `<div class="scriptor-paragraph"><span>${inner}</span></div>`;
+    const pic = (attrs, cv) => `<div class="scriptor-paragraph"><span></span><img ${attrs} src="${png(cv)}" style="display: block;"><span></span></div>`;
+    const variants = [
+      ["A: as today. alt, width 560, height 265, full pixels", pic(`alt="A" width="560" height="${h560}"`, full)],
+      ["B: no alt, width 560, height 265, full pixels", pic(`width="560" height="${h560}"`, full)],
+      ["C: no alt, attributes equal to the pixels, half size (1120 wide)", pic(`width="${half.width}" height="${half.height}"`, half)],
+      ["D: no alt, attributes equal to the pixels, exactly 560 wide", pic(`width="${small.width}" height="${small.height}"`, small)],
+      ["E: no alt, attributes equal to the pixels, full size", pic(`width="${full.width}" height="${full.height}"`, full)],
+      /* shapes that may make Loop file the picture as a block instead of an inline image (its frame then has no text line under it) */
+      ["F: picture alone, not inside any paragraph", `<img width="560" height="${h560}" src="${png(full)}" style="display: block;">`],
+      ["G: picture inside Loop's own scriptor-image block", `<div class="scriptor-paragraph"><div class="scriptor-image scriptor-block" style="display: block; width: 560px;"><img class="scriptor-image-element" width="560" height="${h560}" src="${png(full)}"></div></div>`],
+      ["H: picture in a figure", `<figure style="margin: 0;"><img width="560" height="${h560}" src="${png(full)}" style="display: block;"></figure>`],
+      ["I: picture in a p, display block", `<p style="line-height: 0;"><img width="560" height="${h560}" src="${png(full)}" style="display: block; vertical-align: top;"></p>`],
+    ];
+    const html = `<meta charset='utf-8'><html><head></head><body><span><!--ScriptorStartFragment-->${variants.map(([t, p]) => para(`<b>${t}</b>`) + p + para("<br>")).join("")}<!--ScriptorEndFragment--></span></body></html>`;
+    const text = variants.map(([t]) => t).join("\n");
+    await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+    out.textContent = `Copied 9 variants of comment ${c.n}. Paste into Loop, click each picture, note which have the strip.`;
+  });
+  box.querySelector(".sink").addEventListener("paste", async (e) => {
+    e.preventDefault();
+    const html = e.clipboardData.getData("text/html");
+    const text = e.clipboardData.getData("text/plain");
+    /* a picture on the clipboard (a screenshot) is kept too, as a data URL */
+    const file = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
+    const image = file ? await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(file); }) : "";
+    const r = await (await rv("/__review/paste", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ html, text, image }) })).json();
+    box.querySelector(".out").textContent = r.ok ? `Saved: ${r.htmlLength} characters of HTML${r.image ? " and a picture" : ""}. You can close this.` : "Could not save.";
+    box.querySelector(".sink").textContent = text.slice(0, 200);
+  });
+}
+/* page mode: the panel is the page; "go to" hands over to the app */
+if (PAGE_MODE) {
+  host.setAttribute("data-page", "");
+  host.style.position = "static";
+  host.style.pointerEvents = "auto";
+  document.title = "Review comments";
+  openPanel(true);
+}
+/* the app, arriving from the page with a comment to open */
+const pendingGoto = (() => {
+  /* from the extension's list page or a route change on a site: the id rides in the hash */
+  const m = location.hash.match(/#review-goto=([a-z0-9-]+)/i);
+  if (m) {
+    try {
+      history.replaceState(null, "", location.pathname + location.search);
+    } catch {}
+    return m[1];
+  }
+  try {
+    const id = sessionStorage.getItem("review.goto");
+    if (id) sessionStorage.removeItem("review.goto");
+    return id;
+  } catch {
+    return null;
+  }
+})();
+if (!PAGE_MODE && pendingGoto) {
+  const id = pendingGoto;
+  const tryOpen = async (n) => {
+    await loadComments();
+$(".bar .k").textContent = `${MOD} + click to comment`;
+    const c = state.comments.find((x) => x.id === id);
+    if (c) goTo(c);
+    else if (n > 0) setTimeout(() => tryOpen(n - 1), 500);
+  };
+  setTimeout(() => tryOpen(10), 1200);
+}
+
+/* ---------- the bar: draggable, docks at an edge as a round button, click to expand ---------- */
+const mini = $(".bar-mini");
+const BAR_KEY = "review.bar";
+const barPos = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(BAR_KEY) || "null") || { x: null, y: null, dock: null, along: 0.5 };
+  } catch {
+    return { x: null, y: null, dock: null, along: 0.5 };
+  }
+})();
+const saveBar = () => {
+  try {
+    localStorage.setItem(BAR_KEY, JSON.stringify(barPos));
+  } catch {}
+};
+const EDGE = 28; // this close to an edge on drop: dock
+function placeBar() {
+  if (PAGE_MODE) return;
+  const W = window.innerWidth, H = window.innerHeight;
+  if (barPos.dock) {
+    bar.classList.add("hidden");
+    mini.classList.add("on");
+    const m = 40, gap = 10;
+    let x, y;
+    if (barPos.dock === "left" || barPos.dock === "right") {
+      y = Math.min(H - m - gap, Math.max(gap, barPos.along * H - m / 2));
+      x = barPos.dock === "left" ? gap : W - m - gap;
+    } else {
+      x = Math.min(W - m - gap, Math.max(gap, barPos.along * W - m / 2));
+      y = barPos.dock === "top" ? gap : H - m - gap;
+    }
+    mini.style.left = `${x}px`;
+    mini.style.top = `${y}px`;
+    return;
+  }
+  mini.classList.remove("on");
+  bar.classList.remove("hidden");
+  const r = bar.getBoundingClientRect();
+  let x = barPos.x, y = barPos.y;
+  if (x == null || y == null) {
+    x = (W - r.width) / 2;
+    y = H - r.height - 12;
+  }
+  x = Math.min(W - r.width - 4, Math.max(4, x));
+  y = Math.min(H - r.height - 4, Math.max(4, y));
+  bar.style.left = `${x}px`;
+  bar.style.top = `${y}px`;
+}
+function dockFor(x, y, w, h) {
+  const W = window.innerWidth, H = window.innerHeight;
+  const d = { left: x, right: W - (x + w), top: y, bottom: H - (y + h) };
+  const [edge, dist] = Object.entries(d).sort((a, b) => a[1] - b[1])[0];
+  return dist <= EDGE ? edge : null;
+}
+function dragify(el, onDrop) {
+  let start = null;
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target.closest("button:not(.bar-mini), a")) return;
+    const r = el.getBoundingClientRect();
+    start = { x: e.clientX, y: e.clientY, left: r.left, top: r.top, w: r.width, h: r.height, moved: false };
+    el.setPointerCapture(e.pointerId);
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (!start.moved && Math.hypot(dx, dy) < 4) return;
+    start.moved = true;
+    el.classList.add("dragging");
+    el.style.left = `${start.left + dx}px`;
+    el.style.top = `${start.top + dy}px`;
+  });
+  const end = (e) => {
+    if (!start) return;
+    const s = start;
+    start = null;
+    el.classList.remove("dragging");
+    try {
+      el.releasePointerCapture(e.pointerId);
+    } catch {}
+    onDrop(s.moved, parseFloat(el.style.left), parseFloat(el.style.top), s.w, s.h);
+  };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+}
+dragify(bar, (moved, x, y, w, h) => {
+  if (!moved) return;
+  const edge = dockFor(x, y, w, h);
+  if (edge) {
+    barPos.dock = edge;
+    barPos.along = edge === "left" || edge === "right" ? (y + h / 2) / window.innerHeight : (x + w / 2) / window.innerWidth;
+  } else {
+    barPos.dock = null;
+    barPos.x = x;
+    barPos.y = y;
+  }
+  saveBar();
+  placeBar();
+});
+dragify(mini, (moved, x, y, w, h) => {
+  if (!moved) {
+    /* a click: expand beside the edge it was docked at */
+    const edge = barPos.dock;
+    barPos.dock = null;
+    const r = bar.getBoundingClientRect();
+    const W = window.innerWidth, H = window.innerHeight;
+    bar.classList.remove("hidden");
+    const bw = bar.getBoundingClientRect().width || r.width, bh = bar.getBoundingClientRect().height || r.height;
+    if (edge === "left") (barPos.x = 12), (barPos.y = y + h / 2 - bh / 2);
+    else if (edge === "right") (barPos.x = W - bw - 12), (barPos.y = y + h / 2 - bh / 2);
+    else if (edge === "top") (barPos.x = x + w / 2 - bw / 2), (barPos.y = 12);
+    else (barPos.x = x + w / 2 - bw / 2), (barPos.y = H - bh - 12);
+    saveBar();
+    placeBar();
+    return;
+  }
+  const edge = dockFor(x, y, w, h);
+  if (edge) {
+    barPos.dock = edge;
+    barPos.along = edge === "left" || edge === "right" ? (y + h / 2) / window.innerHeight : (x + w / 2) / window.innerWidth;
+  } else {
+    /* dropped away from every edge: it becomes the full bar there */
+    barPos.dock = null;
+    barPos.x = x;
+    barPos.y = y;
+  }
+  saveBar();
+  placeBar();
+});
+$(".bar .dock").addEventListener("click", () => {
+  const r = bar.getBoundingClientRect();
+  const W = window.innerWidth, H = window.innerHeight;
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const d = { left: cx, right: W - cx, top: cy, bottom: H - cy };
+  const edge = Object.entries(d).sort((a, b) => a[1] - b[1])[0][0];
+  barPos.dock = edge;
+  barPos.along = edge === "left" || edge === "right" ? cy / H : cx / W;
+  saveBar();
+  placeBar();
+});
+window.addEventListener("resize", placeBar);
+/* the mini mirrors the dot and the count */
+const syncMini = () => {
+  mini.querySelector(".mini-dot").classList.toggle("live", dot.classList.contains("live"));
+  const n = mini.querySelector(".mini-n");
+  n.textContent = state.count ? String(state.count) : "";
+  n.classList.toggle("on", !!state.count);
+};
+new MutationObserver(syncMini).observe(dot, { attributes: true, attributeFilter: ["class"] });
+const _updateBar = updateBar;
+updateBar = function () {
+  _updateBar();
+  syncMini();
+};
+placeBar();
+syncMini();
+if (!PAGE_MODE) setReview(!state.off, true);
+
+/* for drives and debugging from the console */
+window.__review = { grabFrame, drawMarker, state, goTo, realType, realKey, realClick, realHover, setReview };

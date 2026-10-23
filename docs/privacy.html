@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Review mode · privacy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{max-width:680px;margin:48px auto;padding:0 20px;font:16px/1.6 -apple-system,system-ui,sans-serif;color:#1d2b3e}h1{font-size:26px}h2{font-size:18px;margin-top:28px}p,li{color:#3b4a60}</style>
+</head>
+<body>
+<h1>Review mode: privacy</h1>
+<p>Review mode is a browser extension for design teams. It lets a signed-in team member leave comments on web pages they are reviewing. This page says what the extension handles and where it goes. Last updated 23 October 2026.</p>
+
+<h2>What the extension collects</h2>
+<ul>
+<li><b>Your GitHub identity.</b> When you sign in with GitHub, the extension receives your GitHub username, display name, email address and profile picture, and keeps a sign-in session in the browser's extension storage so you stay signed in.</li>
+<li><b>Comments and screenshots.</b> When you make a comment on a site you have switched on, the extension saves the comment text, a tag, the address and title of the page, a description of the element you clicked, a screenshot of the visible part of that page at that moment, and the clicks that led there, so the comment can be found again later.</li>
+<li><b>Status changes.</b> When a comment is picked up, done, sent back or approved, the extension records who did it and when, and any note typed with it.</li>
+<li><b>Which sites are on.</b> The list of sites you switched on and their project names is kept in the browser's extension storage.</li>
+</ul>
+
+<h2>What it does not do</h2>
+<ul>
+<li>It does nothing on sites you have not switched on: no reading, no screenshots, no injection.</li>
+<li>It does not read your browsing history, passwords, form entries or other extensions' data.</li>
+<li>It does not sell data, show advertising, or send anything to anyone other than your team's own hub.</li>
+</ul>
+
+<h2>Where the data goes</h2>
+<p>Comments, screenshots, statuses and your name and picture are stored in a database and file store operated by your team (a Supabase project the team administers), so your teammates can see and act on them. Sign-in is handled by GitHub and the same Supabase project. Screenshots of approved comments are deleted automatically 14 days after approval; the comment record is kept.</p>
+
+<h2>Your choices</h2>
+<ul>
+<li>Sign out at any time from the extension's popup; this removes the session from your browser.</li>
+<li>Remove any comment you made from the list; its screenshot is deleted with it.</li>
+<li>Switch a site off from the popup; the extension then stops acting on it.</li>
+<li>Uninstalling the extension removes everything it kept in the browser.</li>
+</ul>
+
+<h2>Contact</h2>
+<p>Questions about this extension or the data it handles: contact the team that administers your review hub.</p>
+</body>
+</html>

@@ -1,0 +1,77 @@
+{
+  "manifest_version": 3,
+  "name": "Review mode",
+  "version": "2.0.42",
+  "description": "Design review on any page: ⌥-click anything, write a comment, the team sees it. Pictures, statuses and notes live on the team's hub.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "storage",
+    "identity"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Review mode",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "overlay.js",
+        "hub.json"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "review-mode@heynirav",
+      "strict_min_version": "140.0",
+      "update_url": "https://niravbhatt1317.github.io/review-mode/firefox/updates.json",
+      "data_collection_permissions": {
+        "required": [
+          "personallyIdentifyingInfo",
+          "websiteContent",
+          "websiteActivity"
+        ]
+      }
+    }
+  }
+}

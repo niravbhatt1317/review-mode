@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Review mode</title>
+  <style>
+    body { margin: 0; padding: 28px 32px; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #1d2b3e; background: #fff; max-width: 640px; }
+    h1 { font-size: 18px; margin: 0 0 18px; }
+    h2 { font-size: 13px; font-weight: 600; margin: 22px 0 8px; }
+    label { display: block; font-weight: 600; margin: 18px 0 6px; }
+    input, textarea { width: 100%; box-sizing: border-box; border: 1px solid #dbe3ef; border-radius: 8px; padding: 8px 10px; font: inherit; }
+    textarea { min-height: 120px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    p.hint { margin: 6px 0 0; color: #5b6b85; font-size: 12px; }
+    button { border: 0; border-radius: 8px; padding: 9px 16px; background: #1d2b3e; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    button.quiet { background: #fff; color: #1d2b3e; border: 1px solid #dbe3ef; }
+    .who { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #dbe3ef; border-radius: 10px; }
+    .who img { width: 36px; height: 36px; border-radius: 50%; background: #eef2f7; }
+    .who .name { font-weight: 600; }
+    .who .handle { color: #5b6b85; font-size: 12px; }
+    .who .sp { flex: 1; }
+    #save { margin-top: 20px; }
+    #saved { margin-left: 12px; color: #2b8a3e; font-size: 12px; opacity: 0; transition: opacity .2s; }
+    #err { color: #c0392b; font-size: 12px; margin-top: 8px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>Review mode · sites</h1>
+  <label for="sites">Sites that are on, and their project</label>
+  <textarea id="sites" spellcheck="false"></textarea>
+  <p class="hint">One line per site: <code>https://example.com = project-name</code>. The toolbar button adds a site with a suggested project; change the project here to share a list between sites.</p>
+  <button id="save">Save</button><span id="saved">Saved</span>
+  <script src="options.js"></script>
+</body>
+</html>

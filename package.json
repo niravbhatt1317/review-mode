@@ -1,0 +1,25 @@
+{
+  "name": "review-mode",
+  "version": "2.0.42",
+  "description": "Design review comments on any page, shared on a team hub. The browser extension and the shared rules.",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:niravbhatt1317/review-mode",
+  "exports": {
+    "./hub-core.js": "./hub-core.js",
+    "./overlay.js": "./overlay.js",
+    "./hub.json": "./hub.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "*.js",
+    "*.html",
+    "*.json",
+    "icons"
+  ],
+  "scripts": {
+    "pack": "node pack.mjs",
+    "pack:ci": "node pack.mjs --no-bump",
+    "firefox-release": "node firefox-release.mjs"
+  }
+}

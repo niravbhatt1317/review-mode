@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root { --ink: #1d2b3e; --ink-2: #5b6b85; --ink-3: #8b99b0; --line: #e4eaf3; --fill: #f4f6fa; --blue: #1a6fe8; --green: #1f7a3e; --red: #c0392b; }
+    body { margin: 0; width: 320px; font: 13px/1.45 -apple-system, system-ui, "Segoe UI", sans-serif; color: var(--ink); background: #fff; }
+    .card { background: #fff; }
+    .head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px; border-bottom: 1px solid var(--line); }
+    .mark { width: 26px; height: 26px; border-radius: 8px; background: var(--ink); display: grid; place-items: center; flex: 0 0 auto; }
+    .mark svg { width: 16px; height: 16px; }
+    .head b { font-size: 14px; }
+    .head .sub { color: var(--ink-3); font-size: 11px; margin-left: auto; }
+    .body { padding: 16px; }
+    .site { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 9px; border-radius: 999px; background: var(--fill); color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .site .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); flex: 0 0 auto; }
+    .site.on .dot { background: var(--green); }
+    .site.on { color: var(--green); background: #e8f5ec; }
+    h1 { font-size: 15px; margin: 12px 0 4px; }
+    p { margin: 0; color: var(--ink-2); }
+    label { display: block; font-weight: 600; font-size: 12px; margin: 14px 0 6px; }
+    input { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; font: inherit; background: #fff; color: var(--ink); }
+    input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(26,111,232,.15); }
+    .hint { color: var(--ink-3); font-size: 11px; margin-top: 6px; }
+    .row { display: flex; gap: 8px; margin-top: 14px; }
+    button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font: inherit; font-weight: 600; cursor: pointer; background: #fff; color: var(--ink); transition: background .12s, border-color .12s; }
+    button:hover { background: var(--fill); }
+    button.go { background: var(--ink); color: #fff; border-color: var(--ink); }
+    button.go:hover { background: #2a3b52; }
+    button.off { color: var(--red); }
+    button.off:hover { background: #fdecea; border-color: #f3c4bf; }
+    button svg { width: 16px; height: 16px; flex: 0 0 auto; }
+    .state { display: flex; align-items: center; gap: 8px; margin: 12px 0 2px; font-weight: 600; }
+    .state .proj { padding: 2px 8px; border-radius: 6px; background: var(--fill); font-weight: 600; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .foot { display: flex; align-items: center; gap: 10px; padding: 10px 16px 12px; border-top: 1px solid var(--line); background: #fbfcfd; font-size: 12px; color: var(--ink-2); }
+    .card:has(.body > #na:not([hidden])) .foot, .card:has(#authPanel:not([hidden])) .foot { display: none; }
+    .foot .av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--ink); flex: 0 0 auto; }
+    .foot .me { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+    .foot .nm { color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .foot .hd { color: var(--ink-3); font-size: 11px; }
+    .foot .sp { flex: 1; }
+    .foot a { color: var(--ink-2); text-decoration: none; padding: 4px 7px; border-radius: 6px; white-space: nowrap; }
+    .foot a:hover { background: var(--line); color: var(--ink); }
+    .err { color: var(--red); font-size: 12px; margin-top: 8px; }
+    .err:empty { display: none; }
+    .site .proj { color: var(--ink-3); }
+    .site.on .proj { color: #2f8f52; }
+    button.busy { pointer-events: none; opacity: .85; }
+    button .ring { display: none; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+    button.busy .ring { display: inline-block; }
+    button.busy .ico { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="card">
+  <div class="head"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="11" r="5"/><circle cx="12" cy="11" r="1.4" fill="#e5484d" stroke="none"/><path d="M6 20h12"/></svg></span><b>Review mode</b><span class="sub" id="ver"></span></div>
+  <div class="body">
+    <span class="site" id="site"><span class="dot"></span><span id="siteName"></span><span class="proj" id="siteProj"></span></span>
+    <div id="authPanel" hidden>
+      <h1>Sign in to review</h1>
+      <p>Your comments carry your GitHub name and picture, so the team knows who said what.</p>
+      <div class="row"><button id="signIn" class="go"><span class="ring"></span><svg class="ico" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span class="lbl">Sign in with GitHub</span></button></div>
+      <p class="err" id="authErr"></p>
+    </div>
+    <div id="onPanel" hidden>
+      <p style="margin-top:12px">⌥-click anything on the page to comment.</p>
+      <div class="row"><button id="list">Open the list</button><button id="off" class="off">Switch off</button></div>
+    </div>
+    <div id="offPanel" hidden>
+      <h1>Review this site</h1>
+      <p>Comments go to a project on the team's hub. Local, staging and production of one product share a name.</p>
+      <label for="project">Project</label>
+      <input id="project" list="projects" placeholder="a name the team shares" autocomplete="off">
+      <datalist id="projects"></datalist>
+      <p class="hint">Suggested from the address; names already on the hub appear as you type.</p>
+      <div class="row"><button id="on" class="go">Switch on</button></div>
+    </div>
+    <p id="na" hidden class="hint">Review works on web pages (http or https).</p>
+  </div>
+  <div class="foot" id="whoLine" hidden><span id="pav" class="av"></span><span class="me"><span class="nm" id="who"></span><span class="hd" id="handle"></span></span><span class="sp"></span><a href="#" id="opts">Sites</a><a href="#" id="signOut">Sign out</a></div>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
