@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Review mode sign-in</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<style>
+  :root { --ink: #1d2b3e; --ink-2: #5b6b85; --line: #e4eaf3; --fill: #f4f6fa; --red: #c0392b; }
+  body { max-width: 520px; margin: 96px auto; padding: 0 20px; font: 16px/1.55 -apple-system, system-ui, sans-serif; color: var(--ink); }
+  .head { display: flex; align-items: center; gap: 12px; }
+  .mark { width: 40px; height: 40px; border-radius: 11px; background: var(--ink); display: grid; place-items: center; }
+  h1 { font-size: 22px; margin: 0; }
+  p { color: var(--ink-2); }
+  .err { color: var(--red); }
+  .hint { display: none; border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin-top: 20px; font-size: 15px; }
+  .hint b { display: block; margin-bottom: 4px; color: var(--ink); }
+  a { color: var(--ink-2); }
+</style>
+</head>
+<body>
+<div class="head"><span class="mark"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="11" r="5"/><circle cx="12" cy="11" r="1.4" fill="#e5484d" stroke="none"/><path d="M6 20h12"/></svg></span><h1 id="title">Signing you in…</h1></div>
+<p id="msg">One moment. This tab closes by itself when Review mode has your sign-in.</p>
+<div class="hint" id="hint"><b>Still here?</b>Review mode did not pick the sign-in up. Make sure the extension is installed and switched on in this browser, then click its toolbar icon and sign in again. <a href="./">Install page</a></div>
+<script>
+  // The hub (Supabase Auth) sends the person here after GitHub: ?code=… on success, ?error=…&error_description=…
+  // when not. The extension's background watches this tab's address, trades the code for the session and closes
+  // the tab; this page only tells the person what is going on. The code is one-time and useless without the
+  // verifier the extension holds, and it is taken off the address once the extension has had its chance.
+  const q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.slice(1));
+  const error = q.get("error_description") || h.get("error_description") || q.get("error") || h.get("error");
+  const title = document.getElementById("title"), msg = document.getElementById("msg"), hint = document.getElementById("hint");
+  if (error) {
+    title.textContent = "Could not sign in";
+    msg.textContent = error.replace(/\+/g, " ");
+    msg.className = "err";
+    hint.style.display = "block";
+  } else if (!q.get("code")) {
+    title.textContent = "Review mode sign-in";
+    msg.textContent = "This page finishes the GitHub sign-in for the Review mode extension. Nothing to do here on its own.";
+  } else {
+    setTimeout(() => { hint.style.display = "block"; }, 6000);
+  }
+  setTimeout(() => history.replaceState(null, "", location.pathname), 4000);
+</script>
+</body>
+</html>

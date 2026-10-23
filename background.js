@@ -15,6 +15,7 @@ async function config() {
   return {
     url: saved.hub?.url || bundled.url,
     key: saved.hub?.anonKey || bundled.anonKey,
+    authPage: saved.hub?.authPage || bundled.authPage, // where the hub sends the sign-in back; in its allowed redirect URLs
     people: { ...(bundled.people || {}), ...(saved.hub?.people || {}) },
     who: saved.who || "",
     sites: saved.sites || {}, // origin -> { project }
@@ -35,7 +36,15 @@ async function projectFor(origin) {
     return "site";
   }
 }
-const auth = makeAuth(async () => { const c = await config(); return { url: c.url, key: c.key }; });
+const auth = makeAuth(
+  async () => { const c = await config(); return { url: c.url, key: c.key, authPage: c.authPage }; },
+  /* signed in: the person goes on the hub's people table (name, avatar), by their verified account */
+  async (p) => {
+    const cfg = await config();
+    const hub = await hubFor(cfg.sites[Object.keys(cfg.sites)[0]]?.project || bundled.project || "main");
+    await hub.bePerson({ handle: p.handle, name: p.name, avatar: p.avatar, userId: p.id });
+    peopleCache.at = 0;
+  });
 /* who is commenting: the signed-in GitHub account (handle verified), else the handle typed in the options */
 async function whoami() {
   const p = await auth.person().catch(() => null);
@@ -223,17 +232,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
   if (msg?.type === "review-sign-in") {
-    auth.signIn().then(async (p) => {
-      try {
-        const cfg = await config();
-        const hub = await hubFor(cfg.sites[Object.keys(cfg.sites)[0]]?.project || bundled.project || "main");
-        await hub.bePerson({ handle: p.handle, name: p.name, avatar: p.avatar, userId: p.id });
-        peopleCache.at = 0;
-      } catch (e) {
-        console.warn("[review] could not register the person on the hub:", e.message);
-      }
-      reply({ ok: true, person: p });
-    }, (e) => reply({ ok: false, error: String(e?.message || e) }));
+    auth.signIn().then(reply, (e) => reply({ ok: false, error: String(e?.message || e) }));
     return true;
   }
   if (msg?.type === "review-sign-out") {

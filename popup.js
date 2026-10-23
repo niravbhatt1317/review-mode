@@ -16,7 +16,7 @@ if (ok && !me?.signedIn) {
   $("#authPanel").hidden = false;
   $("#signIn").addEventListener("click", () => {
     $("#signIn").classList.add("busy");
-    $("#signIn").querySelector(".lbl").textContent = "Opening GitHub…";
+    $("#signIn").querySelector(".lbl").textContent = "Finish in the GitHub tab…";
     $("#authErr").textContent = "";
     chrome.runtime.sendMessage({ type: "review-sign-in" }, (r) => {
       if (r?.ok) location.reload();

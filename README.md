@@ -55,6 +55,15 @@ for another team's hub. `.review/sessions/_*/` are local test sessions (`?sessio
 hub. The skill at `.claude/skills/review/SKILL.md` tells Claude the same commands. The hub itself is set up once per
 team with `hub/schema.sql` and `hub/people.sql` in the Supabase SQL Editor.
 
+### Sign-in on your own hub
+
+Sign-in is GitHub through Supabase Auth (Authentication → Providers → GitHub, with a GitHub OAuth app whose callback is
+`https://<project>.supabase.co/auth/v1/callback`). The extension runs the PKCE flow in a tab and the hub sends the
+one-time code back to `hub.json`'s `authPage` (`https://niravbhatt1317.github.io/review-mode/auth.html`, a copy of
+`docs/auth.html` on any site works): that address must be in Authentication → URL Configuration → Redirect URLs. The
+code is useless without the verifier the extension holds; the tab closes itself once the session is in. (The extension
+does not use `chrome.identity.launchWebAuthFlow`: Firefox 156+ no longer catches its fake redirect address.)
+
 ## Testing headless
 
 Google Chrome 137+ ignores `--load-extension`; use Chrome for Testing (`npx @puppeteer/browsers install chrome@stable`).

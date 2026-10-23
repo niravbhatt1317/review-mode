@@ -1,13 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Review mode",
-  "version": "2.0.43",
+  "version": "2.0.44",
   "description": "Design review on any page: ⌥-click anything, write a comment, the team sees it. Pictures, statuses and notes live on the team's hub.",
   "permissions": [
     "tabs",
     "scripting",
-    "storage",
-    "identity"
+    "storage"
   ],
   "host_permissions": [
     "<all_urls>"
