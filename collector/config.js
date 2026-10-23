@@ -41,6 +41,7 @@ export function loadConfig(from = process.cwd()) {
     port: Number(own.port) || 4178,
     hub: hub.url && hub.anonKey ? { url: String(hub.url).replace(/\/+$/, ""), key: hub.anonKey } : null,
     people,
+    approvers: [...new Set([...(packaged.approvers || []), ...(own.hub?.approvers || []), ...(local.approvers || [])])], // who approves (until the hub's members list)
     reviewDir: path.join(root, ".review"),
     sessionsDir: path.join(root, ".review", "sessions"),
     cacheDir: path.join(root, ".review", ".cache"),

@@ -5,7 +5,7 @@ description: Work the design review comments left on this project's running UI w
 
 # Review comments
 
-Review mode is an overlay on the project's UI. A reviewer ⌥-clicks anything, writes a comment with a tag (Must fix, Should fix, Idea, Question), and the tool keeps the comment with a picture of the screen at that moment (the element boxed, the comment's number on it) on the team's hub. The developer, or Claude, works through them and moves their status; the reviewer approves.
+Review mode is an overlay on the project's UI. A reviewer ⌥-clicks anything, writes a comment with a tag (Fix or Question; older comments may carry must, should or idea: treat must and should as Fix, idea as Question), and the tool keeps the comment with a picture of the screen at that moment (the element boxed, the comment's number on it) on the team's hub. The developer, or Claude, works through them and moves their status; the reviewer approves.
 
 ## Where things are
 

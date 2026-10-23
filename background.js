@@ -42,11 +42,45 @@ const auth = makeAuth(
   async (p) => {
     const cfg = await config();
     const hub = await hubFor(cfg.sites[Object.keys(cfg.sites)[0]]?.project || bundled.project || "main");
-    await hub.bePerson({ handle: p.handle, name: p.name, avatar: p.avatar, userId: p.id });
+    await hub.bePerson({ handle: p.handle, name: p.name, avatar: await smallFace(p.avatar), userId: p.id });
     peopleCache.at = 0;
   });
 /* who is commenting: the signed-in GitHub account (handle verified), else the handle typed in the options */
+/* the person's photo kept on the hub itself (Nirav, 2026-10-23): GitHub's picture at 64 px as a data URL (3 to 5 KB), so
+   every drawer gets the faces with the people list and never asks GitHub's picture server */
+async function smallFace(url) {
+  if (!url || url.startsWith("data:")) return url || null;
+  try {
+    const r = await fetch(url + (url.includes("?") ? "&" : "?") + "s=64");
+    if (!r.ok) return url;
+    const type = (r.headers.get("content-type") || "image/png").split(";")[0];
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return `data:${type};base64,${btoa(bin)}`;
+  } catch {
+    return url; // offline or blocked: the link, as before
+  }
+}
+/* once per start of the extension: a signed-in person's own row gets the small copy (the hub lets each person write
+   only their own row, so every browser looks after its owner) */
+let faceKept = false;
+async function keepFace() {
+  if (faceKept) return;
+  faceKept = true;
+  const p = await auth.person().catch(() => null);
+  if (!p?.avatar) return;
+  const face = await smallFace(p.avatar);
+  if (!face?.startsWith("data:")) return;
+  const cfg = await config();
+  const hub = await hubFor(Object.values(cfg.sites)[0]?.project || bundled.project || "main");
+  const known = (await hub.people().catch(() => ({})))[p.handle];
+  if (known?.avatar?.startsWith("data:")) return;
+  await hub.bePerson({ handle: p.handle, name: known?.name || p.name, avatar: face, userId: p.id }).catch(() => {});
+  peopleCache.at = 0;
+}
 async function whoami() {
+  keepFace().catch(() => {});
   const p = await auth.person().catch(() => null);
   if (p) return { handle: p.handle, name: p.name, avatar: p.avatar, signedIn: true };
   return { handle: "", name: "", avatar: null, signedIn: false };
@@ -63,7 +97,10 @@ async function hubFor(project) {
 let peopleCache = { at: 0, map: {} };
 async function peopleOn(hub) {
   if (Date.now() - peopleCache.at < 60_000) return peopleCache.map;
-  peopleCache = { at: Date.now(), map: await hub.people() };
+  /* a miss keeps the last good list: an empty answer for a minute turned every face into its initial */
+  const map = await hub.people().catch(() => null);
+  if (map && (Object.keys(map).length || !Object.keys(peopleCache.map).length)) peopleCache = { at: Date.now(), map };
+  else peopleCache.at = Date.now() - 50_000; // try again in about ten seconds
   return peopleCache.map;
 }
 /* the names shown: the team's map first (a first name chosen by the team), else the GitHub name's first word */
@@ -98,7 +135,7 @@ async function answer(origin, { path, query, method, body }) {
   const no = (status, error) => ({ ok: false, status, body: { error } });
   switch (path) {
     case "/__review/hub":
-      return ok({ on: true, project, who: people[who]?.name || who, avatar: people[who]?.avatar || me.avatar || null, signedIn: me.signedIn, usage: await hub.usage().catch(() => null) });
+      return ok({ on: true, project, who: people[who]?.name || who, avatar: people[who]?.avatar || me.avatar || null, approver: me.signedIn && (bundled.approvers || []).includes(me.handle), signedIn: me.signedIn, usage: await hub.usage().catch(() => null) });
     case "/__review/list": {
       hub.sweep().catch(() => {});
       const list = prepare(await hub.list());

@@ -40,6 +40,14 @@ file map; read it next.
 - Check Firefox builds with `npx addons-linter --self-hosted dist/review-mode-<v>-firefox.zip` (0 errors expected;
   the innerHTML warnings are known and accepted).
 
+## Local development on the console
+
+The console's `Functional/next-gen-ui/node_modules/review-mode` is a symlink to this clone (set 2026-10-23; an
+`npm install` there puts the GitHub copy back, so redo it with `ln -s ~/Claude-Projects/review-mode
+node_modules/review-mode` after moving the installed folder aside). The collector reads `overlay.js` on every request,
+so overlay edits show on http://localhost:4178/ with a page refresh. `collector/` or `hub-core.js` changes need the dev
+server restarted (`npm run dev:review`). `background.js`, `popup.*`, `auth.js` changes still need the extension reloaded.
+
 ## Testing
 
 - Google Chrome 137+ ignores `--load-extension`: use Chrome for Testing (`npx @puppeteer/browsers install

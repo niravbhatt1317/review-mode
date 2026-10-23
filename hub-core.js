@@ -44,7 +44,7 @@ export const newId = () => `${Date.now().toString(36)}-${Math.random().toString(
 export function applyChange(c, body, who) {
   const { text, severity, status, resolved, note } = body;
   if (typeof text === "string" && text.trim()) c.text = sentence(text);
-  if (["must", "should", "idea", "question"].includes(severity)) c.severity = severity;
+  if (["fix", "question", "must", "should", "idea"].includes(severity)) c.severity = severity; // fix and question since 2026-10-23; the old four still accepted
   const to = STATUSES.includes(status) ? status : typeof resolved === "boolean" ? (resolved ? "approved" : "open") : null;
   if (to && to !== c.status) {
     const at = Date.now();

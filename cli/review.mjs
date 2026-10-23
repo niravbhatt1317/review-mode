@@ -51,7 +51,8 @@ try {
   who = execSync("git config user.name", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
 } catch {}
 const people = mergePeople(cfg.people, store.kind === "hub" ? await store.people().catch(() => ({})) : {});
-const line = (c) => `${String(c.n).padStart(3)}  ${c.id}  ${c.status.padEnd(8)}  ${(c.severity || "").padEnd(8)}  ${c.text}${c.note?.text ? `  [${c.note.to === "open" ? "put back" : "sent back"}: ${c.note.text}]` : ""}`;
+const kind = (k) => (k === "question" || k === "idea" ? "question" : "fix"); // the old four read as the two kinds
+const line = (c) => `${String(c.n).padStart(3)}  ${c.id}  ${c.status.padEnd(8)}  ${kind(c.severity).padEnd(8)}  ${c.text}${c.note?.text ? `  [${c.note.to === "open" ? "put back" : "sent back"}: ${c.note.text}]` : ""}`;
 
 if (cmd === "list" || !cmd) {
   const list = prepare(await store.list()).map((c) => withNames(c, people));

@@ -74,14 +74,18 @@ const HIDE_KEY = MOD === "⌥" ? "⌥⇧H" : "Alt+Shift+H"; // shows or hides th
 /* STATUS (2026-10-21): open -> progress (picked up) -> approval (done, for the reviewer) -> approved. Reopen and
    send back move it back. Approved comments leave the pins and the open list. */
 const STATUS = { open: "Open", progress: "In progress", approval: "For approval", approved: "Approved" };
+/* two kinds (Nirav, 2026-10-23): Fix and Question. Comments made with the old four keep them on the hub and read as
+   the new two: Must fix and Should fix are Fix, Idea is a Question */
 const SEVERITIES = [
-  ["must", "Must fix"],
-  ["should", "Should fix"],
-  ["idea", "Idea"],
+  ["fix", "Fix"],
   ["question", "Question"],
 ];
+const kindOf = (k) => (k === "question" || k === "idea" ? "question" : "fix");
 
 const state = {
+  q: "", // the search box at the top of the list
+  type: "all", // all, fix, question: the type pill beside it
+  status: null, // the status filter (Nirav, 2026-10-23): a Set of open, progress, approval; empty = all; set per persona below
   alt: false,
   sticky: false,
   mouse: { x: -1, y: -1 },
@@ -200,10 +204,39 @@ const root = host.attachShadow({ mode: "open" });
 root.innerHTML = `
 <style>
   :host { all: initial;
-    --tag-must-ink: var(--mdt-badge-danger-ink, #b51225); --tag-must-dot: var(--mdt-badge-danger-dot, #d92638); --tag-must-fill: var(--mdt-badge-danger-fill, #fde8ec);
-    --tag-should-ink: var(--mdt-badge-warning-ink, #9f6404); --tag-should-dot: var(--mdt-badge-warning-dot, #fdb13f); --tag-should-fill: var(--mdt-badge-warning-fill, #fff3d6);
-    --tag-idea-ink: var(--mdt-badge-info-ink, #1d4ed8); --tag-idea-dot: var(--mdt-badge-info-dot, #2f6fe4); --tag-idea-fill: var(--mdt-badge-info-fill, #e6f1ff);
-    --tag-question-ink: var(--mdt-badge-neutral-ink, #1d2b3e); --tag-question-dot: var(--mdt-badge-neutral-dot, #b6c2d6); --tag-question-fill: var(--mdt-badge-neutral-fill, #eef0f3);
+    /* THEME (Nirav, 2026-10-23): the drawer, the cards, the menus and the page follow the computer's light or dark
+       setting, or the switch in the drawer's head (Auto, Light, Dark); the bar, the comment box and the pin cards stay
+       dark in both. Both sets are the design system's own values (light :root, dark [data-theme="dark"]), fixed here so a page's theme never leaks in. */
+    --rv-surface: #fff; --rv-ink: #1d2b3e; --rv-ink-2: #5b6b85; --rv-ink-3: #8fa0bd;
+    --rv-chip: #fff; --rv-chip-ink: #5b6b85; --rv-chip-line: #dbe3ef;
+    --rv-st-new: #6626A6; --rv-st-new-dot: #A64DFF; --rv-st-prog: #994200; --rv-st-prog-dot: #FF6F00; --rv-st-appr: #1F7A71; --rv-st-appr-dot: #31BFB0; --rv-st-done: #1B6540; --rv-st-done-dot: #2BA66B; /* the system's purple, orange and teal: 60 for the dots, the text steps for the words (Nirav, 2026-10-23) */
+    --rv-fill: #ecf1f9; --rv-line: #e4eaf3; --rv-line-2: #dbe3ef; --rv-hover: #f7fafc; --rv-page: #f6f8fb;
+    --rv-bg: 0 0% 100%; --rv-n10: 210 50% 98%; --rv-n20: 217 52% 95%;
+    --rv-n30: 220 34.7% 91.9%; --rv-n50: 218 26% 65%; --rv-n70: 216 24% 52%;
+    --rv-n90: 218 23% 41%; --rv-n130: 214 36% 18%;
+    --rv-ok-bg: 140 52% 91%; --rv-ok-ink: 135 59% 32%;
+    --rv-danger-bg: 353 82% 94%; --rv-warn-bg: 40 100% 94%; --rv-warn-ink: 36 95% 32%;
+    --tag-must-ink: #b51225; --tag-must-dot: #d92638; --tag-must-fill: #fce3e6;
+    --tag-should-ink: #9f6404; --tag-should-dot: #fdb13f; --tag-should-fill: #fff3d6;
+    --tag-idea-ink: #1d4ed8; --tag-idea-dot: #2f6fe4; --tag-idea-fill: #e6f1ff;
+    --tag-question-ink: #1d4ed8; --tag-question-dot: #2f6fe4; --tag-question-fill: #e6f1ff;
+    --tag-fix-ink: #b51225; --tag-fix-dot: #d92638; --tag-fix-fill: #fce3e6;
+  }
+  /* dark: the design system's own dark theme (@mtdt/nextgen-design-system, [data-theme="dark"]) */
+  :host([data-theme="dark"]) {
+    --rv-surface: hsl(217.5 63.16% 7.45%); --rv-ink: hsl(220 36.59% 91.96%); --rv-ink-2: hsl(217.83 25.56% 64.71%); --rv-ink-3: hsl(216.67 22.13% 52.16%);
+    --rv-st-new: #CC99FF; --rv-st-new-dot: #A64DFF; --rv-st-prog: #FF8629; --rv-st-prog-dot: #FF6F00; --rv-st-appr: #64CEC3; --rv-st-appr-dot: #31BFB0; --rv-st-done: #4CCD8E; --rv-st-done-dot: #2BA66B;
+    --rv-chip: hsl(216.36 36.26% 17.84%); --rv-chip-ink: hsl(217.83 25.56% 64.71%); --rv-chip-line: hsl(217.33 23.81% 37.06%);
+    --rv-fill: hsl(216.36 36.26% 17.84%); --rv-line: hsl(216.36 36.26% 17.84%); --rv-line-2: hsl(217.33 23.81% 37.06%); --rv-hover: hsl(216.77 40.26% 15.1%); --rv-page: hsl(217.5 63.16% 7.45%);
+    --rv-bg: 217.5 63.16% 7.45%; --rv-n10: 216.43 56% 9.8%; --rv-n20: 216.36 36.26% 17.84%; --rv-n30: 216.77 40.26% 15.1%; --rv-n50: 216.67 22.13% 52.16%;
+    --rv-n70: 216.67 22.13% 52.16%; --rv-n90: 217.83 25.56% 64.71%; --rv-n130: 217.5 29.27% 83.92%;
+    --rv-ok-bg: 181.18 54.84% 18.24%; --rv-ok-ink: 157 59.41% 60.39%; --rv-danger-bg: 332.5 23.08% 20.39%; --rv-warn-bg: 27 19% 21%; --rv-warn-ink: 35 73% 59%;
+    --tag-must-ink: #f17a73; --tag-must-dot: #ec5b5b; --tag-must-fill: #402833;
+    --tag-should-ink: #e3a44a; --tag-should-dot: #fad100; --tag-should-fill: #40352c;
+    --tag-idea-ink: #7fb2e0; --tag-idea-dot: #008cff; --tag-idea-fill: #1d3754;
+    --tag-question-ink: #7fb2e0; --tag-question-dot: #008cff; --tag-question-fill: #1d3754;
+    --tag-fix-ink: #f17a73; --tag-fix-dot: #ec5b5b; --tag-fix-fill: #402833;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   .ui { font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #1d2b3e; }
@@ -223,16 +256,16 @@ root.innerHTML = `
   .pin-box.flash { border: 2px solid #e11d48; animation: rv-pulse 1s ease-out 3; }
   @keyframes rv-pulse { 0% { box-shadow: 0 0 0 0 rgba(225,29,72,.55); } 100% { box-shadow: 0 0 0 14px rgba(225,29,72,0); } }
   .card-n.out { cursor: pointer; }
-  .card-n.out:hover { background: #1d2b3e; color: #fff; }
+  .card-n.out:hover { background: var(--rv-ink); color: var(--rv-surface); }
   /* the pin's card: the comment under its pin, dressed like the composer (the same dark surface, the same tag pill,
      the same well for the text). At rest it is the tag and the comment. The hover brings the other tags into the
      pill, the list arrow and the actions row, each fading or sliding in so nothing already shown moves. */
-  .pin-tip { position: fixed; pointer-events: auto; z-index: 1; width: 300px; background: hsl(var(--mdt-neutral-130, 216 36% 18%)); color: #fff; border-radius: 10px; padding: 12px; font: 13px/1.45 -apple-system, system-ui, sans-serif; box-shadow: 0 16px 40px rgba(0,0,0,.35); display: none; }
+  .pin-tip { position: fixed; pointer-events: auto; z-index: 1; width: 300px; background: hsl(216 36% 18%); color: #fff; border-radius: 10px; padding: 12px; font: 13px/1.45 -apple-system, system-ui, sans-serif; box-shadow: 0 16px 40px rgba(0,0,0,.35); display: none; }
   .pin-tip.on { display: block; }
   .pin-tip .tip-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   /* the tag pill (the composer's): the picked one named and first, the other three slide in after it on hover; a
      switch puts the new one first at once (Nirav, 2026-10-21: this over a fixed order and over a glide) */
-  .pin-tip .tip-sev { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 999px; background: hsl(var(--mdt-black, 218 61% 7%) / .45); margin-right: auto; }
+  .pin-tip .tip-sev { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 999px; background: hsl(218 61% 7% / .45); margin-right: auto; }
   .pin-tip .tip-sev button { position: relative; height: 24px; width: 24px; padding: 0; margin: 0; border: 0; border-radius: 999px; background: transparent; color: #fff; font: 500 11px/24px -apple-system, system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; white-space: nowrap; transition: width .18s ease, opacity .18s ease, margin .18s ease, padding .2s ease, background-color .2s ease; }
   /* the name unfolds beside the dot of the picked one and folds away on the one just left, so a switch glides */
   .pin-tip .tip-sev button .lbl { display: block; max-width: 0; margin-left: 0; overflow: hidden; opacity: 0; transition: max-width .2s ease, margin .2s ease, opacity .15s ease; }
@@ -244,39 +277,40 @@ root.innerHTML = `
   .pin-tip .tip-sev button:not(.on):hover .scope-tip { opacity: 1; }
   .pin-tip .tip-sev .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
   .pin-tip .tip-sev button[data-k="must"] .dot { background: var(--tag-must-dot); } .pin-tip .tip-sev button[data-k="should"] .dot { background: var(--tag-should-dot); } .pin-tip .tip-sev button[data-k="idea"] .dot { background: var(--tag-idea-dot); } .pin-tip .tip-sev button[data-k="question"] .dot { background: var(--tag-question-dot); }
+  .pin-tip .tip-sev button[data-k="fix"] .dot { background: var(--tag-fix-dot); }
   /* the list arrow keeps its slot at rest and fades in */
-  .pin-tip .tip-open { width: 24px; height: 24px; padding: 0; margin-right: -4px; border: 0; border-radius: 6px; background: transparent; color: hsl(var(--mdt-neutral-50, 216 30% 80%)); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .18s ease; }
+  .pin-tip .tip-open { width: 24px; height: 24px; padding: 0; margin-right: -4px; border: 0; border-radius: 6px; background: transparent; color: hsl(216 30% 80%); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .18s ease; }
   .pin-tip:hover .tip-open, .pin-tip.held .tip-open { opacity: 1; }
   .pin-tip .tip-open:hover { background: rgba(255,255,255,.1); color: #fff; }
   /* the text in the composer's well */
-  .pin-tip .tip-text { white-space: pre-wrap; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 6px 10px; background: hsl(var(--mdt-black, 218 61% 7%) / .45); cursor: text; outline: none; transition: border-color .12s, box-shadow .12s; }
+  .pin-tip .tip-text { white-space: pre-wrap; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 6px 10px; background: hsl(218 61% 7% / .45); cursor: text; outline: none; transition: border-color .12s, box-shadow .12s; }
   .pin-tip .tip-text:hover { border-color: rgba(255,255,255,.18); }
-  .pin-tip .tip-note { margin-top: 6px; padding: 4px 10px; border-left: 2px solid hsl(var(--mdt-badge-warning-ink, 36 95% 32%) / .8); font-size: 12px; line-height: 1.4; color: hsl(var(--mdt-neutral-30, 216 30% 88%)); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .pin-tip .tip-text[contenteditable="true"] { border-color: hsl(var(--mdt-info, 214 98% 44%)); box-shadow: 0 0 0 1px hsl(var(--mdt-info, 214 98% 44%)); }
+  .pin-tip .tip-note { margin-top: 6px; padding: 4px 10px; border-left: 2px solid hsl(36 95% 32% / .8); font-size: 12px; line-height: 1.4; color: hsl(216 30% 88%); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pin-tip .tip-text[contenteditable="true"] { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 1px hsl(214 98% 44%); }
   /* the actions row unfolds under the text */
   .pin-tip .tip-acts { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .18s ease; }
   .pin-tip:hover .tip-acts, .pin-tip.held .tip-acts { grid-template-rows: 1fr; }
   .pin-tip .tip-acts-in { min-height: 0; overflow: hidden; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
-  .pin-tip .tip-acts button { height: 28px; margin-top: 10px; border: 0; border-radius: 8px; padding: 0 12px; background: transparent; color: hsl(var(--mdt-neutral-50, 216 30% 80%)); font: 500 12px/28px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .pin-tip .tip-acts button { height: 28px; margin-top: 10px; border: 0; border-radius: 8px; padding: 0 12px; background: transparent; color: hsl(216 30% 80%); font: 500 12px/28px -apple-system, system-ui, sans-serif; cursor: pointer; }
   .pin-tip .tip-acts button:hover { color: #fff; }
-  .pin-tip .tip-acts .tip-ok { background: hsl(var(--mdt-info, 214 98% 44%)); color: #fff; padding: 0 14px; border-radius: 999px; }
+  .pin-tip .tip-acts .tip-ok { background: hsl(214 98% 44%); color: #fff; padding: 0 14px; border-radius: 999px; }
   .pin-tip .tip-acts .tip-ok:hover { filter: brightness(1.08); }
   .pin-tip .tip-acts .tip-rm.sure { background: #e11d48; color: #fff; border-radius: 999px; }
   .pin { cursor: pointer; }
   /* the card the pin pointed at, once the list opens on it */
   .card.spot { animation: rv-spot 1.1s ease-out 2; }
-  @keyframes rv-spot { 0% { box-shadow: 0 0 0 0 hsl(var(--mdt-info, 214 98% 44%) / .6); } 100% { box-shadow: 0 0 0 10px hsl(var(--mdt-info, 214 98% 44%) / 0); } }
+  @keyframes rv-spot { 0% { box-shadow: 0 0 0 0 hsl(214 98% 44% / .6); } 100% { box-shadow: 0 0 0 10px hsl(214 98% 44% / 0); } }
   /* the comment box, dark, on the product's own surfaces: the number a pin above it; the place a faint small line;
      the tags first, then the text on a darker well with the info-blue ring; Cancel plain, Save the info-blue pill */
-  .composer { position: fixed; pointer-events: auto; width: 320px; background: hsl(var(--mdt-neutral-130, 216 36% 18%)); color: #fff; border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.35); padding: 12px 12px 12px; display: none; }
+  .composer { position: fixed; pointer-events: auto; width: 320px; background: hsl(216 36% 18%); color: #fff; border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.35); padding: 12px 12px 12px; display: none; }
   .composer.on { display: block; }
   /* the pin's row, above the box: the blue number, then the place as a small dark label beside it */
   .composer .pin-row { position: absolute; top: -34px; left: 0; display: flex; align-items: center; gap: 6px; max-width: 100%; }
-  .composer .num { width: 26px; height: 26px; border-radius: 50%; background: hsl(var(--mdt-info, 214 98% 44%)); color: #fff; font-weight: 700; font-size: 12px; line-height: 26px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,.3), 0 0 0 2px #fff; flex: 0 0 auto; }
-  .composer .what { height: 22px; padding: 0 8px; border-radius: 6px; background: hsl(var(--mdt-neutral-130, 216 36% 18%)); color: hsl(var(--mdt-neutral-50, 216 30% 80%)); font: 400 11px/22px -apple-system, system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+  .composer .num { width: 26px; height: 26px; border-radius: 50%; background: hsl(214 98% 44%); color: #fff; font-weight: 700; font-size: 12px; line-height: 26px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,.3), 0 0 0 2px #fff; flex: 0 0 auto; }
+  .composer .what { height: 22px; padding: 0 8px; border-radius: 6px; background: hsl(216 36% 18%); color: hsl(216 30% 80%); font: 400 11px/22px -apple-system, system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
   .composer .what b { font-weight: 600; color: #fff; }
   /* the tags (the Agent Fleet trial's form): the picked one carries its name, the others are dots, named on hover */
-  .composer .sev { margin: 0 0 8px; display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: hsl(var(--mdt-black, 218 61% 7%) / .45); }
+  .composer .sev { margin: 0 0 8px; display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: hsl(218 61% 7% / .45); }
   .composer .sev button { position: relative; height: 24px; width: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 999px; background: transparent; font: 500 11px/24px -apple-system, system-ui, sans-serif; color: #fff; cursor: pointer; white-space: nowrap; transition: width .15s, padding .15s; }
   .composer .sev button .lbl { display: none; }
   .composer .sev button.on { width: auto; padding: 0 10px 0 8px; background: rgba(255,255,255,.16); }
@@ -286,13 +320,14 @@ root.innerHTML = `
   .composer .sev button:not(.on):hover .scope-tip { opacity: 1; }
   .composer .sev .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
   .composer .sev button[data-k="must"] .dot { background: var(--tag-must-dot); } .composer .sev button[data-k="should"] .dot { background: var(--tag-should-dot); } .composer .sev button[data-k="idea"] .dot { background: var(--tag-idea-dot); } .composer .sev button[data-k="question"] .dot { background: var(--tag-question-dot); }
-  .composer textarea { width: 100%; min-height: 72px; resize: vertical; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 8px 10px; background: hsl(var(--mdt-black, 218 61% 7%) / .45); font: 13px/1.45 -apple-system, system-ui, sans-serif; color: #fff; outline: none; box-sizing: border-box; transition: border-color .12s, box-shadow .12s; }
-  .composer textarea::placeholder { color: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
-  .composer textarea:focus { border-color: hsl(var(--mdt-info, 214 98% 44%)); box-shadow: 0 0 0 1px hsl(var(--mdt-info, 214 98% 44%)); }
+  .composer .sev button[data-k="fix"] .dot { background: var(--tag-fix-dot); }
+  .composer textarea { width: 100%; min-height: 72px; resize: vertical; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 8px 10px; background: hsl(218 61% 7% / .45); font: 13px/1.45 -apple-system, system-ui, sans-serif; color: #fff; outline: none; box-sizing: border-box; transition: border-color .12s, box-shadow .12s; }
+  .composer textarea::placeholder { color: hsl(216 25% 65%); }
+  .composer textarea:focus { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 1px hsl(214 98% 44%); }
   .actions { display: flex; justify-content: flex-end; gap: 4px; align-items: center; margin-top: 10px; }
-  .btn { height: 28px; border: 0; background: transparent; color: hsl(var(--mdt-neutral-50, 216 30% 80%)); border-radius: 8px; padding: 0 12px; font: 500 12px/28px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .btn { height: 28px; border: 0; background: transparent; color: hsl(216 30% 80%); border-radius: 8px; padding: 0 12px; font: 500 12px/28px -apple-system, system-ui, sans-serif; cursor: pointer; }
   .btn:hover { color: #fff; }
-  .btn.primary { background: hsl(var(--mdt-info, 214 98% 44%)); color: #fff; padding: 0 14px; border-radius: 999px; }
+  .btn.primary { background: hsl(214 98% 44%); color: #fff; padding: 0 14px; border-radius: 999px; }
   .btn.primary:hover { filter: brightness(1.08); }
   .btn:disabled { opacity: .5; cursor: default; }
   .bar { position: fixed; left: 0; top: 0; pointer-events: auto; touch-action: none; cursor: grab; user-select: none; display: flex; align-items: center; gap: 6px; height: 38px; background: #1d2b3e; color: #fff; border-radius: 999px; padding: 0 8px 0 14px; box-shadow: 0 6px 20px rgba(0,0,0,.28); white-space: nowrap; }
@@ -300,18 +335,7 @@ root.innerHTML = `
   .bar.hidden { display: none; }
   .bar .dot { width: 8px; height: 8px; border-radius: 50%; background: #e11d48; margin-right: 2px; border: 0; padding: 0; cursor: pointer; }
   .bar .brand { display: inline-flex; align-items: center; gap: 6px; }
-  /* the two satellites (Nirav, 2026-10-21): hover the bar and a round hide-eye floats out on its left, a round
-     minimise × on its right, each its own disc a little apart from the bar, in the bar's look. While the bar is
-     hovered it grows an invisible reach across the gaps so the pointer can cross to them. */
-  .bar:hover::before { content: ""; position: absolute; inset: -8px -46px; border-radius: 999px; }
-  .bar > * { position: relative; } /* above the reach, so the buttons keep their clicks */
-  .bar .sat { position: absolute; top: 50%; width: 30px; height: 30px; margin-top: -15px; padding: 0; border: 0; border-radius: 50%; background: #1d2b3e; color: #cfd8e6; box-shadow: 0 6px 20px rgba(0,0,0,.28); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease, background-color .12s; }
-  .bar .sat.off { right: calc(100% + 8px); transform: translateX(8px) scale(.9); }
-  .bar .sat.dock { left: calc(100% + 8px); transform: translateX(-8px) scale(.9); }
-  .bar:hover .sat { opacity: 1; transform: none; pointer-events: auto; }
-  .bar .sat:hover { background: #26364d; color: #fff; }
-  .bar .sat .scope-tip { top: auto; bottom: calc(100% + 8px); }
-  .bar .sat:hover .scope-tip { opacity: 1; }
+  .bar button { position: relative; } /* anchors each tooltip and the count badge */
   /* docked at an edge: a round button with the comment glyph, the status dot and the count */
   .bar-mini { position: fixed; left: 0; top: 0; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #1d2b3e; color: #fff; display: none; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,.28); pointer-events: auto; cursor: pointer; touch-action: none; user-select: none; padding: 0; }
   .bar-mini.on { display: inline-flex; animation: rv-pop .28s cubic-bezier(.34,1.56,.64,1); }
@@ -333,8 +357,33 @@ root.innerHTML = `
   .bar .dot.live { background: #22c55e; cursor: default; }
   .bar b { font-weight: 600; font-size: 12px; }
   .bar .k { color: #9fb0c9; font-size: 12px; margin-left: 4px; }
-  .bar .list .count { margin-left: 6px; font-weight: 500; color: #9fb0c9; }
-  .bar .list.on .count { color: #5b6b85; }
+  /* Pins and List as their own discs beside the bar (Nirav, 2026-10-23), in the satellites' look but always shown:
+     the bar itself is only the transparent row; its dark pill is .bar-main */
+  .bar { background: transparent; box-shadow: none; padding: 0; gap: 8px; }
+  .bar.dragging { box-shadow: none; }
+  .bar.dragging .bar-main, .bar.dragging .disc { box-shadow: 0 10px 28px rgba(0,0,0,.35); }
+  .bar .bar-main { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px 0 14px; background: #1d2b3e; border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.28); }
+  /* the hide eye and the minimise: their own round discs left of the pill, the eye nearest, floating out only while
+     the Review pill is hovered (Nirav, 2026-10-23), sliding and fading in and out; an invisible reach on the pill's
+     left lets the pointer cross the gap to them */
+  .bar .sat { position: absolute; top: 50%; z-index: 1; width: 30px; height: 30px; margin-top: -15px; padding: 0; border: 0; border-radius: 50%; background: #1d2b3e; color: #cfd8e6; box-shadow: 0 6px 20px rgba(0,0,0,.28); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .16s ease, transform .22s cubic-bezier(.32,.72,0,1), background-color .12s; }
+  .bar .sat.off { right: calc(100% + 8px); transform: translateX(10px) scale(.85); }
+  .bar .sat.dock { right: calc(100% + 44px); transform: translateX(46px) scale(.85); }
+  .bar:has(.bar-main:hover, .sat:hover, .sat:focus-visible) .sat { opacity: 1; transform: none; pointer-events: auto; }
+  .bar .sat:hover::before { content: ""; position: absolute; inset: -10px; border-radius: 50%; } /* bridges the gaps between the discs and the pill */
+  .bar .sat:hover { background: #26364d; color: #fff; }
+  .bar .bar-main:hover::before { content: ""; position: absolute; top: -8px; bottom: -8px; right: 100%; width: 82px; }
+  .bar .sat .scope-tip { top: auto; bottom: calc(100% + 8px); left: 0; transform: none; }
+  .bar .sat:hover .scope-tip { opacity: 1; }
+  .bar button.disc { width: 38px; height: 38px; padding: 0; border-radius: 50%; background: #1d2b3e; color: #cfd8e6; box-shadow: 0 6px 20px rgba(0,0,0,.28); display: inline-flex; align-items: center; justify-content: center; }
+  .bar button.disc:hover { background: #26364d; color: #fff; }
+  .bar button.disc.on { background: #fff; color: #1d2b3e; }
+  .bar .disc .bi { width: 17px; height: 17px; }
+  .bar .disc .scope-tip { top: auto; bottom: calc(100% + 8px); }
+  .bar .disc:hover .scope-tip { opacity: 1; }
+  .bar .list .count { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: #fff; color: #1d2b3e; font: 600 11px/18px -apple-system, system-ui, sans-serif; text-align: center; box-shadow: 0 0 0 2px #1d2b3e; }
+  .bar .list .count:empty { display: none; }
+  .bar .list.on .count { background: #1d2b3e; color: #fff; box-shadow: 0 0 0 2px #fff; }
   .bar .sep { width: 1px; height: 18px; background: rgba(255,255,255,.18); margin: 0 4px; }
   .bar button { border: 0; background: transparent; color: #cfd8e6; border-radius: 999px; height: 26px; padding: 0 10px; font: 500 12px/26px -apple-system, system-ui, sans-serif; cursor: pointer; }
   .bar button:hover { background: rgba(255,255,255,.1); color: #fff; }
@@ -350,16 +399,16 @@ root.innerHTML = `
   .toast.busy::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; margin-right: 10px; vertical-align: -1px; animation: rv-spin .8s linear infinite; }
   @keyframes rv-spin { to { transform: rotate(360deg); } }
   /* the product's drawer: a veil over the page, the sheet sliding in from the right */
-  .panel-veil { position: fixed; inset: 0; background: hsl(var(--mdt-black, 218 61% 7%) / .25); pointer-events: auto; opacity: 0; visibility: hidden; transition: opacity .2s ease-out, visibility 0s linear .2s; z-index: 1; }
+  .panel-veil { position: fixed; inset: 0; background: hsl(218 61% 7% / .25); pointer-events: auto; opacity: 0; visibility: hidden; transition: opacity .2s ease-out, visibility 0s linear .2s; z-index: 1; }
   .panel-veil.on { opacity: 1; visibility: visible; transition: opacity .2s ease-out; }
-  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 100vw; background: #fff; color: #1d2b3e; box-shadow: -12px 0 32px rgba(29,43,62,.18); pointer-events: auto; display: flex; flex-direction: column; z-index: 2; transform: translateX(100%); visibility: hidden; transition: transform .22s cubic-bezier(.32,.72,0,1), visibility 0s linear .22s; }
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 100vw; background: var(--rv-surface); color: var(--rv-ink); box-shadow: -12px 0 32px rgba(29,43,62,.18); pointer-events: auto; display: flex; flex-direction: column; z-index: 2; transform: translateX(100%); visibility: hidden; transition: transform .22s cubic-bezier(.32,.72,0,1), visibility 0s linear .22s; }
   .panel.on { transform: none; visibility: visible; transition: transform .22s cubic-bezier(.32,.72,0,1); }
-  .panel-head { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; }
+  .panel-head { position: relative; z-index: 6; display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; }
   /* the title opens the panel as a page: on hover a dotted underline and the arrow beside it, with the instant tooltip */
   .panel-title { position: relative; display: inline-flex; align-items: center; gap: 5px; margin-right: auto; font-size: 14px; font-weight: 600; color: inherit; text-decoration: none; cursor: pointer; }
   .panel-title .txt { text-decoration: underline dotted transparent; text-underline-offset: 3px; text-decoration-thickness: 1px; transition: text-decoration-color .12s; }
-  .panel-title svg { color: hsl(var(--mdt-neutral-70, 216 25% 65%)); opacity: 0; transition: opacity .12s; }
-  .panel-title:hover .txt { text-decoration-color: hsl(var(--mdt-neutral-90, 215 20% 45%)); }
+  .panel-title svg { color: hsl(var(--rv-n70)); opacity: 0; transition: opacity .12s; }
+  .panel-title:hover .txt { text-decoration-color: hsl(var(--rv-n90)); }
   .panel-title:hover svg { opacity: 1; }
   .panel-title .scope-tip { left: 0; transform: none; }
   .panel-title:hover .scope-tip { opacity: 1; }
@@ -367,12 +416,12 @@ root.innerHTML = `
   :host([data-page]) .panel-title svg { display: none; }
   /* the two copy buttons: the products' own marks (Claude's from simple-icons, Loop's own favicon) in a bordered
      square, so they read as buttons; the instant tooltip names what each does */
-  .panel-copy { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid hsl(var(--mdt-neutral-30, 217 44% 90%)); border-radius: 6px; background: #fff; cursor: pointer; }
-  .panel-copy:hover { border-color: hsl(var(--mdt-neutral-90, 215 20% 45%)); background: hsl(var(--mdt-neutral-10, 210 50% 98%)); }
+  .panel-copy { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid hsl(var(--rv-n30)); border-radius: 6px; background: var(--rv-surface); cursor: pointer; }
+  .panel-copy:hover { border-color: hsl(var(--rv-n90)); background: hsl(var(--rv-n10)); }
   /* the marks rest in the panel's grey and take their own colours on hover */
-  .panel-copy .logo-claude { fill: hsl(var(--mdt-neutral-70, 216 25% 65%)); transition: fill .12s; }
+  .panel-copy .logo-claude { fill: hsl(var(--rv-n70)); transition: fill .12s; }
   .panel-copy:hover .logo-claude, .panel-copy.busy .logo-claude, .panel-copy.done .logo-claude { fill: #D97757; }
-  .panel-copy .logo-loop-rest { fill: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
+  .panel-copy .logo-loop-rest { fill: hsl(var(--rv-n70)); }
   .panel-copy .logo-loop { display: none; }
   .panel-copy:hover .logo-loop-rest, .panel-copy.busy .logo-loop-rest, .panel-copy.done .logo-loop-rest { display: none; }
   .panel-copy:hover .logo-loop, .panel-copy.busy .logo-loop, .panel-copy.done .logo-loop { display: block; }
@@ -381,87 +430,174 @@ root.innerHTML = `
   .panel-copy .scope-tip { left: auto; right: 0; transform: none; }
   /* while it copies: the border itself is the loading state, a dash in the product's colour running round the square */
   .panel-copy .ring { position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); display: none; fill: none; stroke: var(--ring); stroke-width: 1.5; stroke-dasharray: 28 72; stroke-linecap: round; animation: rv-ring .9s linear infinite; }
-  .panel-copy.busy { pointer-events: none; border-color: hsl(var(--mdt-neutral-20, 214 40% 95%)); }
+  .panel-copy.busy { pointer-events: none; border-color: hsl(var(--rv-n20)); }
   .panel-copy.busy .ring { display: block; }
   .panel-copy[data-kind="prompt"] { --ring: #D97757; }
   .panel-copy[data-kind="loop"] { --ring: #7B3FE4; }
   @keyframes rv-ring { to { stroke-dashoffset: -100; } }
-  .panel-copy.done { border-color: hsl(var(--mdt-success, 136 53% 43%)); box-shadow: 0 0 0 2px hsl(var(--mdt-success, 136 53% 43%) / .18); }
+  .panel-copy.done { border-color: hsl(136 53% 43%); box-shadow: 0 0 0 2px hsl(136 53% 43% / .18); }
   .panel-copy .more { position: absolute; top: -3px; right: -4px; display: none; padding: 0 3px; border-radius: 6px; background: #1d2b3e; color: #fff; font: 600 9px/12px -apple-system, system-ui, sans-serif; font-style: normal; }
   .panel-copy .more:not(:empty) { display: block; }
   /* the head is one plane: title and filter together, white, a soft edge below it that deepens once the list scrolls */
-  .panel-bar { display: flex; align-items: center; gap: 10px; padding: 6px 16px 12px; border-bottom: 1px solid hsl(var(--mdt-neutral-20, 214 40% 95%)); position: relative; z-index: 1; background: #fff; transition: box-shadow .15s, border-color .15s; }
+  .panel-bar { display: flex; align-items: center; gap: 10px; padding: 6px 16px 12px; border-bottom: 1px solid hsl(var(--rv-n20)); position: relative; z-index: 5; background: var(--rv-surface); transition: box-shadow .15s, border-color .15s; }
   /* the edge and the shadow only once something has gone under the head (the scope band's divider rule) */
   .panel[data-scrolled] .panel-bar { box-shadow: 0 6px 16px -8px rgba(29,43,62,.18); }
+  .panel[data-pinned] .panel-bar { box-shadow: none; } /* a group heading pinned under the head brings its own edge (Nirav, 2026-10-24) */
+  /* status shapes (Nirav, 2026-10-23): New a circle, In progress a diamond, For approval a square, all the same weight */
+  .panel-filter { align-items: center; }
+  .group-switch { display: inline-flex; align-items: center; gap: 2px; padding-left: 4px; transition: padding .2s cubic-bezier(.32,.72,0,1); } /* air on the left at rest, where the pill's curve meets the icon */
+  .group-switch:hover, .group-switch:has(.side:focus-visible) { padding-left: 0; }
+  .status-switch .gs-rule { width: 1px; height: 14px; margin: 0 3px; background: color-mix(in srgb, var(--rv-ink) 14%, transparent); flex: 0 0 auto; }
+  .group-switch .side { transition: width .2s cubic-bezier(.32,.72,0,1), margin .2s cubic-bezier(.32,.72,0,1), opacity .15s ease, background-color .12s, color .12s; }
+  .group-switch .side:not([aria-pressed="true"]) { width: 0; margin-left: -2px; opacity: 0; pointer-events: none; }
+  .group-switch:hover .side, .group-switch:has(.side:focus-visible) .side { width: 24px; margin-left: 0; opacity: 1; pointer-events: auto; }
+  .group-switch .side .scope-tip { left: auto; right: 0; transform: none; }
+  /* quiet at rest (Nirav, 2026-10-23): the picked grouping is a grey icon, no white lift; the lift comes back while
+     the three are open under the pointer */
+  .status-switch .group-switch .side[aria-pressed="true"] { background: transparent; box-shadow: none; color: var(--rv-ink-3); }
+  .status-switch .group-switch:hover .side[aria-pressed="true"], .status-switch .group-switch:has(.side:focus-visible) .side[aria-pressed="true"] { background: hsl(var(--rv-bg)); box-shadow: 0 1px 2px rgba(29,43,62,.12); color: var(--rv-ink); }
+  .group-switch .side svg { stroke-width: 1.7; }
+  .status-switch .tag[data-s="progress"] .dot, .card-status[data-s="progress"]::before, .gh-shape[data-s="progress"] { border-radius: 1.5px; transform: rotate(45deg) scale(.86); }
+  .status-switch .tag[data-s="approval"] .dot, .card-status[data-s="approval"]::before, .gh-shape[data-s="approval"] { border-radius: 2px; }
+  .status-switch .all-mark { flex: 0 0 auto; color: var(--rv-ink-2); }
+  .status-switch .tag[data-s="all"][aria-pressed="true"] .all-mark { color: var(--rv-ink); }
+  .status-switch .tag.quiet[aria-pressed="false"] { opacity: .6; }
+  .gh-shape { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; flex: 0 0 auto; }
+  .gh-shape[data-s="open"] { background: var(--rv-st-new-dot); } .gh-shape[data-s="progress"] { background: var(--rv-st-prog-dot); } .gh-shape[data-s="approval"] { background: var(--rv-st-appr-dot); }
+  .list-group { display: flex; align-items: center; width: calc(100% + 4px); margin: 4px -2px 8px; padding: 4px 6px 4px 4px; border: 0; border-radius: 6px; background: transparent; font: 600 11px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); cursor: pointer; text-align: left; }
+  .panel-body > .list-sec:first-of-type > .list-group { margin-top: -8px; } /* the first heading sits where the first card would, not lower */
+  /* pinned while its group scrolls by (Nirav, 2026-10-24); the next group's heading pushes it out */
+  .list-group { position: sticky; top: -16px; z-index: 2; background: hsl(var(--rv-n10)); box-shadow: 0 -10px 0 hsl(var(--rv-n10)), 0 6px 8px -6px hsl(var(--rv-n10)); } /* flush with the top edge (the list has 16 px padding), the ground carried up and a soft fade under it */
+  .list-group:hover { background: color-mix(in srgb, var(--rv-ink) 5%, hsl(var(--rv-n10))); }
+  .list-group:hover { color: var(--rv-ink); }
+  .list-group { transition: margin .22s cubic-bezier(.32,.72,0,1), padding .22s cubic-bezier(.32,.72,0,1), border-radius .22s, box-shadow .22s; }
+  .list-group.pinned { margin-left: -16px; margin-right: -16px; width: calc(100% + 32px); padding-left: 18px; padding-right: 22px; border-radius: 0; box-shadow: 0 -10px 0 hsl(var(--rv-n10)), 0 1px 0 var(--rv-line), 0 6px 12px -8px rgba(29,43,62,.18); } /* the ground stays solid: a pinned heading must hide what scrolls under it */
+  .list-group .lg-chev { flex: 0 0 auto; margin-left: auto; color: var(--rv-ink-3); transition: transform .18s ease; }
+  .list-group.folded .lg-chev { transform: rotate(90deg); }
+  .list-group.folded + .list-group { margin-top: 0; }
+  .gh-type { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; }
+  .gh-type[data-k="fix"] { background: var(--tag-fix-dot); } .gh-type[data-k="question"] { background: var(--tag-question-dot); }
+  .list-group .av { width: 14px; height: 14px; margin: 0 6px 0 0; }
+  .list-sec + .list-sec > .list-group { margin-top: 6px; }
+  .status-switch .tag[data-s="all"] .dot { background: transparent; box-shadow: inset 0 0 0 2px var(--rv-ink-3); }
+  .status-switch .tag[data-s="all"][aria-pressed="true"] .dot { box-shadow: inset 0 0 0 2px var(--rv-ink); }
+  .status-switch .tag[data-s="open"] .dot { background: var(--rv-st-new-dot); }
+  .status-switch .tag[data-s="progress"] .dot { background: var(--rv-st-prog-dot); }
+  .status-switch .tag[data-s="approval"] .dot { background: var(--rv-st-appr-dot); }
+  .status-switch .tag[aria-pressed="true"] b { color: var(--rv-ink); }
   .panel-scope { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; }
   /* the Organizations page's switcher (the scope band's variant a): a 28 pill on neutral-20, two words, the picked
      one lifted white in the primary ink; then the crumb: a 16 mark, the word, a chevron, dotted underline on hover.
      The library's tokens reach the shadow root (custom properties inherit), with fallbacks for safety. */
-  .scope-switch { display: inline-flex; align-items: center; height: 28px; padding: 2px; gap: 2px; border-radius: 999px; background: hsl(var(--mdt-neutral-20, 214 40% 95%)); flex: 0 0 auto; box-sizing: border-box; }
-  .scope-switch .side { position: relative; width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999px; background: transparent; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); cursor: pointer; }
+  .scope-switch { display: inline-flex; align-items: center; height: 28px; padding: 2px; gap: 2px; border-radius: 999px; background: hsl(var(--rv-n20)); flex: 0 0 auto; box-sizing: border-box; }
+  .scope-switch .side { position: relative; width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999px; background: transparent; color: hsl(var(--rv-n70)); cursor: pointer; }
   .scope-tip { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1d2b3e; color: #fff; font: 500 11px/16px -apple-system, system-ui, sans-serif; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .08s; z-index: 3; }
   .scope-switch .side:hover .scope-tip { opacity: 1; }
   /* hover on any side: the white ground without the pressed side's lift, and the ink darkens */
-  .scope-switch .side:hover { background: hsl(var(--mdt-background, 0 0% 100%) / .7); color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
-  .scope-switch .side[aria-pressed="true"]:hover { background: hsl(var(--mdt-background, 0 0% 100%)); }
-  .tag-switch .tag:hover b { color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
+  .scope-switch .side:hover { background: hsl(var(--rv-bg) / .7); color: hsl(var(--rv-n130)); }
+  .scope-switch .side[aria-pressed="true"]:hover { background: hsl(var(--rv-bg)); }
+  .tag-switch .tag:hover b { color: hsl(var(--rv-n130)); }
   .tag-switch .tag:disabled { cursor: default; background: transparent; }
   .tag-switch .tag:disabled .dot { opacity: .3; }
-  .tag-switch .tag:disabled b { color: hsl(var(--mdt-neutral-50, 216 30% 80%)); }
+  .tag-switch .tag:disabled b { color: hsl(var(--rv-n50)); }
   .tag-switch .tag:disabled .scope-tip { display: none; }
-  .scope-switch .side[aria-pressed="true"] { background: hsl(var(--mdt-background, 0 0% 100%)); color: hsl(var(--mdt-primary, 214 98% 44%)); box-shadow: 0 1px 2px rgba(29,43,62,.12); }
+  .scope-switch .side[aria-pressed="true"] { background: hsl(var(--rv-bg)); color: var(--rv-ink); box-shadow: 0 1px 2px rgba(29,43,62,.12); }
   /* the crumb: its own pill on the neutral-20 ground, 28 like the switcher, no edge at rest; the edge and the darker
      ink under the pointer or while open. Between the two, the breadcrumb's own "›" in the faint ink */
-  .scope-sep { display: inline-flex; align-items: center; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); margin: 0 4px; flex: 0 0 auto; }
-  .scope-crumb { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 1px solid transparent; border-radius: 999px; background: hsl(var(--mdt-neutral-20, 214 40% 95%)); color: hsl(var(--mdt-neutral-90, 215 20% 45%)); font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; white-space: nowrap; box-sizing: border-box; }
-  .scope-crumb b { font-weight: 500; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
-  .scope-crumb:hover, .scope-crumb[aria-expanded="true"] { border-color: hsl(var(--mdt-neutral-90, 215 20% 45%)); color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
-  .scope-crumb > svg:last-child { color: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
-  .scope-menu { position: absolute; top: calc(100% + 6px); left: 76px; width: 300px; max-height: min(360px, calc(100vh - 160px)); overflow: auto; background: #fff; border: 1px solid #dbe3ef; border-radius: 10px; box-shadow: 0 12px 32px rgba(29,43,62,.18); padding: 6px; z-index: 2; }
-  .scope-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; color: #1d2b3e; outline: none; }
-  .scope-item b { font-weight: 500; color: #8fa0bd; flex: 0 0 auto; }
-  .scope-item:hover, .scope-item:focus { background: #f7fafc; }
-  .scope-item.on { background: #ecf1f9; }
+  .scope-sep { display: inline-flex; align-items: center; color: hsl(var(--rv-n70)); margin: 0 4px; flex: 0 0 auto; }
+  .scope-crumb { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 1px solid transparent; border-radius: 999px; background: hsl(var(--rv-n20)); color: hsl(var(--rv-n90)); font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; white-space: nowrap; box-sizing: border-box; }
+  .scope-crumb b { font-weight: 500; color: hsl(var(--rv-n70)); }
+  .scope-crumb:hover, .scope-crumb[aria-expanded="true"] { border-color: hsl(var(--rv-n90)); color: hsl(var(--rv-n130)); }
+  .scope-crumb > svg:last-child { color: hsl(var(--rv-n70)); }
+  .scope-menu { position: absolute; top: calc(100% + 6px); left: 76px; width: 300px; max-height: min(360px, calc(100vh - 160px)); overflow: auto; background: var(--rv-surface); border: 1px solid var(--rv-line-2); border-radius: 10px; box-shadow: 0 12px 32px rgba(29,43,62,.18); padding: 6px; z-index: 2; }
+  .scope-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; color: var(--rv-ink); outline: none; }
+  .scope-item b { font-weight: 500; color: var(--rv-ink-3); flex: 0 0 auto; }
+  .scope-item:hover, .scope-item:focus { background: var(--rv-hover); }
+  .scope-item.on { background: var(--rv-fill); }
   /* the two views, drawn as a distinct two-line block above the places */
   .scope-view { height: 44px; padding: 4px 8px; }
   .scope-view .lines { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .scope-view .sub { font-size: 11px; color: #8fa0bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .scope-view .mark { width: 26px; height: 26px; border-radius: 6px; background: #ecf1f9; color: #1d2b3e; display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; flex: 0 0 auto; }
+  .scope-view .sub { font-size: 11px; color: var(--rv-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scope-view .mark { width: 26px; height: 26px; border-radius: 6px; background: var(--rv-fill); color: var(--rv-ink); display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; flex: 0 0 auto; }
   /* on the picked row the tile would sink into the row's own fill: it goes dark, the glyph white (the scope list's
      inverted view tiles) */
-  .scope-view.on .mark { background: #1d2b3e; color: #fff; }
-  .scope-view:hover .mark { background: #fff; box-shadow: 0 0 0 1px #e4eaf3; }
-  .scope-view.on:hover .mark { background: #1d2b3e; box-shadow: none; }
+  .scope-view.on .mark { background: var(--rv-ink); color: var(--rv-surface); }
+  .scope-view:hover .mark { background: var(--rv-surface); box-shadow: 0 0 0 1px var(--rv-line); }
+  .scope-view.on:hover .mark { background: var(--rv-ink); box-shadow: none; }
   .scope-view .lead { display: flex; align-items: center; min-width: 0; }
-  .scope-rule { height: 1px; background: #ecf1f9; margin: 6px -6px; }
+  .scope-rule { height: 1px; background: var(--rv-fill); margin: 6px -6px; }
   .scope-group { font-weight: 600; margin-top: 2px; }
   .scope-page { padding-left: 22px; }
   .panel-filter { display: flex; flex-wrap: nowrap; gap: 6px; flex: 0 0 auto; margin-left: auto; }
-  .tag-switch .tag { width: auto; padding: 0 9px 0 8px; gap: 5px; font: 500 12px/24px -apple-system, system-ui, sans-serif; color: hsl(var(--mdt-neutral-90, 215 20% 45%)); }
-  .tag-switch .tag b { font-weight: 500; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); }
-  .tag-switch .tag[aria-pressed="true"] b { color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
-  .tag-switch .dot { width: 8px; height: 8px; border-radius: 50%; background: #8fa0bd; flex: 0 0 auto; }
+  .tag-switch .tag { width: auto; padding: 0 9px 0 8px; gap: 5px; font: 500 12px/24px -apple-system, system-ui, sans-serif; color: hsl(var(--rv-n90)); }
+  .tag-switch .tag b { font-weight: 500; color: hsl(var(--rv-n70)); }
+  .tag-switch .tag[aria-pressed="true"] b { color: hsl(var(--rv-n130)); }
+  .tag-switch .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rv-ink-3); flex: 0 0 auto; }
   /* TRIAL (Nirav, 2026-10-20): once a tag is pressed, the ones left out go quiet: dot and count at half strength */
   .tag-switch[data-narrowed] .tag[aria-pressed="false"] .dot { opacity: .4; }
-  .tag-switch[data-narrowed] .tag[aria-pressed="false"] b { color: hsl(var(--mdt-neutral-50, 216 30% 80%)); }
+  .tag-switch[data-narrowed] .tag[aria-pressed="false"] b { color: hsl(var(--rv-n50)); }
   .tag-switch[data-narrowed] .tag[aria-pressed="false"]:hover .dot { opacity: 1; }
-  .tag-switch[data-narrowed] .tag[aria-pressed="false"]:hover b { color: hsl(var(--mdt-neutral-90, 215 20% 45%)); }
-  .tag-switch .tag[data-k="all"] .dot { background: transparent; box-shadow: inset 0 0 0 2px #8fa0bd; }
-  .tag-switch .tag[data-k="all"][aria-pressed="true"] .dot { box-shadow: inset 0 0 0 2px #1d2b3e; }
+  .tag-switch[data-narrowed] .tag[aria-pressed="false"]:hover b { color: hsl(var(--rv-n90)); }
+  .tag-switch .tag[data-k="all"] .dot { background: transparent; box-shadow: inset 0 0 0 2px var(--rv-ink-3); }
+  .tag-switch .tag[data-k="all"][aria-pressed="true"] .dot { box-shadow: inset 0 0 0 2px var(--rv-ink); }
   .tag-switch .tag[data-k="must"] .dot { background: var(--tag-must-dot); } .tag-switch .tag[data-k="should"] .dot { background: var(--tag-should-dot); } .tag-switch .tag[data-k="idea"] .dot { background: var(--tag-idea-dot); } .tag-switch .tag[data-k="question"] .dot { background: var(--tag-question-dot); }
+  .tag-switch .tag[data-k="fix"] .dot { background: var(--tag-fix-dot); }
   /* the list is a well: the neutral-10 ground, the cards white on it */
-  .panel-body { overflow: auto; padding: 16px 16px 24px; flex: 1; background: hsl(var(--mdt-neutral-10, 210 50% 98%)); }
-  .panel-empty { color: #8fa0bd; padding: 24px 8px; text-align: center; }
-  .card { border: 1px solid #ecf1f9; border-radius: 10px; padding: 9px 14px 12px; margin-bottom: 16px; background: #fff; }
-  .card.here { border-color: #dbe3ef; }
-  .card-n { width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(29,43,62,.06); color: #1d2b3e; font-weight: 600; font-size: 11px; line-height: 22px; text-align: center; flex: 0 0 auto; }
-  .card-n.away { color: #8fa0bd; }
-  .card-sev { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #ecf1f9; color: #5b6b85; cursor: pointer; border: 0; }
+  .panel-body { position: relative; z-index: 1; overflow: auto; padding: 16px 16px 72px; /* the last line clears the bar's band at the end of the list */ flex: 1; background: hsl(var(--rv-n10)); }
+  /* the list's bar (Nirav, 2026-10-23, iOS style): floating at the bottom of the drawer in frosted-glass capsules; the
+     type words on the left, a round search on the right that opens across the bar when tapped (the type capsule
+     steps aside) and folds back when left empty */
+  .panel-tools { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: none; }
+  .panel-tools > * { pointer-events: auto; }
+  .panel-tools { transition: transform .32s cubic-bezier(.32,.72,0,1), opacity .22s ease; }
+  .panel-tools.away { transform: translateY(calc(100% + 24px)); opacity: 0; }
+  /* a soft fade of the list's well behind the bar while it shows, so the cards dissolve under it (Nirav, 2026-10-23) */
+  .panel-tools::before { content: ""; position: absolute; left: -16px; right: -16px; bottom: -16px; height: 76px; z-index: -1; pointer-events: auto; background: linear-gradient(to bottom, hsl(var(--rv-n10) / 0) 0%, hsl(var(--rv-n10) / .3) 22%, hsl(var(--rv-n10) / .7) 42%, hsl(var(--rv-n10) / .93) 62%, hsl(var(--rv-n10)) 80%); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); -webkit-mask-image: linear-gradient(to bottom, transparent, #000 45%); mask-image: linear-gradient(to bottom, transparent, #000 45%); }
+  /* dark: the earlier plain fade (Nirav, 2026-10-23: the blurred one looked odd), a touch longer at the top */
+  :host([data-theme="dark"]) .panel-tools::before { background: linear-gradient(to bottom, hsl(var(--rv-n10) / 0), hsl(var(--rv-n10) / .5) 30%, hsl(var(--rv-n10) / .85) 60%, hsl(var(--rv-n10))); -webkit-backdrop-filter: none; backdrop-filter: none; -webkit-mask-image: none; mask-image: none; }
+  .panel-tools.away > * { pointer-events: none; }
+  .panel-tools.away::before { pointer-events: none; } /* the faded band takes the pointer only while it shows: nothing under it opens by accident */
+  .glass { height: 30px; border-radius: 999px; background: color-mix(in srgb, var(--rv-surface) 72%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); border: 1px solid rgba(29,43,62,.09); box-shadow: 0 6px 18px rgba(29,43,62,.14), 0 1px 2px rgba(29,43,62,.06), inset 0 1px 0 rgba(255,255,255,.35); }
+  :host([data-theme="dark"]) .glass { background: color-mix(in srgb, hsl(217 40% 16%) 70%, transparent); border-color: rgba(255,255,255,.1); box-shadow: 0 8px 22px rgba(0,0,0,.4); } /* one edge only: no inner highlight in dark */
+  .pt-search { flex: 0 0 auto; width: 84px; display: flex; align-items: center; gap: 6px; padding: 0 0 0 10px; color: var(--rv-ink-2); cursor: pointer; overflow: hidden; transition: width .3s cubic-bezier(.32,.72,0,1), flex-grow .3s; }
+  .pt-search svg:first-child { flex: 0 0 auto; width: 13px; height: 13px; }
+  .pt-search:hover { color: var(--rv-ink); }
+  .pt-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--rv-ink); font: 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .pt-search input::placeholder { color: var(--rv-ink-2); }
+  .pt-search input::-webkit-search-cancel-button { display: none; }
+  .panel-tools:has(.pt-search:focus-within) .pt-search, .panel-tools.has-q .pt-search { flex: 1 1 auto; width: 100%; cursor: text; padding-right: 6px; }
+  .panel-tools:has(.pt-search:focus-within) .pt-search input, .panel-tools.has-q .pt-search input { cursor: text; }
+  /* the shortcut in the search's instant tooltip, not in the pill (the pill clips, so the tip sits on the bar) */
+  .panel-tools .pt-tip { top: auto; bottom: calc(100% + 8px); left: 0; transform: none; display: inline-flex; align-items: center; gap: 6px; }
+  .panel-tools .pt-tip kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 15px; padding: 0 3px; border: 1px solid rgba(255,255,255,.35); border-radius: 4px; font: 500 10px/1 -apple-system, system-ui, sans-serif; }
+  .panel-tools:has(.pt-search:hover):not(:has(.pt-search:focus-within)):not(.has-q) .pt-tip { opacity: 1; }
+  .pt-clear { display: none; flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--rv-ink-3); align-items: center; justify-content: center; cursor: pointer; }
+  .pt-clear:hover { background: var(--rv-fill); color: var(--rv-ink); }
+  .panel-tools.has-q .pt-clear { display: inline-flex; }
+  .type-pick { display: inline-flex; align-items: center; gap: 0; padding: 0 3px; flex: 0 1 auto; min-width: 0; overflow: hidden; transition: opacity .2s, max-width .3s cubic-bezier(.32,.72,0,1), padding .3s; max-width: 320px; }
+  .panel-tools:has(.pt-search:focus-within) .type-pick, .panel-tools.has-q .type-pick { max-width: 0; padding: 0; opacity: 0; border-width: 0; }
+  .type-pick .tp { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent; color: var(--rv-ink-2); font: 400 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; white-space: nowrap; transition: background-color .15s, color .15s; }
+  /* the capsule with words only (Nirav, 2026-10-23): no dots, no icons; the picked one on a soft fill */
+  .type-pick .tp[aria-pressed="true"][data-k="fix"] .ti { color: var(--tag-fix-dot); }
+  .type-pick .tp[aria-pressed="true"][data-k="question"] .ti { color: var(--tag-question-dot); }
+  .type-pick .tp b { font-weight: 400; color: var(--rv-ink-3); opacity: .8; }
+  .type-pick .tp:hover:not(:disabled) { background: color-mix(in srgb, var(--rv-ink) 5%, transparent); color: var(--rv-ink); }
+  .type-pick .tp:hover:not(:disabled) b { color: var(--rv-ink-2); }
+  .type-pick .tp[aria-pressed="true"] { background: color-mix(in srgb, var(--rv-ink) 9%, transparent); color: var(--rv-ink); }
+  .type-pick .tp[aria-pressed="true"] b { color: var(--rv-ink); opacity: 1; }
+  .type-pick .tp:disabled { opacity: .4; cursor: default; }
+  .panel-empty { color: var(--rv-ink-3); padding: 24px 8px; text-align: center; }
+  .card { border: 1px solid var(--rv-fill); border-radius: 10px; padding: 9px 14px 9px; margin-bottom: 16px; background: var(--rv-surface); }
+  .card.here { border-color: var(--rv-line-2); }
+  .card-n { width: 22px; height: 22px; border-radius: 50%; background: var(--rv-surface); box-shadow: 0 1px 2px rgba(29,43,62,.06); color: var(--rv-ink); font-weight: 600; font-size: 11px; line-height: 22px; text-align: center; flex: 0 0 auto; }
+  .card-n.away { color: var(--rv-ink-3); }
+  .card-sev { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--rv-fill); color: var(--rv-ink-2); cursor: pointer; border: 0; }
   .card-sev[data-k="must"] { background: var(--tag-must-fill); color: var(--tag-must-ink); } .card-sev[data-k="should"] { background: var(--tag-should-fill); color: var(--tag-should-ink); } .card-sev[data-k="idea"] { background: var(--tag-idea-fill); color: var(--tag-idea-ink); } .card-sev[data-k="question"] { background: var(--tag-question-fill); color: var(--tag-question-ink); }
-  .card-text { font-size: 14px; line-height: 1.5; color: #1d2b3e; margin: 0 0 10px; white-space: pre-wrap; border-radius: 6px; padding: 2px 4px; margin-left: -4px; box-shadow: 0 0 0 1px transparent; }
-  .card-text:hover { background: hsl(var(--mdt-neutral-10, 210 50% 98%)); box-shadow: 0 0 0 1px #e4eaf3; }
-  .card-text[contenteditable="true"] { background: #fff; outline: 2px solid #2563eb; outline-offset: 0; }
-  .card-shot { display: block; width: 100%; border: 1px solid #ecf1f9; border-radius: 6px; cursor: zoom-in; }
+  .card-sev[data-k="fix"] { background: var(--tag-fix-fill); color: var(--tag-fix-ink); }
+  .card-text { font-size: 14px; line-height: 1.5; color: var(--rv-ink); margin: 0 0 10px; white-space: pre-wrap; border-radius: 6px; padding: 2px 4px; margin-left: -4px; box-shadow: 0 0 0 1px transparent; }
+  .card-text:hover { background: hsl(var(--rv-n10)); box-shadow: 0 0 0 1px var(--rv-line); }
+  .card-text[contenteditable="true"] { background: var(--rv-surface); outline: 2px solid #2563eb; outline-offset: 0; }
+  .card-shot { display: block; width: 100%; border: 1px solid var(--rv-fill); border-radius: 6px; cursor: zoom-in; }
   .card-c { position: relative; margin-left: 32px; }
   .card-c .card-pic { position: relative; container-type: inline-size; }
   /* the number, drawn live over the picture at the badge's own spot (the same geometry the baked ones had, so it
@@ -469,20 +605,29 @@ root.innerHTML = `
   .pic-n { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; background: #e11d48; color: #fff; font-weight: 700; text-align: center; box-shadow: 0 0 0 0.15em #fff; pointer-events: none; display: flex; align-items: center; justify-content: center; }
   /* the tag on the picture: a 22 pill holding the tag's dot; it grows to show its name under the pointer, and a click
      still cycles it */
-  .card-c .card-sev.on-pic { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 999px; box-shadow: 0 1px 3px rgba(29,43,62,.18); background: #fff; transition: padding .15s; }
-  .card-c .card-sev.on-pic .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  /* the type marker on the picture, small and quiet (Nirav, 2026-10-23): a 16 px pill, a 6 px dot, a hairline */
+  .card-c .card-sev.on-pic { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; height: 16px; padding: 0 5px; font-size: 10px; border-radius: 999px; box-shadow: 0 0 0 1px rgba(29,43,62,.08); background: var(--rv-surface); transition: padding .15s; }
+  .card-c .card-by-pic { position: absolute; top: 6px; left: 6px; display: inline-flex; align-items: center; height: 18px; padding: 0 1px; border-radius: 999px; background: var(--rv-surface); box-shadow: 0 0 0 1px rgba(29,43,62,.08); color: var(--rv-ink-2); font: 500 10px/1 -apple-system, system-ui, sans-serif; transition: padding .15s; cursor: default; }
+  .card-c .card-by-pic .av { width: 16px; height: 16px; margin: 0; vertical-align: 0; }
+  .card-c .card-by-pic .by-clock { margin: 0 3px; color: var(--rv-ink-3); }
+  .card-c .card-by-pic .lbl { max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; margin-left: 0; transition: max-width .18s ease, opacity .12s ease, margin-left .18s ease; }
+  .card-c .card-by-pic:hover { padding: 0 7px 0 1px; }
+  .card-c .card-by-pic:hover .lbl { max-width: 180px; opacity: 1; margin-left: 5px; }
+  .card-c .card-sev.on-pic .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
   .card-c .card-sev.on-pic .lbl { max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; margin-left: 0; transition: max-width .18s ease, opacity .12s ease, margin-left .18s ease; }
-  .card-c .card-sev.on-pic:hover { padding: 0 9px 0 7px; }
-  .card-c .card-sev.on-pic:hover .lbl { max-width: 96px; opacity: 1; margin-left: 6px; }
+  .card-c .card-sev.on-pic:hover { padding: 0 7px 0 5px; }
+  .card-c .card-sev.on-pic:hover .lbl { max-width: 96px; opacity: 1; margin-left: 4px; }
   .card-c .card-sev.on-pic[data-k="must"] { background: var(--tag-must-fill); } .card-c .card-sev.on-pic[data-k="must"] .dot { background: var(--tag-must-dot); }
+  .card-c .card-sev.on-pic[data-k="fix"] { background: var(--tag-fix-fill); } .card-c .card-sev.on-pic[data-k="fix"] .dot { background: var(--tag-fix-dot); }
   .card-c .card-sev.on-pic[data-k="should"] { background: var(--tag-should-fill); } .card-c .card-sev.on-pic[data-k="should"] .dot { background: var(--tag-should-dot); }
   .card-c .card-sev.on-pic[data-k="idea"] { background: var(--tag-idea-fill); } .card-c .card-sev.on-pic[data-k="idea"] .dot { background: var(--tag-idea-dot); }
   .card-c .card-sev.on-pic[data-k="question"] { background: var(--tag-question-fill); } .card-c .card-sev.on-pic[data-k="question"] .dot { background: var(--tag-question-dot); }
   .card-medium .card-text { font-weight: 500; line-height: 1.35; }
   /* a corner accent in the tag's colour: a fine arc hugging the top-left corner whose two legs fade out,
      over a faint wash of the same colour in the corner */
-  .card-c.card-rail { --accent: #8fa0bd; }
+  .card-c.card-rail { --accent: var(--rv-ink-3); }
   .card-c.card-rail[data-k="must"] { --accent: var(--tag-must-dot); } .card-c.card-rail[data-k="should"] { --accent: var(--tag-should-dot); } .card-c.card-rail[data-k="idea"] { --accent: var(--tag-idea-dot); } .card-c.card-rail[data-k="question"] { --accent: var(--tag-question-dot); }
+  .card-c.card-rail[data-k="fix"] { --accent: var(--tag-fix-dot); }
   /* the arc is a tapered shape (2px at the corner, nothing at the ends) cut out of the accent colour by an SVG
      mask that also fades it along both legs */
   .card-c.card-rail::before { content: ""; position: absolute; top: -1px; left: -1px; width: 56px; height: 56px; pointer-events: none; background: var(--accent); -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 56'><defs><linearGradient id='g' gradientUnits='userSpaceOnUse' x1='0' y1='0' x2='30' y2='30'><stop offset='0' stop-color='%23fff'/><stop offset='1' stop-color='%23fff' stop-opacity='0'/></linearGradient></defs><path d='M0 56 V10 A10 10 0 0 1 10 0 H56 L10 2.2 A7.8 7.8 0 0 0 2.2 10 Z' fill='url(%23g)'/></svg>") no-repeat 0 0 / 56px 56px; mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 56'><defs><linearGradient id='g' gradientUnits='userSpaceOnUse' x1='0' y1='0' x2='30' y2='30'><stop offset='0' stop-color='%23fff'/><stop offset='1' stop-color='%23fff' stop-opacity='0'/></linearGradient></defs><path d='M0 56 V10 A10 10 0 0 1 10 0 H56 L10 2.2 A7.8 7.8 0 0 0 2.2 10 Z' fill='url(%23g)'/></svg>") no-repeat 0 0 / 56px 56px; }
@@ -490,70 +635,132 @@ root.innerHTML = `
   .card-c.card-rail-right::before { left: auto; right: -1px; transform: scaleX(-1); }
   /* mirrored with scaleX(-1), so the element's top-LEFT radius lands on the card's top-right corner */
   .card-c.card-rail-right::after { left: auto; right: -1px; border-top-left-radius: 10px; transform: scaleX(-1); }
-  .card.card-fill, .card.here.card-fill { border-color: transparent; background: #fff; box-shadow: 0 1px 2px rgba(29,43,62,.06); }
-  .card-fill .card-shot { border-color: #e4eaf3; }
+  .card.card-fill, .card.here.card-fill { border-color: transparent; background: var(--rv-surface); box-shadow: 0 1px 2px rgba(29,43,62,.06); }
+  /* dark only: a hairline in the design system's border colour, so the cards stand off the dark well (Nirav, 2026-10-23) */
+  :host([data-theme="dark"]) .card.card-fill { border-color: hsl(216.77 40.26% 15.1%); }
+  :host([data-theme="dark"]) .card.card-fill:not(.picked):not(.failed) { box-shadow: none; }
+  :host([data-theme="dark"]) .card.card-fill.picked { box-shadow: 0 0 0 2px hsl(214 98% 44% / .45); }
+  .card-fill .card-shot { border-color: var(--rv-line); }
   .card-fill .card-rm { background: transparent; }
   .card-c .card-line { margin-bottom: 10px; }
+  /* TRY (Nirav, 2026-10-23): under the pointer the card grows a light strip at its foot with who raised it and where;
+     the foot keeps the status and the actions. To go back: the face on the picture (byPicHtml) and the where in footHtml */
+  .card-foot .where { display: none; }
+  .card-meta { display: grid; grid-template-rows: 0fr; margin: 0 -15px 0; border-radius: 0 0 10px 10px; /* out over the card's 1 px edge, so no white rim shows round the strip */ transition: grid-template-rows .22s cubic-bezier(.32,.72,0,1), margin .22s cubic-bezier(.32,.72,0,1); }
+  .card-meta-in { min-height: 0; overflow: hidden; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: hsl(var(--rv-n10)); border-radius: 0 0 10px 10px; font-size: 11px; color: var(--rv-ink-3); opacity: 0; transition: opacity .18s ease, padding .22s cubic-bezier(.32,.72,0,1); }
+  .card:hover .card-meta, .card:focus-visible .card-meta, .card:has(:focus-visible) .card-meta { grid-template-rows: 1fr; margin-top: 9px; margin-bottom: -10px; } /* over the card's padding and edge only while open; at rest the card keeps its own bottom padding */
+  .card:hover .card-meta-in, .card:focus-visible .card-meta-in, .card:has(:focus-visible) .card-meta-in { opacity: 1; padding: 9px 15px; }
+  :host([data-theme="dark"]) .card-meta-in { box-shadow: inset 1px 0 0 hsl(216.77 40.26% 15.1%), inset -1px 0 0 hsl(216.77 40.26% 15.1%), inset 0 -1px 0 hsl(216.77 40.26% 15.1%); } /* the card's dark edge carried round the strip */
+  .card-meta .cm-by { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+  .card-meta .cm-by .by-who { display: inline-flex; align-items: center; color: var(--rv-ink-2); font-weight: 500; }
+  .card-meta .cm-by .av { margin-left: 0; }
+  .list-spacer { height: var(--strip-h, 33px); transition: height .22s cubic-bezier(.32,.72,0,1); pointer-events: none; }
+  .panel-body:has(.card:hover, .card:focus-visible, .card.menu-open, .card :focus-visible) .list-spacer { height: 0; } /* no :has() inside :has(): that voids the whole rule */
+  .card-meta .cm-type { font-weight: 500; }
+  .card-meta .cm-type[data-k="fix"] { color: var(--tag-fix-ink); }
+  .card-meta .cm-type[data-k="question"] { color: var(--tag-question-ink); }
+  .card-more-wrap { position: relative; display: inline-flex; }
+  .card-more { width: 28px; height: 26px; padding: 0; border: 0; border-radius: 8px; background: var(--rv-fill); color: var(--rv-ink-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: background-color .12s, color .12s; }
+  .card-more:hover, .card-more-wrap.open .card-more { background: color-mix(in srgb, var(--rv-ink) 12%, var(--rv-fill)); color: var(--rv-ink); }
+  .card-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 4; display: none; flex-direction: column; min-width: 190px; padding: 5px; border: 1px solid var(--rv-line); border-radius: 12px; background: var(--rv-surface); box-shadow: 0 12px 32px rgba(29,43,62,.14), 0 2px 6px rgba(29,43,62,.06); }
+  .card-more-wrap.open .card-menu { display: flex; }
+  .card-menu .card-mi { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--rv-ink); font: 400 13px/1.3 -apple-system, system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
+  .card-menu .mi-ico { flex: 0 0 auto; color: var(--rv-ink); }
+  .card-menu .card-mi:hover { background: var(--rv-hover); }
+  .card-menu-sep { display: block; height: 1px; margin: 4px -5px; background: var(--rv-line); opacity: .7; }
+  .card-menu .card-rm.card-mi, .card-menu .card-rm.card-mi .mi-ico { color: hsl(353 84% 47%); }
+  .card-menu .card-rm.card-mi:hover:not(.sure) { background: hsl(var(--rv-danger-bg)); } /* Remove hovers light red (Nirav, 2026-10-23) */
+  .card-menu .card-rm.card-mi.sure { background: hsl(353 84% 47%); color: #fff; }
+  .card-menu .card-rm.card-mi.sure .mi-ico { color: #fff; }
+  .card.menu-open .card-foot .acts { opacity: 1; }
+  .card.menu-open .card-meta { grid-template-rows: 1fr; margin-top: 9px; margin-bottom: -10px; }
+  .card.menu-open .card-meta-in { opacity: 1; padding: 9px 15px; }
+  .card-meta .cm-where { flex: 1; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-by { display: flex; align-items: center; gap: 5px; min-height: 18px; margin: 0 0 10px; font-size: 11px; color: var(--rv-ink-3); }
+  .card-by:empty { display: none; }
+  .card-by .by-who { display: inline-flex; align-items: center; color: var(--rv-ink-2); font-weight: 500; }
+  .card-by .by-who .av { margin-left: 0; }
+  .card-by .by-sep { opacity: .7; }
   /* SELECTION (Nirav, 2026-10-21): a check at the card's top-right, seen on hover or once picked; the copies then
      take the picked cards only. The picked card wears a soft info ring. The count sits in the head, by the copy
      buttons it narrows. */
   .card-c .card-line { padding-right: 30px; } /* room for the check at the top-right, so the text never runs under it */
-  .card-pick { position: absolute; z-index: 1; right: 12px; top: 11px; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1.5px solid hsl(var(--mdt-neutral-70, 216 25% 65%)); background: #fff; box-shadow: 0 0 0 2px #fff; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .12s, background-color .12s, border-color .12s; }
+  .card-pick { position: absolute; z-index: 1; right: 12px; top: 11px; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1.5px solid hsl(var(--rv-n70)); background: var(--rv-surface); box-shadow: 0 0 0 2px var(--rv-surface); color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .12s, background-color .12s, border-color .12s; }
   .card:hover .card-pick, .card.picked .card-pick { opacity: 1; }
-  .card-pick:hover { border-color: hsl(var(--mdt-info, 214 98% 44%)); }
-  .card.picked .card-pick { background: hsl(var(--mdt-info, 214 98% 44%)); border-color: hsl(var(--mdt-info, 214 98% 44%)); }
+  .card-pick:hover { border-color: hsl(214 98% 44%); }
+  .card.picked .card-pick { background: hsl(214 98% 44%); border-color: hsl(214 98% 44%); }
   .card-pick svg { opacity: 0; transition: opacity .12s; }
   .card.picked .card-pick svg { opacity: 1; }
-  .card.card-fill.picked { box-shadow: 0 0 0 2px hsl(var(--mdt-info, 214 98% 44%) / .45), 0 1px 2px rgba(29,43,62,.06); }
+  .card:focus { outline: none; }
+  .card:focus-visible { outline: 2px solid hsl(214 98% 44% / .55); outline-offset: 2px; }
+  .card:focus-visible .card-pick { opacity: 1; }
+  .panel.picking, .panel.picking * { user-select: none; cursor: default; }
+  .card.card-fill.picked { box-shadow: 0 0 0 2px hsl(214 98% 44% / .45), 0 1px 2px rgba(29,43,62,.06); }
   /* what the list is doing: "Checking…" on open, "Up to date" for a moment, "2 new" until they are seen */
-  .panel-sync { position: absolute; left: 50%; top: 108px; transform: translate(-50%, -6px); z-index: 3; display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px; border-radius: 999px; background: hsl(var(--mdt-neutral-130, 216 36% 18%)); color: #fff; font-size: 12px; font-weight: 500; box-shadow: 0 6px 18px rgba(29,43,62,.18); opacity: 0; transition: opacity .18s ease, transform .18s ease; pointer-events: none; white-space: nowrap; }
+  .panel-sync { position: absolute; left: 50%; top: 108px; transform: translate(-50%, -6px); z-index: 3; display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px; border-radius: 999px; background: var(--rv-chip); color: var(--rv-chip-ink); border: 1px solid var(--rv-chip-line); font-size: 12px; font-weight: 500; box-shadow: 0 4px 12px rgba(29,43,62,.08); opacity: 0; transition: opacity .18s ease, transform .18s ease; pointer-events: none; white-space: nowrap; }
   .panel-sync.on { opacity: 1; transform: translate(-50%, 0); }
-  .panel-sync.new { background: hsl(var(--mdt-info, 214 98% 44%)); pointer-events: auto; cursor: pointer; }
-  .panel-sync .ring { display: none; width: 10px; height: 10px; border: 1.5px solid #fff; border-color: #fff #fff transparent transparent; border-radius: 50%; animation: rv-spin .7s linear infinite; }
+  .panel-sync.new { background: hsl(214 98% 44%); color: #fff; border-color: transparent; pointer-events: auto; cursor: pointer; }
+  .panel-sync .ring { display: none; width: 10px; height: 10px; border: 1.5px solid currentColor; border-color: currentColor currentColor transparent transparent; border-radius: 50%; animation: rv-spin .7s linear infinite; }
   .panel-sync.checking .ring { display: block; }
   :host([data-page]) .panel-sync { position: fixed; top: 120px; }
   /* not seen yet: the number disc in blue, back to its own colour once the card has been in view a moment */
   .card-n { transition: background-color .5s ease, color .5s ease, box-shadow .5s ease; }
-  .card.unread .card-n { background: hsl(var(--mdt-info, 214 98% 44%)); color: #fff; box-shadow: 0 0 0 3px hsl(var(--mdt-info, 214 98% 44%) / .18); }
-  .pin.unread { box-shadow: 0 0 0 3px hsl(var(--mdt-info, 214 98% 44%) / .35), 0 1px 3px rgba(0,0,0,.25); }
-  .panel-pick { display: inline-flex; align-items: center; height: 26px; padding: 0 4px 0 10px; gap: 6px; margin-right: 4px; border-radius: 999px; background: hsl(var(--mdt-info, 214 98% 44%) / .1); color: hsl(var(--mdt-info, 214 98% 44%)); font-weight: 600; font-size: 12px; flex: 0 0 auto; }
+  .card.unread .card-n { background: hsl(214 98% 44%); color: #fff; box-shadow: 0 0 0 3px hsl(214 98% 44% / .18); }
+  .pin.unread { box-shadow: 0 0 0 3px hsl(214 98% 44% / .35), 0 1px 3px rgba(0,0,0,.25); }
+  .panel-pick { display: inline-flex; align-items: center; height: 26px; padding: 0 4px 0 10px; gap: 6px; margin-right: 4px; border-radius: 999px; background: hsl(214 98% 44% / .1); color: hsl(214 98% 44%); font-weight: 600; font-size: 12px; flex: 0 0 auto; }
   .panel-pick .x { position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-  .panel-pick .x:hover { background: hsl(var(--mdt-info, 214 98% 44%) / .15); }
+  .panel-pick .x:hover { background: hsl(214 98% 44% / .15); }
   .panel-pick .x:hover .scope-tip { opacity: 1; }
   .card-c .card-line .card-text { margin: 0 0 0 -4px; padding: 2px 4px; }
   .card-c .card-n.out { position: absolute; left: -32px; top: 12px; }
-  .card-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 11px; color: #5b6b85; min-height: 26px; }
+  .card-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--rv-ink-2); min-height: 24px; }
   /* the actions show only while the card is under the pointer (or holds the focus) */
-  .card-foot .acts { display: inline-flex; gap: 6px; flex: 0 0 auto; opacity: 0; transition: opacity .12s; }
-  .card:hover .card-foot .acts, .card:focus-within .card-foot .acts { opacity: 1; }
-  .card-ok { border: 1px solid #dbe3ef; background: #fff; color: #5b6b85; border-radius: 6px; padding: 3px 9px; font: 500 11px/1.2 -apple-system, system-ui, sans-serif; cursor: pointer; }
-  .card-ok:hover { border-color: hsl(var(--mdt-success, 136 53% 43%)); color: hsl(var(--mdt-feedback-success-icon, 135 59% 32%)); background: hsl(var(--mdt-feedback-success-bg, 140 52% 91%)); }
-  .card-ok.alt:hover { border-color: hsl(var(--mdt-neutral-70, 216 25% 65%)); color: #1d2b3e; background: hsl(var(--mdt-neutral-10, 210 50% 98%)); }
+  .card-foot .acts { display: inline-flex; gap: 6px; flex: 0 0 auto; margin-left: auto; opacity: 0; transition: opacity .12s; } /* at the right end of the line (Nirav, 2026-10-23) */
+  .card:hover .card-foot .acts, .card:focus-visible .card-foot .acts, .card:has(:focus-visible) .card-foot .acts { opacity: 1; } /* keyboard focus, not a click that left focus behind */
+  .card-ok { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); border-radius: 6px; padding: 3px 9px; font: 500 11px/1.2 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .card-ok:hover { border-color: hsl(136 53% 43%); color: hsl(var(--rv-ok-ink)); background: hsl(var(--rv-ok-bg)); }
+  .card-ok.alt:hover { border-color: hsl(var(--rv-n70)); color: var(--rv-ink); background: hsl(var(--rv-n10)); }
   /* where it stands, after the place: a dot in the status colour and the words */
   .card-status { display: none; align-items: center; gap: 5px; flex: 0 0 auto; font-size: 11px; font-weight: 500; white-space: nowrap; }
   .card-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .av { width: 16px; height: 16px; border-radius: 50%; vertical-align: -3px; margin: 0 4px 0 1px; background: #e4eaf3; object-fit: cover; }
-  .av-i { display: inline-flex; align-items: center; justify-content: center; font: 700 9px/1 -apple-system, system-ui, sans-serif; color: #1d2b3e; background: hsl(var(--mdt-neutral-30, 216 30% 88%)); }
-  .pin-tip .av-i { color: #1d2b3e; }
+  .card-status[data-s="open"]::before { background: var(--rv-st-new-dot); } .card-status[data-s="progress"]::before { background: var(--rv-st-prog-dot); } .card-status[data-s="approval"]::before { background: var(--rv-st-appr-dot); } /* the dots in the bright step, the words in the dark one */
+  .card-status { flex: 0 1 auto; min-width: 0; }
+  .card-status .st-s { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .card-status .st-k { font-weight: 500; color: inherit; }
+  .card-status .st-who { color: var(--rv-ink); font-weight: 500; }
+  .card-status .st-rest { color: var(--rv-ink-2); font-weight: 400; }
+  .card-status .av { margin: 0 4px 0 0; vertical-align: middle; position: relative; top: -1px; }
+  .card-note .nt-head .av { vertical-align: middle; position: relative; top: -1px; }
+  .av { width: 16px; height: 16px; border-radius: 50%; vertical-align: -3px; margin: 0 4px 0 1px; background: var(--rv-line); object-fit: cover; }
+  .av-i { display: inline-flex; align-items: center; justify-content: center; font: 700 9px/1 -apple-system, system-ui, sans-serif; color: var(--rv-ink); background: hsl(var(--rv-n30)); }
+  .pin-tip .av-i { color: var(--rv-ink); }
   .card-status .av { margin-left: 0; }
   .pin-tip .av { width: 14px; height: 14px; vertical-align: -2px; }
-  .card-status[data-s="progress"] { display: inline-flex; color: hsl(var(--mdt-info, 214 98% 44%)); }
-  .card-status[data-s="approval"] { display: inline-flex; color: hsl(var(--mdt-badge-warning-ink, 36 95% 32%)); }
-  .card-status[data-s="approved"] { display: inline-flex; color: hsl(var(--mdt-feedback-success-icon, 135 59% 32%)); }
+  /* the three live states in one colour each, on the cards and in the filter (Nirav, 2026-10-23): New purple, In
+     progress orange, For approval teal */
+  .card-status[data-s="open"] { display: inline-flex; color: var(--rv-st-new); }
+  .card-status[data-s="progress"] { display: inline-flex; color: var(--rv-st-prog); }
+  .card-status[data-s="approval"] { display: inline-flex; color: var(--rv-st-appr); }
+  .card-status[data-s="approved"] { display: inline-flex; color: var(--rv-st-done); }
+  .card-status[data-s="approved"]::before { width: 9px; height: 9px; border-radius: 2.5px; background: var(--rv-st-done-dot) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.6 6.3l2.2 2.2 4.6-4.8' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 8px no-repeat; }
   .card.resolved { opacity: .85; }
-  .card.resolved .card-text { color: #5b6b85; }
-  .card.resolved .card-n.out { background: hsl(var(--mdt-feedback-success-bg, 140 52% 91%)); color: hsl(var(--mdt-feedback-success-icon, 135 59% 32%)); }
-  .panel-end { text-align: center; color: #8fa0bd; font-size: 12px; padding: 14px 0 6px; }
-  .panel-end a { color: #5b6b85; text-decoration: underline dotted; text-underline-offset: 3px; }
-  .end-n { display: inline-block; min-width: 20px; height: 20px; padding: 0 5px; margin: 0 2px; border-radius: 999px; background: hsl(var(--mdt-feedback-success-bg, 140 52% 91%)); color: hsl(var(--mdt-feedback-success-icon, 135 59% 32%)); font: 600 11px/20px -apple-system, system-ui, sans-serif; text-align: center; cursor: pointer; vertical-align: -1px; }
-  .end-n:hover { filter: brightness(.95); }
-  .panel-end a:hover { color: #1d2b3e; }
+  .card.resolved .card-text { color: var(--rv-ink-2); }
+  .card.resolved .card-n.out { background: hsl(var(--rv-ok-bg)); color: hsl(var(--rv-ok-ink)); }
+  .panel-end { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--rv-ink-2); font-size: 12px; padding: 14px 0 6px; }
+  .panel-end.hub-line { display: block; text-align: center; }
+  .panel-end b { font-weight: 600; color: var(--rv-ink); }
+  /* approved, the last step of the status shapes (New circle, In progress diamond, For approval square): the square,
+     finished, green with a tick (Nirav, 2026-10-24) */
+  .panel-end .end-ok { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 3.5px; background: var(--rv-st-done-dot); }
+  .panel-end .end-word { color: var(--rv-st-done); font-weight: 500; }
+  .panel-end a { color: var(--rv-ink-2); text-decoration: underline dotted; text-underline-offset: 3px; }
+  .panel-end a:hover { color: var(--rv-ink); text-decoration-style: solid; }
   .panel-view { display: none; }
   /* on the page the Open / Resolved switch sits in the middle of the head, whatever is on either side */
   :host([data-page]) .panel-view { display: inline-flex; position: absolute; left: 50%; top: 50%; transform: translate(-50%, calc(-50% + 4px)); }
-  .scope-switch.panel-view .side { width: auto; height: 24px; padding: 0 10px; font: 500 12px/24px -apple-system, system-ui, sans-serif; color: hsl(var(--mdt-neutral-90, 215 20% 45%)); }
-  .scope-switch.panel-view .side b { font-weight: 500; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); margin-left: 4px; }
-  .scope-switch.panel-view .side[aria-pressed="true"] b { color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
+  .scope-switch.panel-view .side { width: auto; height: 24px; padding: 0 10px; font: 500 12px/24px -apple-system, system-ui, sans-serif; color: hsl(var(--rv-n90)); }
+  .scope-switch.panel-view .side b { font-weight: 500; color: hsl(var(--rv-n70)); margin-left: 4px; }
+  .scope-switch.panel-view .side[aria-pressed="true"] b { color: hsl(var(--rv-n130)); }
   .card-foot .where { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* a button at work: a small ring where its label was, the width kept; its neighbours quiet meanwhile */
   .card-ok, .card-rm, .tip-acts button { position: relative; transition: opacity .15s ease, border-color .12s, background-color .12s, color .12s; }
@@ -571,27 +778,34 @@ root.innerHTML = `
   .card.sending .card-pic::after { content: ""; position: absolute; inset: 0; border-radius: 6px; background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%); background-size: 250% 100%; animation: rv-shimmer 1.3s linear infinite; pointer-events: none; }
   .card.sending .card-pic { position: relative; }
   @keyframes rv-shimmer { from { background-position: 120% 0; } to { background-position: -130% 0; } }
-  .card-sending { font-size: 11px; color: #8fa0bd; flex: 0 0 auto; }
-  .card.failed { box-shadow: 0 0 0 1px hsl(var(--mdt-destructive, 353 84% 47%) / .5), 0 1px 2px rgba(29,43,62,.06); }
+  .card-sending { font-size: 11px; color: var(--rv-ink-3); flex: 0 0 auto; }
+  .card.failed { box-shadow: 0 0 0 1px hsl(353 84% 47% / .5), 0 1px 2px rgba(29,43,62,.06); }
   .card-foot .acts.on { opacity: 1; }
   /* the reason a comment came back, under the foot, in the warning ink with a thin rule on its left */
-  .card-note { margin-top: 8px; padding: 6px 10px; border-left: 2px solid hsl(var(--mdt-badge-warning-ink, 36 95% 32%) / .5); font-size: 12px; line-height: 1.4; color: #1d2b3e; background: hsl(var(--mdt-badge-warning-bg, 40 100% 94%) / .55); border-radius: 0 6px 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .card-note { margin-top: 8px; padding: 6px 10px;  font-size: 12px; line-height: 1.4; color: var(--rv-ink); background: hsl(var(--rv-warn-bg) / .55); border-radius: 8px; border-left: 2px solid hsl(var(--rv-warn-ink) / .5); /* a curved border: it follows the 8 px corners */ white-space: pre-wrap; overflow-wrap: anywhere; }
+  .card-note .nt-head, .tip-note .nt-head { color: var(--rv-ink-2); }
+  .card-note .nt-head b { font-weight: 500; font-size: 11px; color: var(--rv-ink); }
+  .card-note .av { width: 14px; height: 14px; vertical-align: -3px; margin: 0 4px 0 0; } /* smaller in the note than on the status line (Nirav, 2026-10-23) */
+  .card-note .av-i { font-size: 8px; }
+  .tip-note .nt-head { color: inherit; opacity: .75; }
+  .tip-note .nt-head b { font-weight: 600; }
   /* the one-line ask in the foot when a comment goes back */
-  .card-foot .note-in { flex: 1; min-width: 0; height: 26px; border: 1px solid #dbe3ef; border-radius: 6px; padding: 0 9px; font: 12px/1.2 -apple-system, system-ui, sans-serif; color: #1d2b3e; background: #fff; outline: none; }
-  .card-foot .note-in:focus { border-color: hsl(var(--mdt-info, 214 98% 44%)); box-shadow: 0 0 0 1px hsl(var(--mdt-info, 214 98% 44%)); }
-  .card-foot .note-in::placeholder { color: #8b99b0; }
+  .card-foot .note-in { flex: 1; min-width: 0; height: 26px; border: 1px solid var(--rv-line-2); border-radius: 6px; padding: 0 9px; font: 12px/1.2 -apple-system, system-ui, sans-serif; color: var(--rv-ink); background: var(--rv-surface); outline: none; }
+  .card-foot .note-in:focus { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 1px hsl(214 98% 44%); }
+  .card-foot .note-in::placeholder { color: var(--rv-ink-3); }
   .card-foot .note-go { flex: 0 0 auto; }
-  .card-rm { border: 1px solid #dbe3ef; background: #fff; color: #5b6b85; border-radius: 6px; padding: 3px 9px; font: 500 11px/1.2 -apple-system, system-ui, sans-serif; cursor: pointer; flex: 0 0 auto; }
-  .card-rm:hover { border-color: hsl(var(--mdt-destructive, 353 84% 47%)); color: hsl(var(--mdt-destructive, 353 84% 47%)); background: hsl(var(--mdt-feedback-danger-bg, 353 82% 94%)); }
-  .card-rm.sure { border-color: hsl(var(--mdt-destructive, 353 84% 47%)); color: #fff; background: hsl(var(--mdt-destructive, 353 84% 47%)); }
-  .lightbox { position: fixed; inset: 0; pointer-events: auto; background: rgba(12,20,32,.8); display: none; align-items: center; justify-content: center; z-index: 4; }
+  .card-rm { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); border-radius: 6px; padding: 3px 9px; font: 500 11px/1.2 -apple-system, system-ui, sans-serif; cursor: pointer; flex: 0 0 auto; }
+  .card-rm:hover { border-color: hsl(353 84% 47%); color: hsl(353 84% 47%); background: hsl(var(--rv-danger-bg)); }
+  .card-rm.sure { border-color: hsl(353 84% 47%); color: #fff; background: hsl(353 84% 47%); }
+  .lightbox { position: fixed; inset: 0; pointer-events: auto; background: rgba(12,20,32,.8); display: none; align-items: center; justify-content: center; z-index: 4; user-select: none; -webkit-user-select: none; }
   .lightbox.on { display: flex; }
   /* the frame is exactly as wide as the picture: caption and foot share its edges */
   .lb-frame { display: flex; flex-direction: column; max-width: calc(100vw - 64px); max-height: calc(100vh - 48px); }
   .lb-top { display: flex; align-items: center; gap: 10px; padding: 0 0 10px; color: #fff; font-size: 13px; min-height: 32px; }
   .lb-n { width: 22px; height: 22px; border-radius: 50%; background: #fff; color: #1d2b3e; font-weight: 700; font-size: 11px; line-height: 22px; text-align: center; flex: 0 0 auto; }
-  .lb-sev { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #ecf1f9; color: #5b6b85; flex: 0 0 auto; }
+  .lb-sev { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--rv-fill); color: var(--rv-ink-2); flex: 0 0 auto; }
   .lb-sev[data-k="must"] { background: var(--tag-must-fill); color: var(--tag-must-ink); } .lb-sev[data-k="should"] { background: var(--tag-should-fill); color: var(--tag-should-ink); } .lb-sev[data-k="idea"] { background: var(--tag-idea-fill); color: var(--tag-idea-ink); } .lb-sev[data-k="question"] { background: var(--tag-question-fill); color: var(--tag-question-ink); }
+  .lb-sev[data-k="fix"] { background: var(--tag-fix-fill); color: var(--tag-fix-ink); }
   .lb-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
   .lb-count { color: #9fb0c9; font-size: 12px; margin-right: 2px; flex: 0 0 auto; }
   .lb-top button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; border: 0; background: rgba(255,255,255,.12); color: #fff; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; padding: 0; }
@@ -599,17 +813,32 @@ root.innerHTML = `
   .lb-top button:disabled { opacity: .3; cursor: default; }
   .lb-top .lb-close { margin-left: 6px; }
   .lb-pic { position: relative; container-type: inline-size; display: flex; justify-content: center; min-height: 0; }
-  .lb-img { display: block; max-width: 100%; max-height: calc(100vh - 48px - 42px - 36px); width: auto; height: auto; object-fit: contain; border-radius: 8px; box-shadow: 0 24px 64px rgba(0,0,0,.5); background: #fff; }
+  .lb-img { display: block; width: 100%; max-width: 100%; max-height: calc(100vh - 48px - 42px - 36px); width: auto; height: auto; object-fit: contain; border-radius: 8px; box-shadow: 0 24px 64px rgba(0,0,0,.5); background: #fff; }
   .lb-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0 0; color: #9fb0c9; font-size: 12px; min-height: 36px; }
   .lb-where { color: #cfd8e6; }
   :host([data-page]) .bar, :host([data-page]) .hover, :host([data-page]) .pins, :host([data-page]) .pin-tip, :host([data-page]) .composer { display: none !important; }
   :host([data-page]) .panel-veil { display: none; }
-  :host([data-page]) .panel { transform: none; visibility: visible; transition: none; position: static; width: min(880px, 100%); height: 100vh; margin: 0 auto; box-shadow: none; border-left: 1px solid hsl(var(--mdt-neutral-20, 214 40% 95%)); border-right: 1px solid hsl(var(--mdt-neutral-20, 214 40% 95%)); }
+  :host([data-page]) .panel { transform: none; visibility: visible; transition: none; position: relative; width: min(880px, 100%); height: 100vh; margin: 0 auto; box-shadow: none; border-left: 1px solid hsl(var(--rv-n20)); border-right: 1px solid hsl(var(--rv-n20)); }
   :host([data-page]) .panel-head { padding-top: 18px; }
   :host([data-page]) .panel-back { display: inline-flex; }
   /* the way back to the console, on the page only: a line button at the start of the head, the arrow and the tooltip */
-  .panel-back { position: relative; display: none; align-items: center; justify-content: center; width: 26px; height: 26px; margin-right: 2px; border: 1px solid hsl(var(--mdt-neutral-30, 217 44% 90%)); border-radius: 6px; background: #fff; color: hsl(var(--mdt-neutral-70, 216 25% 65%)); cursor: pointer; text-decoration: none; }
-  .panel-back:hover { border-color: hsl(var(--mdt-neutral-90, 215 20% 45%)); background: hsl(var(--mdt-neutral-10, 210 50% 98%)); color: hsl(var(--mdt-neutral-130, 214 36% 18%)); }
+  .panel-back { position: relative; display: none; align-items: center; justify-content: center; width: 26px; height: 26px; margin-right: 2px; border: 1px solid hsl(var(--rv-n30)); border-radius: 6px; background: var(--rv-surface); color: hsl(var(--rv-n70)); cursor: pointer; text-decoration: none; }
+  .panel-back:hover { border-color: hsl(var(--rv-n90)); background: hsl(var(--rv-n10)); color: hsl(var(--rv-n130)); }
+  /* the theme switch (Nirav, 2026-10-23): the product's switch, folded to the picked side at rest; under the pointer
+     all three show, always in the same order (Auto, Light, Dark), so a click never reshuffles them */
+  .theme-switch { margin-right: 2px; }
+  /* tucked away (Nirav, 2026-10-23): most people stay on Auto, so the switch only fades in while the pointer is over
+     the drawer's head; at rest it takes no room, the copy buttons sit where they always did */
+  .theme-switch { max-width: 0; padding-left: 0; padding-right: 0; margin-right: -8px; opacity: 0; pointer-events: none; transition: max-width .22s cubic-bezier(.32,.72,0,1), padding .22s cubic-bezier(.32,.72,0,1), margin .22s cubic-bezier(.32,.72,0,1), opacity .16s ease; }
+  .panel-head:hover .theme-switch, .theme-switch:has(.side:focus-visible) { max-width: 90px; padding-left: 2px; padding-right: 2px; margin-right: 2px; opacity: 1; pointer-events: auto; }
+  .theme-switch .side { transition: width .2s cubic-bezier(.32,.72,0,1), margin .2s cubic-bezier(.32,.72,0,1), opacity .15s ease, background-color .12s, color .12s; }
+  .theme-switch .side:not([aria-pressed="true"]) { width: 0; margin-left: -2px; opacity: 0; pointer-events: none; }
+  .theme-switch:hover .side, .theme-switch:has(.side:focus-visible) .side { width: 24px; margin-left: 0; opacity: 1; pointer-events: auto; }
+  .theme-switch .side .scope-tip { left: auto; right: 0; transform: none; }
+  /* the switch between light and dark (Nirav, 2026-10-23): a crossfade where the browser offers one (switchTheme);
+     otherwise the big surfaces ease their colours, text untouched so it never shimmers */
+  :host([data-theming]) .panel, :host([data-theming]) .panel-bar, :host([data-theming]) .panel-body, :host([data-theming]) .card, :host([data-theming]) .scope-switch, :host([data-theming]) .scope-crumb, :host([data-theming]) .panel-copy, :host([data-theming]) .theme-switch, :host([data-theming]) .panel-back { transition: background-color .3s ease, border-color .3s ease !important; }
+  @media (prefers-reduced-motion: reduce) { :host([data-theming]) * { transition: none !important; } .theme-switch .side { transition: none; } }
   .panel-back .scope-tip { left: 0; transform: none; }
   .panel-back:hover .scope-tip { opacity: 1; }
   :host([data-capturing]) * { visibility: hidden !important; }
@@ -626,10 +855,10 @@ root.innerHTML = `
   <textarea placeholder="What should change here?" rows="3"></textarea>
   <div class="actions"><button class="btn cancel">Cancel</button><button class="btn primary save">Save</button></div>
 </div>
-<div class="bar ui"><span class="brand"><button class="dot" title="Pictures: off. Click to share this tab (or load the review extension for silent pictures)"></button><b>Review${window.__reviewSession ? ` · ${window.__reviewSession}` : ""}</b></span><span class="k"></span><span class="sep"></span><button class="pins-toggle on" title="Show or hide the pins of comments already made">Pins</button><button class="list" title="The comments so far, in a panel">List<span class="count"></span></button><button class="sat off" aria-label="Hide review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8M9.9 5.1A10.4 10.4 0 0 1 12 5c6 0 9.5 7 9.5 7a16.5 16.5 0 0 1-3.1 3.9M6.6 6.6C4 8.4 2.5 12 2.5 12s3.5 7 9.5 7c1.5 0 2.8-.4 4-.9"/></svg><span class="scope-tip">Hide review · ${HIDE_KEY} brings it back</span></button><button class="sat dock" aria-label="Minimise to the edge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg><span class="scope-tip">Minimise to the edge</span></button></div>
+<div class="bar ui"><button class="sat dock" aria-label="Minimise to the edge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><rect x="12" y="12" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Minimise to the edge</span></button><button class="sat off" aria-label="Turn off review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg><span class="scope-tip">Turn off review · ${HIDE_KEY} turns it on</span></button><span class="bar-main"><span class="brand"><button class="dot" title="Pictures: off. Click to share this tab (or load the review extension for silent pictures)"></button><b>Review${window.__reviewSession ? ` · ${window.__reviewSession}` : ""}</b></span><span class="k"></span></span><button class="pins-toggle on disc" aria-label="Pins"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4.5l-4 4-4 1.5-1.5 1.5 7 7 1.5-1.5 1.5-4 4-4"/><path d="M9 15l-4.5 4.5"/><path d="M14.5 4l5.5 5.5"/></svg><span class="scope-tip">Show or hide the pins</span></button><button class="list disc" aria-label="Comments"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14.5 4v16"/></svg><span class="count"></span><span class="scope-tip">Comments, in a side panel</span></button></div>
 <div class="panel-veil"></div>
 <aside class="panel ui" aria-label="Review comments" role="dialog" aria-modal="true">
-  <div class="panel-head"><a class="panel-back" href="/" aria-label="Back to the console"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="scope-tip">Back to the console</span></a><a class="panel-title" href="/__review/" target="_blank" aria-label="Open as a page"><span class="txt">Comments</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="scope-tip">Open as a page</span></a><div class="scope-switch panel-view" role="group"><button type="button" class="side" data-v="open">Open<b></b></button><button type="button" class="side" data-v="resolved">Approved<b></b></button></div><button class="panel-copy" data-kind="prompt" aria-label="Copy a brief for Claude"><svg class="logo-claude" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a brief for Claude</span></button><button class="panel-copy" data-kind="loop" aria-label="Copy a checklist for Loop"><svg class="logo-loop-rest" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z"/></svg><svg class="logo-loop" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"> <path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z" fill="url(#rv-loop-a)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-b)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-c)" fill-opacity=".56"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-d)" fill-opacity=".15"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-e)"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-f)"/> <defs> <radialGradient id="rv-loop-c" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(4 2.75 -4.83318 7.0301 5.5 17.75)"> <stop/> <stop offset=".7" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-d" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.4 4.6 -8.08463 13.0057 4.3 17)"> <stop offset=".33"/> <stop offset=".6" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-f" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(13.40004 -2.3 6.04701 35.2304 .3 8.2)"> <stop stop-color="#6D05E8"/> <stop offset="1" stop-color="#6D05E8" stop-opacity="0"/> </radialGradient> <linearGradient id="rv-loop-a" x1="14.2" y1="9.1" x2="10.9" y2="22.6" gradientUnits="userSpaceOnUse"> <stop stop-color="#9237E3"/> <stop offset="1" stop-color="#48E6F3"/> </linearGradient> <linearGradient id="rv-loop-b" x1="8.5" y1="20.5" x2="17.3" y2="18.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#51E6FF"/> <stop offset="1" stop-color="#71D4FF" stop-opacity="0"/> </linearGradient> <linearGradient id="rv-loop-e" x1="6.1" y1="12.7" x2="11.2" y2="5.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#6E06E9"/> <stop offset="1" stop-color="#AB5ADD" stop-opacity="0"/> </linearGradient> </defs> </svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a checklist for Loop</span><i class="more"></i></button></div>
+  <div class="panel-head"><a class="panel-back" href="/" aria-label="Back to the console"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="scope-tip">Back to the console</span></a><a class="panel-title" href="/__review/" target="_blank" aria-label="Open as a page"><span class="txt">Comments</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="scope-tip">Open as a page</span></a><div class="scope-switch panel-view" role="group"><button type="button" class="side" data-v="open">Open<b></b></button><button type="button" class="side" data-v="resolved">Approved<b></b></button></div><div class="scope-switch theme-switch" role="group" aria-label="Theme"><button type="button" class="side" data-t="auto" aria-pressed="false" aria-label="Auto, follows your computer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Auto, follows your computer</span></button><button type="button" class="side" data-t="light" aria-pressed="false" aria-label="Light"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg><span class="scope-tip">Light</span></button><button type="button" class="side" data-t="dark" aria-pressed="false" aria-label="Dark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span class="scope-tip">Dark</span></button></div><button class="panel-copy" data-kind="prompt" aria-label="Copy a brief for Claude"><svg class="logo-claude" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a brief for Claude</span></button><button class="panel-copy" data-kind="loop" aria-label="Copy a checklist for Loop"><svg class="logo-loop-rest" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z"/></svg><svg class="logo-loop" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"> <path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z" fill="url(#rv-loop-a)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-b)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-c)" fill-opacity=".56"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-d)" fill-opacity=".15"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-e)"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-f)"/> <defs> <radialGradient id="rv-loop-c" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(4 2.75 -4.83318 7.0301 5.5 17.75)"> <stop/> <stop offset=".7" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-d" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.4 4.6 -8.08463 13.0057 4.3 17)"> <stop offset=".33"/> <stop offset=".6" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-f" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(13.40004 -2.3 6.04701 35.2304 .3 8.2)"> <stop stop-color="#6D05E8"/> <stop offset="1" stop-color="#6D05E8" stop-opacity="0"/> </radialGradient> <linearGradient id="rv-loop-a" x1="14.2" y1="9.1" x2="10.9" y2="22.6" gradientUnits="userSpaceOnUse"> <stop stop-color="#9237E3"/> <stop offset="1" stop-color="#48E6F3"/> </linearGradient> <linearGradient id="rv-loop-b" x1="8.5" y1="20.5" x2="17.3" y2="18.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#51E6FF"/> <stop offset="1" stop-color="#71D4FF" stop-opacity="0"/> </linearGradient> <linearGradient id="rv-loop-e" x1="6.1" y1="12.7" x2="11.2" y2="5.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#6E06E9"/> <stop offset="1" stop-color="#AB5ADD" stop-opacity="0"/> </linearGradient> </defs> </svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a checklist for Loop</span><i class="more"></i></button></div>
   <div class="panel-bar"><div class="panel-scope"></div><div class="panel-filter"></div></div>
   <div class="panel-sync" hidden><span class="ring"></span><span class="txt"></span></div>
   <div class="panel-body"></div>
@@ -671,7 +900,7 @@ const bar = $(".bar");
 const dot = $(".bar .dot");
 const countEl = $(".bar .count");
 const toastEl = $(".toast");
-let severity = "should";
+let severity = "fix";
 
 for (const [k, label] of SEVERITIES) {
   const b = document.createElement("button");
@@ -943,6 +1172,17 @@ window.addEventListener(
       }
       return;
     }
+    /* "/" opens the list's search while the drawer is open (Nirav, 2026-10-23), unless a field anywhere has the keys */
+    if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && panel.classList.contains("on") && !state.pending && !state.asking) {
+      const inField = e.composedPath().some((n) => n instanceof HTMLElement && (n.matches("input, textarea, select") || n.isContentEditable));
+      if (!inField) {
+        e.preventDefault();
+        e.stopPropagation();
+        tools.classList.remove("away");
+        toolsIn.focus();
+        return;
+      }
+    }
     if (e.key === "Escape") {
       const typing = e.composedPath().some((n) => n instanceof HTMLElement && n.getRootNode() === root && (n.matches("input, textarea") || n.isContentEditable));
       if (state.pending) {
@@ -955,6 +1195,14 @@ window.addEventListener(
         cancelAsk();
       } else if (typing) {
         /* a field of ours (an in-place edit) takes its own Esc; the panel stays */
+      } else if (panel.classList.contains("on") && state.selected.size) {
+        /* a selection goes first; the next Esc closes the drawer */
+        e.stopPropagation();
+        e.preventDefault();
+        for (const x of panelBody.querySelectorAll(".card.picked")) setPicked(x, false);
+        state.selected.clear();
+        renderPickPill();
+        refreshCopyLabels();
       } else if (panel.classList.contains("on")) {
         openPanel(false);
       } else if (state.sticky) {
@@ -1498,6 +1746,7 @@ let loadComments = async function () {
     const changed = text !== listSeen;
     listSeen = text;
     const all = JSON.parse(text);
+    for (const c of all) c.severity = kindOf(c.severity);
     if (state.known) {
       for (const c of all) if (!state.known.has(c.id) && !state.mine.has(c.id) && c.status !== "approved") state.unread.add(c.id);
     }
@@ -1540,6 +1789,24 @@ state.hub = null;
 rv(`/__review/hub${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`).then((r) => r.json()).then((h) => {
   state.hub = h;
   state.me = h.who || "";
+  /* who is looking (Nirav, 2026-10-23): the approver, or the team. ?as=team / ?as=approver tries the other view; the
+     test session shows the team's by default, so both can be seen from one machine */
+  const asQ = new URLSearchParams(location.search).get("as");
+  if (asQ) try { sessionStorage.setItem("review.as", asQ); } catch {}
+  let asWas = null;
+  try { asWas = sessionStorage.getItem("review.as"); } catch {}
+  const persona = asWas === "team" || asWas === "approver" ? asWas : window.__reviewSession ? "team" : h.approver ? "approver" : "team";
+  if (state.persona !== persona) {
+    state.persona = persona;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(`review.statuses.${persona}`) || "null"); } catch {}
+    state.status = new Set(Array.isArray(saved) ? saved : persona === "approver" ? ["approval", "progress"] : ["open", "progress"]);
+    let g = null, f = null;
+    try { g = localStorage.getItem(`review.group.${persona}`); f = JSON.parse(localStorage.getItem(`review.folded.${persona}`) || "null"); } catch {}
+    state.groupBy = g || (persona === "approver" ? "status" : "none");
+    state.folded = new Set(Array.isArray(f) ? f : []);
+    renderGroupPick?.();
+  }
   if (PAGE_MODE) renderPanel();
 }).catch(() => {});
 let lastResolve = 0;
@@ -1896,6 +2163,7 @@ async function showInList(c) {
   const group = (c.module && c.module.group) || moduleOf(c.route).group || "Other";
   if ((sc.kind === "route" && sc.route !== (c.route || "").split("?")[0]) || (sc.kind === "group" && sc.group !== group)) state.scope = { kind: "all" }; // "here" follows the page and needs no widening
   state.spot = { id: c.id, until: performance.now() + 2400 };
+  if (state.status?.size && !state.status.has(c.status)) state.status = new Set(); // the card must be in the filter
   tip.classList.remove("on");
   delete tip.dataset.id;
   tipHold = null;
@@ -1984,7 +2252,7 @@ function setReview(on, quiet) {
   try {
     localStorage.setItem("review.on", on ? "on" : "off");
   } catch {}
-  if (!quiet) toast(on ? "Review is back" : `Review hidden · ${HIDE_KEY} shows it again`, on ? 2200 : 4000);
+  if (!quiet) toast(on ? "Review is on" : `Review is off · ${HIDE_KEY} turns it on`, on ? 2200 : 4000);
 }
 $(".bar .off").addEventListener("click", () => setReview(false));
 
@@ -2064,6 +2332,54 @@ function liveBadge(c, img) {
 /* ---------- the panel: every comment so far, editable, removable ---------- */
 const panel = $(".panel");
 const panelBody = $(".panel-body");
+/* the list's own toolbar (Nirav, 2026-10-23): a search and the Fix / Question pill at the top of the list, not in the
+   head. It scrolls with the cards, slides away as the list scrolls down and comes back the moment it scrolls up. One
+   element for the life of the drawer, so a redraw never takes the focus or the half-typed words from the search. */
+const tools = document.createElement("div");
+tools.className = "panel-tools";
+tools.innerHTML = `<label class="pt-search glass"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input type="search" placeholder="Search" aria-label="Search comments"><button type="button" class="pt-clear" aria-label="Clear the search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></label><span class="type-pick glass" role="group" aria-label="Type"></span><span class="scope-tip pt-tip">Search <kbd>/</kbd></span>`;
+const toolsIn = tools.querySelector("input");
+let toolsT = 0;
+toolsIn.addEventListener("input", () => {
+  clearTimeout(toolsT);
+  toolsT = setTimeout(() => {
+    state.q = toolsIn.value.trim();
+    tools.classList.toggle("has-q", !!state.q);
+    renderPanel();
+  }, 140);
+});
+/* Esc: the first clears what is typed, the next one closes the search back to its circle (the drawer stays) */
+toolsIn.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  e.stopPropagation();
+  e.preventDefault();
+  if (toolsIn.value) {
+    toolsIn.value = "";
+    state.q = "";
+    tools.classList.remove("has-q");
+    renderPanel();
+  } else toolsIn.blur();
+});
+tools.querySelector(".pt-clear").addEventListener("click", () => {
+  toolsIn.value = "";
+  state.q = "";
+  tools.classList.remove("has-q");
+  toolsIn.focus();
+  renderPanel();
+});
+/* the group choice is drawn with the head (renderPanel); kept as a name for the persona code */
+function renderGroupPick() {}
+/* clears the list but keeps the toolbar where it is */
+function clearBody() {
+  for (const ch of [...panelBody.childNodes]) if (ch !== tools) ch.remove();
+  if (tools.parentNode !== panel) panel.appendChild(tools);
+}
+/* a comment matches the search by its words, its number, its page or place, or a person on it */
+function matchesQ(c, q) {
+  if (!q) return true;
+  const hay = [c.text, `#${c.n}`, String(c.n), c.pageTitle, c.route, c.context, c.assignee, c.doneBy, c.approvedBy, c.by, c.note?.text].filter(Boolean).join(" \n ").toLowerCase();
+  return q.toLowerCase().split(/\s+/).every((w) => hay.includes(w));
+}
 const shotUrl = (c) => c.localShot || c.urls?.shot || `/__review/shot/${c.shot}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`;
 /* THUMBNAILS (2026-10-21): the list shows a small JPEG (720 wide), the full PNG is fetched only for the lightbox and
    the copies. Made in the browser at save time; older comments get theirs the first time the list shows them. */
@@ -2125,7 +2441,7 @@ function refreshCard(c, animate = false) {
     if (lbl) lbl.textContent = sevLabel;
     else sev.textContent = sevLabel;
   }
-  const rail = c.severity === "must" || c.severity === "should";
+  const rail = c.severity === "question"; // the exception carries the mark (Nirav, 2026-10-23: most comments are fixes)
   card.classList.toggle("card-rail", rail);
   card.classList.toggle("card-rail-right", rail);
   if (rail) card.dataset.k = c.severity;
@@ -2137,7 +2453,7 @@ function refreshCard(c, animate = false) {
     st.innerHTML = statusHtml(c);
   };
   const buttons = () => {
-    if (acts && !c.pending) acts.innerHTML = `${statusActions(c)}<button class="card-rm">Remove</button>`;
+    if (acts && !c.pending) acts.innerHTML = actsHtml(c);
   };
   if (!st || state.asking?.id === c.id) {
     /* the box is in the foot: the words are kept in state and shown when it closes */
@@ -2153,7 +2469,7 @@ function refreshCard(c, animate = false) {
     if (!note) {
       note = document.createElement("div");
       note.className = "card-note";
-      card.appendChild(note);
+      card.insertBefore(note, card.querySelector(".card-meta")); // above the hover strip, which stays the card's last line
     }
     note.innerHTML = noteHtml(c);
   } else note?.remove();
@@ -2198,6 +2514,29 @@ let scopeAway = null; // the scope menu's outside-click listener, one at a time
    list, fixed) | { kind: "here" } ("This page": whatever page the app is on when the list is drawn) */
 const scopeNow = () => (state.scope.kind === "here" ? { kind: "route", route: location.pathname, title: pageTitle(), here: true } : state.scope);
 /* the foot's buttons for where a comment stands: the next step first, the way back second */
+/* the card's actions (Nirav, 2026-10-23: one button, the rest in a menu): the next step as the only button, then ⋯
+   with the other moves, the type change and Remove */
+function actsHtml(c) {
+  const all = statusActions(c).match(/<button[^>]*>[^<]*<\/button>/g) || [];
+  const main = all.find((x) => !/ alt"/.test(x)) || all[0] || "";
+  /* the product's popover (Nirav, 2026-10-23): an icon before every item */
+  const I = (d) => `<svg class="mi-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ICO = {
+    approved: I('<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>'),
+    open: I('<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+    progress: I('<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+    approval: I('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>'),
+    fix: I('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-.4-.4-2.1z"/>'),
+    question: I('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17h.01"/>'),
+    remove: I('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
+  };
+  const rest = all.filter((x) => x !== main).map((x) => x.replace('class="card-ok card-st alt"', 'class="card-st card-mi"').replace(/data-to="(\w+)">/, (m, to) => `data-to="${to}">${ICO[to] || ""}`));
+  const other = SEVERITIES.find(([k]) => k !== c.severity);
+  /* in groups, a rule between them: where it goes, what it is, and Remove on its own */
+  const groups = [rest.join(""), other ? `<button class="card-type card-mi" data-k="${other[0]}">${ICO[other[0]]}Make it a ${esc(other[1].toLowerCase())}</button>` : "", `<button class="card-rm card-mi">${ICO.remove}<span class="mi-l">Remove</span></button>`].filter(Boolean);
+  const items = groups.join(`<span class="card-menu-sep" role="separator"></span>`);
+  return `${main}<span class="card-more-wrap"><button class="card-more" aria-label="More" aria-haspopup="menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button><span class="card-menu" role="menu">${items}</span></span>`;
+}
 function statusActions(c) {
   const b = (to, label, alt) => `<button class="card-ok card-st${alt ? " alt" : ""}" data-to="${to}">${label}</button>`;
   if (c.status === "progress") return b("approval", "Done") + b("open", "Put back", true);
@@ -2213,9 +2552,58 @@ function personHtml(c, name) {
   const initial = esc(String(name).trim()[0].toUpperCase());
   return url ? `<img class="av" src="${esc(url)}" alt="" data-i="${initial}">${esc(name)}` : `<span class="av av-i">${initial}</span>${esc(name)}`;
 }
+/* how long ago, short: "just now", "5 min ago", "3 h ago", "yesterday", "4 days ago", then the date */
+function agoText(ts) {
+  if (!ts) return "";
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.round(h / 24);
+  if (d === 1) return "yesterday";
+  if (d < 7) return `${d} days ago`;
+  return new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+/* who added it and when, under the comment (Nirav, 2026-10-23): their picture and name ("You" for your own), then the
+   time; comments from before sign-in carry no author and show the time alone */
+function byHtml(c) {
+  const when = agoText(c.ts);
+  const whenHtml = when ? `<span class="by-when" title="${esc(new Date(c.ts).toLocaleString())}">${esc(when)}</span>` : "";
+  if (!c.by) return whenHtml;
+  const statusWho = c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : c.status === "approved" ? c.approvedBy : null;
+  const sameFace = (!!statusWho && statusWho === c.by) || (!!c.note?.text && c.note.by === c.by); // already on the status line or the note: the name only here
+  const mine = !!state.me && (c.by === state.me || c.by.split(/\s+/)[0] === state.me); // "Nirav Bhatt" from before the first-name list is still you
+  const full = personHtml(c, c.by), named = esc(c.by);
+  const person = (sameFace ? "" : full.slice(0, full.length - named.length)) + (mine ? "You" : named); // the picture (unless the status line shows it), then the name or "You"
+  return `<span class="by-who${mine ? " mine" : ""}">${person}</span>${whenHtml ? `<span class="by-sep">·</span>${whenHtml}` : ""}`;
+}
+/* the same on the picture, at its top-left, mirroring the type marker on the right (Nirav, 2026-10-23): the face at rest,
+   the name and the time unfolding under the pointer; a comment with no author shows a clock */
+function byPicHtml(c) {
+  const when = agoText(c.ts);
+  const mine = !!c.by && !!state.me && (c.by === state.me || c.by.split(/\s+/)[0] === state.me);
+  const name = c.by ? (mine ? "You" : c.by) : "";
+  const url = c.by && c.avatars && c.avatars[c.by];
+  const face = c.by ? (url ? `<img class="av" src="${esc(url)}" alt="" data-i="${esc(c.by.trim()[0].toUpperCase())}">` : `<span class="av av-i">${esc(c.by.trim()[0].toUpperCase())}</span>`) : `<svg class="by-clock" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+  const words = [name, when].filter(Boolean).join(" · ");
+  return `<span class="card-by-pic" title="${esc(c.ts ? new Date(c.ts).toLocaleString() : "")}">${face}<span class="lbl">${esc(words)}</span></span>`;
+}
 /* a picture that fails to load becomes the initial (no inline handlers: a page's CSP may forbid them) */
 root.addEventListener("error", (e) => {
   const img = e.target;
+  /* GitHub's picture server misses now and then: try twice more (1 s, then 4 s) before settling for the initial, so a
+     redraw at a slow moment does not leave letters where faces were (Nirav's "avatars turn into initials" bug) */
+  if (img?.classList?.contains("av") && img.tagName === "IMG" && (Number(img.dataset.tries) || 0) < 2) {
+    const tries = (Number(img.dataset.tries) || 0) + 1;
+    img.dataset.tries = String(tries);
+    const src = img.getAttribute("src");
+    setTimeout(() => {
+      if (!img.isConnected) return;
+      img.src = src + (src.includes("?") ? "&" : "?") + "r=" + tries;
+    }, tries === 1 ? 1000 : 4000);
+    return;
+  }
   if (img?.classList?.contains("av") && img.tagName === "IMG") {
     const sp = document.createElement("span");
     sp.className = "av av-i";
@@ -2223,16 +2611,42 @@ root.addEventListener("error", (e) => {
     img.replaceWith(sp);
   }
 }, true);
+/* the status as a sentence with the person's face (Nirav, 2026-10-23): "Pranjal is working on it", "You sent it for
+   approval", "Approved by Nirav", "New, waiting for someone to pick it up"; the status words keep the status colour,
+   the rest is in the quiet ink */
 function statusHtml(c) {
   const who = c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : c.status === "approved" ? c.approvedBy : null;
-  const label = c.status === "progress" ? STATUS.progress : c.status === "approval" ? STATUS.approval : c.status === "approved" ? STATUS.approved : "";
-  if (!label) return "";
-  return who ? `${esc(label)} · ${personHtml(c, who)}` : esc(label);
+  const mine = !!who && !!state.me && (who === state.me || who.split(/\s+/)[0] === state.me);
+  const face = (name) => {
+    const full = personHtml(c, name), named = esc(name);
+    return full.slice(0, full.length - named.length);
+  };
+  const k = (t) => `<b class="st-k">${esc(t)}</b>`;
+  const person = who ? `${face(who)}<span class="st-who">${mine ? "You" : esc(who)}</span>` : "";
+  const line = (h) => `<span class="st-s">${h}</span>`; // one inline run, so the spaces between the words stay
+  if (c.status === "open") return line(`${k("New")}<span class="st-rest">, waiting for someone to pick it up</span>`);
+  if (c.status === "progress") return who ? line(`${person}<span class="st-rest">${mine ? " are" : " is"}</span> ${k("working on it")}`) : k("In progress");
+  if (c.status === "approval") return who ? line(`${person}<span class="st-rest"> sent it</span> ${k("for approval")}`) : k("Waiting for approval");
+  if (c.status === "approved") return who ? line(`${k("Approved")}<span class="st-rest"> by</span> ${person}`) : k("Approved");
+  return "";
 }
 function noteHtml(c) {
   if (!c.note?.text) return "";
-  const what = c.note.from === "approved" ? "Reopened" : c.note.to === "open" ? "Put back" : "Sent back";
-  return `${esc(what)}${c.note.by ? ` · ${personHtml(c, c.note.by)}` : ""}: ${esc(c.note.text)}`;
+  /* a sentence and the words (Nirav, 2026-10-23): "Nirav sent it back", then what they said on its own line */
+  const verb = c.note.from === "approved" ? "reopened it" : c.note.to === "open" ? "put it back" : "sent it back";
+  const by = c.note.by;
+  const mine = !!by && !!state.me && (by === state.me || by.split(/\s+/)[0] === state.me);
+  /* one face per person per card (Nirav, 2026-10-23): the note shows its writer's face unless the status line already
+     shows that same person */
+  const statusWho = c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : c.status === "approved" ? c.approvedBy : null;
+  let face = "";
+  if (by && by !== statusWho) {
+    const full = personHtml(c, by), named = esc(by);
+    face = full.slice(0, full.length - named.length);
+  }
+  const who = by ? `${face}<b>${mine ? "You" : esc(by)}</b> ` : "";
+  const head = by ? `${who}${esc(verb)}` : esc(verb[0].toUpperCase() + verb.slice(1));
+  return `<span class="nt-head">${head}:</span> <span class="nt-text">“${esc(c.note.text)}”</span>`; // one line; long words wrap under
 }
 function statusLine(c) {
   if (c.status === "progress") return `${STATUS.progress}${c.assignee ? ` · ${c.assignee}` : ""}`;
@@ -2320,7 +2734,7 @@ window.addEventListener("pointerdown", (e) => {
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
 /* the foot's normal content: where, the status chip, the actions */
 function footHtml(c) {
-  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${c.status}">${statusHtml(c)}</span>${c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${statusActions(c)}<button class="card-rm">Remove</button></span>`}`;
+  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${c.status}">${statusHtml(c)}</span>${c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${actsHtml(c)}</span>`}`;
 }
 /* the note under the foot, added, changed or removed to match the comment */
 function settle(card, c) {
@@ -2329,7 +2743,7 @@ function settle(card, c) {
     if (!note) {
       note = document.createElement("div");
       note.className = "card-note";
-      card.appendChild(note);
+      card.insertBefore(note, card.querySelector(".card-meta")); // above the hover strip
     }
     note.innerHTML = noteHtml(c);
   } else note?.remove();
@@ -2339,12 +2753,90 @@ function renderPanel() {
   if (renderPanel.skipWhileMenu && $(".scope-menu")) return; // a background refresh never rebuilds an open menu
   if (state.asking) state.asking.focused = !!root.activeElement?.classList?.contains("note-in"); // before the rebuild takes it
   const scrollWas = panelBody.scrollTop;
+  const focusWas = root.activeElement?.classList?.contains("card") ? root.activeElement.dataset.id : null;
   const view = PAGE_MODE ? window.__reviewView || "open" : "open";
   for (const b of $(".panel-view").querySelectorAll("button")) {
     b.setAttribute("aria-pressed", b.dataset.v === view ? "true" : "false");
     b.querySelector("b").textContent = b.dataset.v === "open" ? state.comments.length : state.done.length;
   }
   const pool = view === "resolved" ? state.done : state.comments;
+  /* the status filter (Nirav, 2026-10-23), in the place and the look of the old tag pill: All, New, In progress, For
+     approval, Approved, each a coloured dot and its count, one picked at a time; the counts follow the scope */
+  {
+    const inScopeT = (c) => { const s2 = scopeNow(); const r = (c.route || "").split("?")[0]; const g = (c.module && c.module.group) || moduleOf(c.route).group || "Other"; return s2.kind === "route" ? r === s2.route : s2.kind === "group" ? g === s2.group : true; };
+    const live = state.comments.filter(inScopeT), done = state.done.filter(inScopeT);
+    const cnt = (k) => live.filter((c) => c.status === k).length;
+    const ST = { open: ["open", "New", cnt("open")], progress: ["progress", "In progress", cnt("progress")], approval: ["approval", "For approval", cnt("approval")] };
+    const approver = state.persona === "approver";
+    const TABS = [["all", "All", live.length], ...(approver ? [ST.approval, ST.progress, ST.open] : [ST.open, ST.progress, ST.approval])];
+    const quietK = approver ? "open" : "approval"; // the one this person rarely needs: last, and quieter
+    const filt = $(".panel-filter");
+    filt.innerHTML = "";
+    const pillS = document.createElement("div");
+    pillS.className = "scope-switch tag-switch status-switch";
+    pillS.setAttribute("role", "group");
+    pillS.setAttribute("aria-label", "Status");
+    for (const [k, label, n] of TABS) {
+      const t = document.createElement("button");
+      t.type = "button";
+      t.className = "side tag";
+      t.dataset.s = k;
+      const sel = state.status || new Set();
+      t.setAttribute("aria-pressed", String(k === "all" ? !sel.size : sel.has(k)));
+      if (k === quietK) t.classList.add("quiet");
+      t.setAttribute("aria-label", `${label} · ${n}`);
+      t.innerHTML = `<span class="dot"></span><b>${n}</b><span class="scope-tip"></span>`;
+      t.querySelector(".scope-tip").textContent = k === "all" ? `Everything not yet approved · ${n}` : `${label} · ${n}`;
+      t.addEventListener("click", () => {
+        /* several at once: a click adds or drops one; All clears them; the choice is remembered for this person */
+        const set = new Set(state.status || []);
+        if (k === "all") set.clear();
+        else if (set.has(k)) set.delete(k);
+        else set.add(k);
+        state.status = set;
+        try { localStorage.setItem(`review.statuses.${state.persona}`, JSON.stringify([...set])); } catch {}
+        panelBody.scrollTop = 0;
+        renderPanel();
+      });
+      pillS.appendChild(t);
+    }
+    if (view === "open") {
+      /* how the list is grouped (Nirav, 2026-10-23): None, Status, Person, folded to the picked one like the theme
+         switch; the other two slide out under the pointer */
+      const GI = {
+        none: '<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/>',
+        status: '<rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/>',
+        person: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/>',
+      };
+      const GL = { none: "No groups", status: "Group by status", person: "Group by person" };
+      /* one pill (Nirav, 2026-10-23): the group choice is its first part, a thin rule, then the statuses */
+      const gs = document.createElement("span");
+      gs.className = "group-switch";
+      gs.setAttribute("role", "group");
+      gs.setAttribute("aria-label", "Group the list");
+      for (const k of ["none", "status", "person"]) {
+        const gb = document.createElement("button");
+        gb.type = "button";
+        gb.className = "side";
+        gb.dataset.g = k;
+        gb.setAttribute("aria-pressed", String((state.groupBy || "none") === k));
+        gb.setAttribute("aria-label", GL[k]);
+        gb.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GI[k]}</svg><span class="scope-tip">${GL[k]}</span>`;
+        gb.addEventListener("click", () => {
+          if ((state.groupBy || "none") === k) return;
+          state.groupBy = k;
+          try { localStorage.setItem(`review.group.${state.persona}`, k); } catch {}
+          panelBody.scrollTop = 0;
+          renderPanel();
+        });
+        gs.appendChild(gb);
+      }
+      const rule = document.createElement("span");
+      rule.className = "gs-rule";
+      pillS.prepend(gs, rule);
+      filt.appendChild(pillS);
+    }
+  }
   const here = location.pathname;
   const groupOf = (c) => (c.module && c.module.group) || moduleOf(c.route).group || "Other";
   const routeOf = (c) => (c.route || "").split("?")[0];
@@ -2502,93 +2994,134 @@ function renderPanel() {
   });
   }
   if (wasOpen && crumb) openMenu();
-  /* the tags: a pill like the scope's, one side per tag with its colour dot and count; pressed sides narrow the list,
-     several at once add up, none pressed means every tag */
-  const counts = {};
-  for (const c of scoped) counts[c.severity] = (counts[c.severity] || 0) + 1;
-  const filt = $(".panel-filter");
-  filt.innerHTML = "";
-
-  const tagPill = document.createElement("div");
-  tagPill.className = "scope-switch tag-switch";
-  tagPill.setAttribute("role", "group");
-  tagPill.setAttribute("aria-label", "Tags");
-  if (state.filter.size) tagPill.dataset.narrowed = "";
-  /* All first: a hollow dot and the whole count, pressed while no tag is; pressing it releases every tag */
+  /* no tag filter any more (Nirav, 2026-10-23: the status is what people sort by); the tag still shows on each card */
+  state.filter.clear();
+  const sel = state.status || new Set();
+  const inTab = view === "resolved" ? scoped : scoped.filter((c) => !sel.size || sel.has(c.status));
+  /* the type pill in the list's toolbar: All, Fix, Question, with their counts in the current status and scope */
   {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "side tag";
-    b.dataset.k = "all";
-    b.innerHTML = `<span class="dot"></span><b>${scoped.length}</b><span class="scope-tip"></span>`;
-    b.querySelector(".scope-tip").textContent = `All tags · ${scoped.length}`;
-    b.setAttribute("aria-label", `All tags · ${scoped.length}`);
-    b.setAttribute("aria-pressed", state.filter.size ? "false" : "true");
-    b.addEventListener("click", () => {
-      state.filter.clear();
-      renderPanel();
-    });
-    tagPill.appendChild(b);
-  }
-  for (const [k, label] of SEVERITIES) {
-    const n = counts[k] || 0;
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "side tag";
-    b.dataset.k = k;
-    b.innerHTML = `<span class="dot"></span><b>${n}</b><span class="scope-tip"></span>`;
-    b.querySelector(".scope-tip").textContent = `${label} · ${n}`;
-    b.setAttribute("aria-label", `${label} · ${n}`);
-    b.setAttribute("aria-pressed", state.filter.has(k) ? "true" : "false");
-    /* nothing to show: not a choice. Disabled, and released if it was pressed before the scope emptied it */
-    if (!n) {
-      b.disabled = true;
-      state.filter.delete(k);
-      b.setAttribute("aria-pressed", "false");
+    const tp = tools.querySelector(".type-pick");
+    tp.innerHTML = "";
+    const n = { all: inTab.length, fix: inTab.filter((c) => c.severity === "fix").length, question: inTab.filter((c) => c.severity === "question").length };
+    if (state.type !== "all" && !n[state.type]) state.type = "all";
+    /* not a switch (Nirav, 2026-10-23): two quiet words with their dots at the end of the search field; a click shows
+       only that type, a second click shows both again */
+    for (const [k, label] of SEVERITIES) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tp";
+      b.dataset.k = k;
+      b.setAttribute("aria-pressed", String(state.type === k));
+      /* icons, not coloured dots (Nirav, 2026-10-23): red already means For approval up top; the picked one takes its colour */
+      const ICON = { fix: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-.4-.4-2.1z"/>', question: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17h.01"/>' };
+      b.innerHTML = `<span class="w"></span><b>${n[k]}</b>`; // words only (Nirav, 2026-10-23); ICON kept for a later try
+      b.querySelector(".w").textContent = label;
+      b.setAttribute("aria-label", state.type === k ? `Showing ${label.toLowerCase()} only, click to show all` : `Only ${label.toLowerCase()}`); // no native title: the hover state says it
+      if (!n[k]) b.disabled = true;
+      b.addEventListener("click", (e) => {
+        e.preventDefault();
+        state.type = state.type === k ? "all" : k;
+        renderPanel();
+      });
+      tp.appendChild(b);
     }
-    b.addEventListener("click", () => {
-      if (state.filter.has(k)) state.filter.delete(k);
-      else state.filter.add(k);
-      renderPanel();
-    });
-    tagPill.appendChild(b);
   }
-  filt.appendChild(tagPill);
-  panelBody.innerHTML = "";
-  const shown = scoped.filter((c) => !state.filter.size || state.filter.has(c.severity));
+  clearBody();
+  const shown = inTab.filter((c) => (state.type === "all" || c.severity === state.type) && matchesQ(c, state.q));
   if (!shown.length) {
-    panelBody.innerHTML = `<div class="panel-empty">${pool.length ? (scoped.length ? "Nothing with this tag here." : "Nothing here yet.") : view === "resolved" ? "Nothing approved yet." : `No comments yet.<br>Hold ${MOD} and click anything.`}</div>`;
-    if (view === "open" && state.done.length) panelBody.appendChild(endLine());
+    const EMPTY = { open: "Nothing new.", progress: "Nothing in progress.", approval: "Nothing waiting for approval." };
+    panelBody.insertAdjacentHTML("beforeend", `<div class="panel-empty">${state.q || state.type !== "all" ? (state.q ? "No comments match the search." : "None of this type here.") : pool.length ? (scoped.length && sel.size === 1 && EMPTY[[...sel][0]] ? EMPTY[[...sel][0]] : scoped.length && sel.size ? "Nothing in these statuses." : "Nothing here yet.") : view === "resolved" ? "Nothing approved yet." : `No comments yet.<br>Hold ${MOD} and click anything.`}</div>`);
+    if (view === "open" && !sel.size && state.done.length) panelBody.appendChild(endLine());
     return;
   }
-  for (const c of shown) {
+  /* GROUPS (Nirav, 2026-10-23): the list grouped by status, person, page or type, or not at all (the Group capsule in
+     the bottom bar; the approver starts on status, the team on none). Status puts what waits for approval first and
+     splits In progress by the person on it. Each heading folds its group away and back; folds are remembered. */
+  let list = shown, heads = new Map();
+  const groupBy = view === "open" && ["status", "person"].includes(state.groupBy) ? state.groupBy : "none";
+  if (groupBy !== "none" && shown.length) {
+    const SHAPE = (k) => `<span class="gh-shape" data-s="${k}"></span>`;
+    const face = (c, who) => { const full = personHtml(c, who), named = esc(who); return full.slice(0, full.length - named.length); };
+    const isMe = (who) => !!state.me && !!who && (who === state.me || who.split(/\s+/)[0] === state.me);
+    const groups = []; // { key, label, items }
+    const add = (key, label, items) => items.length && groups.push({ key, label, items });
+    if (groupBy === "status") {
+      const by = (k) => shown.filter((c) => c.status === k);
+      const order = state.persona === "approver" ? ["approval", "progress", "open"] : ["open", "progress", "approval"];
+      for (const k of order) {
+        const cs = by(k);
+        if (k === "progress") {
+          const ppl = new Map();
+          for (const c of cs) { const w = c.assignee || "Someone"; if (!ppl.has(w)) ppl.set(w, []); ppl.get(w).push(c); }
+          for (const [w, xs] of ppl) add(`progress:${w}`, `${SHAPE("progress")}${face(xs[0], w)}${isMe(w) ? "You" : esc(w)} · working on ${xs.length}`, xs);
+        } else add(k, `${SHAPE(k)}${k === "approval" ? (state.persona === "approver" ? "Waiting for you" : "For approval") : "New"} · ${cs.length}`, cs);
+      }
+    } else if (groupBy === "person") {
+      const ppl = new Map();
+      for (const c of shown) {
+        const w = c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : null;
+        const k = w || "";
+        if (!ppl.has(k)) ppl.set(k, []);
+        ppl.get(k).push(c);
+      }
+      for (const [w, xs] of [...ppl].sort((x, y) => (x[0] === "" ? 1 : y[0] === "" ? -1 : x[0].localeCompare(y[0]))))
+        add(`person:${w}`, w ? `${face(xs[0], w)}${isMe(w) ? "You" : esc(w)} · ${xs.length}` : `Not picked up · ${xs.length}`, xs);
+    }
+    list = [];
+    for (const g of groups) {
+      heads.set(g.items[0].id, g);
+      list.push(...g.items);
+    }
+  }
+  const folded = state.folded || new Set();
+  let foldedNow = false;
+  let into = panelBody; // each group in its own section, so its heading stays pinned while its cards scroll by
+  for (const c of list) {
+    if (heads.has(c.id)) {
+      const g = heads.get(c.id);
+      foldedNow = folded.has(g.key);
+      into = document.createElement("section");
+      into.className = "list-sec";
+      panelBody.appendChild(into);
+      into.insertAdjacentHTML("beforeend", `<button type="button" class="list-group${foldedNow ? " folded" : ""}" data-g="${esc(g.key)}" aria-expanded="${!foldedNow}">${g.label}<svg class="lg-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`);
+    }
+    if (foldedNow) continue;
     /* THE CARD (Nirav, 2026-10-19, picked from seven trials): a soft fill, no border; the number outside in the
        left gutter; the note first, 500, tight; the tag riding on the picture's top-right; a corner accent in the
        tag's colour on the top-right for Must fix and Should fix only; the foot: where it was, and Remove */
     const onPage = (c.route || "").split("?")[0] === here;
     const card = document.createElement("div");
     card.className = "card card-c card-fill card-medium" + (onPage ? " here" : "") + (c.resolved ? " resolved" : "") + (state.selected.has(c.id) ? " picked" : "") + (c.pending ? (c.failed ? " failed" : " sending") : "") + (state.unread.has(c.id) ? " unread" : "");
-    if (c.severity === "must" || c.severity === "should") {
+    if (c.severity === "question") { // the corner mark on questions only: most comments are fixes
       card.classList.add("card-rail", "card-rail-right");
       card.dataset.k = c.severity;
     }
     card.dataset.id = c.id;
+    card.tabIndex = 0; // the keyboard walks the cards (↑ ↓, Space selects)
     const sevLabel = SEVERITIES.find(([k]) => k === c.severity)?.[1] || c.severity;
     card.innerHTML = `
       <div class="card-line"><span class="card-n out${onPage ? "" : " away"}" title="Show it on the page">${c.n}</span><div class="card-text" title="Click to edit"></div></div>
+      ${"" /* TRY 2026-10-23 (hover strip): was c.shot ? "" : the card-by line */}
       <button class="card-pick" aria-label="Select for copying" aria-pressed="${state.selected.has(c.id)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></button>
-      ${c.shot ? `<div class="card-pic"><img class="card-shot" data-id="${c.id}" src="${thumbUrl(c)}" alt="" title="Open the picture"><button class="card-sev on-pic" data-k="${c.severity}" title="Click to change" aria-label="${sevLabel}"><span class="dot"></span><span class="lbl">${sevLabel}</span></button></div>` : `<button class="card-sev" data-k="${c.severity}" title="Click to change">${sevLabel}</button>`}
-      <div class="card-foot">${footHtml(c)}</div>${c.note?.text ? `<div class="card-note"></div>` : ""}`;
+      ${c.shot ? `<div class="card-pic"><img class="card-shot" data-id="${c.id}" src="${thumbUrl(c)}" alt=""></div>` /* TRY 2026-10-23: byPicHtml(c) was here */ : ""}
+      <div class="card-foot">${footHtml(c)}</div>${c.note?.text ? `<div class="card-note"></div>` : ""}
+      <div class="card-meta"><div class="card-meta-in"><span class="cm-by">${byHtml(c)}</span><span class="cm-where"></span></div></div>`;
     card.querySelector(".card-text").textContent = c.text;
+    card.querySelector(".cm-where").innerHTML = `<b class="cm-type" data-k="${c.severity}">${esc(sevLabel)}</b> · ${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}`;
     if (c.note?.text) card.querySelector(".card-note").innerHTML = noteHtml(c);
     if (c.shot && c.rect) card.querySelector(".card-pic").appendChild(liveBadge(c, card.querySelector(".card-shot")));
-    panelBody.appendChild(card);
+    into.appendChild(card);
     if (state.asking?.id === c.id) mountAsk(card, c); // the note box back, once the card is on the page
   }
-  if (view === "open" && state.done.length) panelBody.appendChild(endLine());
+  if (view === "open" && (!sel.size || state.persona === "approver") && state.done.length) panelBody.appendChild(endLine());
   if (PAGE_MODE && state.hub?.on) panelBody.appendChild(hubLine());
   if (scrollWas) panelBody.scrollTop = scrollWas; // a redraw is not a reason to move
+  /* a spacer at the very end that gives back exactly what a card's hover strip takes, so the list's height never
+     changes on hover; at the bottom of the list the scroll then has nothing to jump for (the last card shook) */
+  panelBody.insertAdjacentHTML("beforeend", `<div class="list-spacer" aria-hidden="true"></div>`);
   renderPickPill();
+  if (focusWas) panelBody.querySelector(`.card[data-id="${focusWas}"]`)?.focus({ preventScroll: true });
+  markPinned();
   watchUnread();
   backfillThumbs();
   /* opened from a pin: that card scrolled into view once and ringed for a moment (a refresh keeps the ring) */
@@ -2645,36 +3178,47 @@ function hubLine() {
   d.textContent = `Shared on the hub · ${state.hub.project}${u ? ` · pictures ${mb(u.bytes)}${u.total !== u.bytes ? ` (${mb(u.total)} with other projects)` : ""} of ${mb(u.limit)}, kept 14 days after approval` : ""}`;
   return d;
 }
+/* the end of the list (Nirav, 2026-10-23: simpler than a row of numbers): a check, how many are approved, and a link
+   to see them; on the page the link switches to the Approved tab */
 function endLine() {
   const d = document.createElement("div");
   d.className = "panel-end";
-  const nums = [...state.done].sort((a, b) => a.n - b.n).map((c) => `<span class="end-n" data-id="${c.id}" title="${(c.text || "").replace(/"/g, "&quot;")}">${c.n}</span>`).join("");
+  const n = state.done.length;
   const href = EXT ? `${EXT.listUrl}&view=resolved` : `/__review/?view=resolved${window.__reviewSession ? `&session=${window.__reviewSession}` : ""}`;
-  d.innerHTML = `Approved ${nums} · <a href="${href}" target="_blank">See them on the page</a>`;
-  if (EXT && !PAGE_MODE) d.querySelector("a").addEventListener("click", (e) => {
-    e.preventDefault();
-    openExtPage(href);
-  });
-  if (PAGE_MODE) {
-    d.innerHTML = `Approved ${nums} · <a href="#" class="to-resolved">Show</a>`;
-    d.querySelector("a").addEventListener("click", (e) => {
+  d.innerHTML = `<span class="end-ok" aria-hidden="true"><svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.3l2.2 2.2 4.6-4.8"/></svg></span><span><b>${n}</b> <span class="end-word">approved</span></span><a href="${PAGE_MODE ? "#" : href}" target="_blank">View</a>`;
+  d.querySelector("a").addEventListener("click", (e) => {
+    if (PAGE_MODE) {
       e.preventDefault();
       window.__reviewView = "resolved";
+      panelBody.scrollTop = 0;
       renderPanel();
-    });
-  }
-  /* a number opens the page on that comment's Resolved tab */
-  for (const el of d.querySelectorAll(".end-n"))
-    el.addEventListener("click", () => {
-      if (PAGE_MODE) {
-        window.__reviewView = "resolved";
-        renderPanel();
-      } else window.open(href, "_blank");
-    });
+    } else if (EXT) {
+      e.preventDefault();
+      openExtPage(href);
+    }
+  });
   return d;
 }
 for (const t of ["wheel", "touchmove"]) panelBody.addEventListener(t, () => (state.spot = null), { passive: true });
+let toolsLast = 0, toolsRest = 0;
+/* a group heading pinned at the top grows to the drawer's full width, and eases back once it lets go (Nirav, 2026-10-24) */
+function markPinned() {
+  const top = panelBody.getBoundingClientRect().top;
+  for (const h of panelBody.querySelectorAll(".list-group")) {
+    const sec = h.parentElement.getBoundingClientRect();
+    h.classList.toggle("pinned", sec.top < top - 1 && sec.bottom > top + h.offsetHeight);
+  }
+  panel.toggleAttribute("data-pinned", !!panelBody.querySelector(".list-group.pinned"));
+}
 panelBody.addEventListener("scroll", () => {
+  markPinned();
+  const y = panelBody.scrollTop;
+  toolsLast = y;
+  /* the bar (Nirav, 2026-10-23): slips down and fades while the list is scrolling, back a moment after it stops;
+     never while the search is in use */
+  if (!(root.activeElement === toolsIn || state.q)) tools.classList.add("away");
+  clearTimeout(toolsRest);
+  toolsRest = setTimeout(() => tools.classList.remove("away"), 420);
   if (panelBody.scrollTop > 4) panel.setAttribute("data-scrolled", "");
   else panel.removeAttribute("data-scrolled");
 });
@@ -2700,6 +3244,24 @@ for (const b of $(".panel-view").querySelectorAll("button"))
   });
 $(".panel-veil").addEventListener("click", () => openPanel(false));
 panelBody.addEventListener("click", async (e) => {
+  const head = e.target.closest(".list-group");
+  if (head) {
+    const set = new Set(state.folded || []);
+    const k = head.dataset.g;
+    if (set.has(k)) set.delete(k);
+    else set.add(k);
+    state.folded = set;
+    try { localStorage.setItem(`review.folded.${state.persona}`, JSON.stringify([...set])); } catch {}
+    /* folding a heading that was pinned (scrolled past its own start): after the redraw the list starts at that heading,
+       so the next group's first comment comes right below it, not halfway down (Nirav, 2026-10-24) */
+    const pinned = head.parentElement.getBoundingClientRect().top < panelBody.getBoundingClientRect().top;
+    renderPanel();
+    if (pinned) {
+      const again = [...panelBody.querySelectorAll(".list-group")].find((h) => h.dataset.g === k);
+      if (again) panelBody.scrollTop = Math.max(0, again.parentElement.offsetTop - panelBody.offsetTop - 8);
+    }
+    return;
+  }
   const card = e.target.closest(".card");
   if (!card) return;
   const c = state.comments.find((x) => x.id === card.dataset.id) || state.done.find((x) => x.id === card.dataset.id);
@@ -2718,23 +3280,37 @@ panelBody.addEventListener("click", async (e) => {
     renderPanel();
     return;
   }
-  if (e.target.classList.contains("card-st")) {
-    const to = e.target.dataset.to;
+  const btn = e.target.closest("button"); // a click on an item's icon still means its button
+  if (btn?.classList.contains("card-st")) {
+    const to = btn.dataset.to;
+    card.querySelector(".card-more-wrap.open")?.classList.remove("open");
+    card.classList.remove("menu-open");
     const order = ["open", "progress", "approval", "approved"];
-    if (order.indexOf(to) < order.indexOf(c.status)) return askNote(card, c, to, e.target.textContent);
-    await applyUpdate({ id: c.id, status: to }, e.target);
+    if (order.indexOf(to) < order.indexOf(c.status)) return askNote(card, c, to, btn.textContent.trim());
+    await applyUpdate({ id: c.id, status: to }, btn);
     toast(`#${c.n} ${statusToast[to]}`);
     return;
   }
+  if (e.target.closest(".card-more")) {
+    const wrap = e.target.closest(".card-more-wrap");
+    const open = !wrap.classList.contains("open");
+    root.querySelectorAll(".card-more-wrap.open").forEach((w) => w.classList.remove("open"));
+    wrap.classList.toggle("open", open);
+    card.classList.toggle("menu-open", open);
+    return;
+  }
+  if (e.target.closest(".card-type")) {
+    const k = e.target.closest(".card-type").dataset.k;
+    card.querySelector(".card-more-wrap")?.classList.remove("open");
+    card.classList.remove("menu-open");
+    await applyUpdate({ id: c.id, severity: k });
+    return;
+  }
   if (e.target.closest(".card-pick")) {
-    /* in place, no rebuild: the pictures would reload for a tick */
-    const on = !state.selected.has(c.id);
-    if (on) state.selected.add(c.id);
-    else state.selected.delete(c.id);
-    card.classList.toggle("picked", on);
-    card.querySelector(".card-pick").setAttribute("aria-pressed", String(on));
-    renderPickPill();
-    refreshCopyLabels();
+    if (pickDrag.handled) return (pickDrag.handled = false); // the pointer already did it
+    if (e.shiftKey && pickDrag.anchor) return pickRange(pickDrag.anchor, c.id, true);
+    setPicked(card, !state.selected.has(c.id));
+    pickDrag.anchor = c.id;
     return;
   }
   if (e.target.classList.contains("card-shot")) {
@@ -2751,13 +3327,14 @@ panelBody.addEventListener("click", async (e) => {
     await applyUpdate({ id: c.id, severity: next });
     return;
   }
-  if (e.target.classList.contains("card-rm")) {
-    if (!e.target.classList.contains("sure")) {
-      e.target.classList.add("sure");
-      e.target.textContent = "Remove, sure?";
+  if (btn?.classList.contains("card-rm")) {
+    const lbl = btn.querySelector(".mi-l") || btn;
+    if (!btn.classList.contains("sure")) {
+      btn.classList.add("sure");
+      lbl.textContent = "Remove, sure?";
       setTimeout(() => {
-        e.target.classList.remove("sure");
-        e.target.textContent = "Remove";
+        btn.classList.remove("sure");
+        lbl.textContent = "Remove";
       }, 2500);
       return;
     }
@@ -2770,10 +3347,139 @@ $(".bar .k").textContent = `${MOD} + click to comment`;
   }
   if (e.target.classList.contains("card-text") && e.target.contentEditable !== "true") editInPlace(e.target, c, () => {});
 });
+/* SELECTING (Nirav, 2026-10-24): one click on the circle, Shift-click for a range, a drag across the circles to paint
+   many (starting on a picked card unpicks), and the keyboard: ↑ ↓ walk the cards, Space picks, Shift with an arrow
+   extends, ⌘A takes every card shown, Esc lets them all go. All in place: no rebuild, the pictures stay. */
+function setPicked(card, on) {
+  const id = card.dataset.id;
+  if (on) state.selected.add(id);
+  else state.selected.delete(id);
+  card.classList.toggle("picked", on);
+  card.querySelector(".card-pick")?.setAttribute("aria-pressed", String(on));
+  renderPickPill();
+  refreshCopyLabels();
+}
+const shownCards = () => [...panelBody.querySelectorAll(".card")];
+function pickRange(fromId, toId, on) {
+  const cards = shownCards();
+  const a = cards.findIndex((x) => x.dataset.id === fromId), b = cards.findIndex((x) => x.dataset.id === toId);
+  if (a < 0 || b < 0) return;
+  for (const card of cards.slice(Math.min(a, b), Math.max(a, b) + 1)) if (state.selected.has(card.dataset.id) !== on) setPicked(card, on);
+}
+const pickDrag = { on: false, mode: true, anchor: null, handled: false, y: 0, raf: 0 };
+panelBody.addEventListener("pointerdown", (e) => {
+  const pick = e.target.closest(".card-pick");
+  if (!pick || e.button !== 0 || e.shiftKey) return;
+  const card = pick.closest(".card");
+  e.preventDefault();
+  pickDrag.on = true;
+  pickDrag.mode = !state.selected.has(card.dataset.id);
+  pickDrag.anchor = card.dataset.id;
+  pickDrag.handled = true;
+  pickDrag.y = e.clientY;
+  setPicked(card, pickDrag.mode);
+  panel.classList.add("picking");
+  const edge = () => {
+    if (!pickDrag.on) return;
+    const r = panelBody.getBoundingClientRect();
+    const d = pickDrag.y < r.top + 48 ? -1 : pickDrag.y > r.bottom - 48 ? 1 : 0;
+    if (d) {
+      panelBody.scrollTop += d * 14;
+      paintAt(pickDrag.y);
+    }
+    pickDrag.raf = requestAnimationFrame(edge);
+  };
+  pickDrag.raf = requestAnimationFrame(edge);
+});
+function paintAt(y) {
+  for (const card of shownCards()) {
+    const r = card.getBoundingClientRect();
+    if (y >= r.top && y <= r.bottom) {
+      if (state.selected.has(card.dataset.id) !== pickDrag.mode) setPicked(card, pickDrag.mode);
+      break;
+    }
+  }
+}
+window.addEventListener("pointermove", (e) => {
+  if (!pickDrag.on) return;
+  pickDrag.y = e.clientY;
+  paintAt(e.clientY);
+}, true);
+window.addEventListener("pointerup", () => {
+  if (!pickDrag.on) return;
+  pickDrag.on = false;
+  cancelAnimationFrame(pickDrag.raf);
+  panel.classList.remove("picking");
+  setTimeout(() => (pickDrag.handled = false), 0);
+}, true);
+/* into the list straight away (Nirav, 2026-10-24): with the drawer open and the focus not yet in it, Tab lands on the first
+   card, ↓ on the first card in view and ↑ on the last one in view; a field being typed in keeps its keys */
+window.addEventListener("keydown", (e) => {
+  if (!panel.classList.contains("on") || state.off || lightbox.classList.contains("on") || $(".scope-menu")) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tab = e.key === "Tab" && !e.shiftKey, down = e.key === "ArrowDown", up = e.key === "ArrowUp";
+  if (!tab && !down && !up) return;
+  const act = root.activeElement;
+  if (e.composedPath().some((n) => n instanceof HTMLElement && (n.matches("input, textarea, select") || n.isContentEditable))) return;
+  if (act?.classList?.contains("card") || (act && panelBody.contains(act))) return; // the list's own keys take over
+  if (tab && act && panel.contains(act)) return; // already walking the head: Tab goes on as usual
+  const cards = shownCards();
+  if (!cards.length) return;
+  const r = panelBody.getBoundingClientRect();
+  const inView = cards.filter((c) => { const b = c.getBoundingClientRect(); return b.bottom > r.top + 8 && b.top < r.bottom - 60; });
+  const target = up ? (inView.at(-1) || cards.at(-1)) : (tab ? cards[0] : inView[0] || cards[0]);
+  e.preventDefault();
+  e.stopPropagation();
+  target.focus({ preventScroll: !tab });
+  if (tab) target.scrollIntoView({ block: "nearest" });
+}, true);
+panelBody.addEventListener("keydown", (e) => {
+  const card = e.target.classList?.contains("card") ? e.target : null;
+  const cards = shownCards();
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a" && (card || e.target === panelBody)) {
+    e.preventDefault();
+    for (const x of cards) if (!state.selected.has(x.dataset.id)) setPicked(x, true);
+    return;
+  }
+  if (e.key === "Escape" && state.selected.size && card) {
+    e.preventDefault();
+    e.stopPropagation();
+    for (const x of cards) if (state.selected.has(x.dataset.id)) setPicked(x, false);
+    state.selected.clear();
+    renderPickPill();
+    refreshCopyLabels();
+    return;
+  }
+  if (!card) return;
+  const i = cards.indexOf(card);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    const next = cards[i + (e.key === "ArrowDown" ? 1 : -1)];
+    if (!next) return;
+    if (e.shiftKey) {
+      if (!state.selected.has(card.dataset.id)) setPicked(card, true);
+      setPicked(next, true);
+    }
+    next.focus();
+    next.scrollIntoView({ block: "nearest" });
+  } else if (e.key === " " || e.key === "x") {
+    e.preventDefault();
+    setPicked(card, !state.selected.has(card.dataset.id));
+    pickDrag.anchor = card.dataset.id;
+  }
+}, true);
 /* keep the panel current when comments come and go (never rebuilding a menu that is open under the pointer) */
 const _load = loadComments;
 /* nobody is in the middle of something in the panel: a note being typed, a text edited, a "sure?" pending, a menu */
-const panelBusy = () => !!(state.asking || root.querySelector('[contenteditable="true"]') || $(".card-rm.sure") || $(".scope-menu") || state.pending);
+const panelBusy = () => !!(state.asking || root.querySelector('[contenteditable="true"]') || $(".card-rm.sure") || $(".scope-menu") || $(".card-more-wrap.open") || state.pending);
+/* a click anywhere else closes an open card menu */
+window.addEventListener("pointerdown", (e) => {
+  if (e.composedPath().some((n) => n.classList?.contains?.("card-more-wrap"))) return;
+  root.querySelectorAll(".card-more-wrap.open").forEach((w) => {
+    w.classList.remove("open");
+    w.closest(".card")?.classList.remove("menu-open");
+  });
+}, true);
 loadComments = async function () {
   const changed = await _load();
   if (changed && panelBusy()) state.stale = true; // drawn once the panel is free again
@@ -3067,6 +3773,17 @@ function stepLightbox(d) {
   const next = withPics[i + d];
   if (next) openLightbox(next.id);
 }
+/* the frame is as wide as the picture, the picture as big as the window allows (never above its own size): the
+   caption and the foot follow its width, not the other way round */
+function fitLightbox() {
+  const img = $(".lb-img");
+  if (!img.naturalWidth) return;
+  const maxW = innerWidth - 64, maxH = innerHeight - 48 - 42 - 36;
+  const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+  $(".lb-frame").style.width = `${Math.max(320, Math.round(img.naturalWidth * scale))}px`;
+}
+$(".lb-img").addEventListener("load", fitLightbox);
+addEventListener("resize", () => lightbox.classList.contains("on") && fitLightbox());
 $(".lb-close").addEventListener("click", closeLightbox);
 $(".lb-prev").addEventListener("click", () => stepLightbox(-1));
 $(".lb-next").addEventListener("click", () => stepLightbox(1));
@@ -3661,6 +4378,74 @@ if (PAGE_MODE && new URLSearchParams(location.search).get("inspect")) {
     box.querySelector(".sink").textContent = text.slice(0, 200);
   });
 }
+/* the theme: Auto follows the computer's setting (and changes with it), Light and Dark are kept for this site in
+   localStorage; the switch in the drawer's head goes Auto, Light, Dark */
+const THEMES = { auto: 1, light: 1, dark: 1 };
+const darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+let themePick = (() => { try { return localStorage.getItem("review.theme") || "auto"; } catch { return "auto"; } })();
+if (!THEMES[themePick]) themePick = "auto";
+let themingTimer = 0;
+function applyTheme(animate) {
+  const dark = themePick === "dark" || (themePick === "auto" && !!darkMq?.matches);
+  if (animate === true && host.getAttribute("data-theme") !== (dark ? "dark" : "light")) {
+    host.setAttribute("data-theming", "");
+    clearTimeout(themingTimer);
+    themingTimer = setTimeout(() => host.removeAttribute("data-theming"), 420);
+  }
+  host.setAttribute("data-theme", dark ? "dark" : "light");
+  root.querySelectorAll(".theme-switch .side").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.t === themePick)));
+  if (PAGE_MODE) {
+    if (animate === true) document.documentElement.style.transition = document.body.style.transition = "background-color .35s ease";
+    document.documentElement.style.background = dark ? "hsl(217.5 63.16% 7.45%)" : "";
+    document.body.style.background = dark ? "hsl(217.5 63.16% 7.45%)" : "";
+    document.documentElement.style.colorScheme = dark ? "dark" : "";
+  }
+}
+/* the change itself: where the browser can (View Transitions), it crossfades a picture of the old look into the new
+   one, so no text is repainted mid-fade and nothing moves; elsewhere the colours ease across */
+const reduceMq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+/* the ripple (Nirav, 2026-10-23): the new theme spreads as a circle from the switch over the drawer. The page's own
+   view transitions are left alone: our rules apply only while <html> carries rv-theme-vt. */
+function rippleStyle() {
+  if (document.getElementById("rv-theme-vt")) return;
+  const st = document.createElement("style");
+  st.id = "rv-theme-vt";
+  st.textContent = ":root.rv-theme-vt::view-transition-old(root), :root.rv-theme-vt::view-transition-new(root) { animation: none; mix-blend-mode: normal; } :root.rv-theme-vt::view-transition-new(root) { z-index: 2147483647; }";
+  (document.head || document.documentElement).appendChild(st);
+}
+function switchTheme(from) {
+  if (reduceMq?.matches) return applyTheme(false);
+  if (typeof document.startViewTransition === "function") {
+    try {
+      const b = (from || $(".theme-switch .side[aria-pressed='true']"))?.getBoundingClientRect();
+      const x = b && b.width ? b.left + b.width / 2 : innerWidth - 40;
+      const y = b && b.width ? b.top + b.height / 2 : 30;
+      /* as far as the drawer's farthest corner (the page itself does not change), the window's when it is closed */
+      const pr = $(".panel")?.getBoundingClientRect();
+      const box = pr && pr.width && $(".panel").classList.contains("on") ? pr : { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+      const r = Math.hypot(Math.max(x - box.left, box.right - x), Math.max(y - box.top, box.bottom - y));
+      rippleStyle();
+      document.documentElement.classList.add("rv-theme-vt");
+      const vt = document.startViewTransition(() => applyTheme(false));
+      vt.ready.then(() => document.documentElement.animate({ clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`] }, { duration: 620, easing: "cubic-bezier(.4,0,.2,1)", pseudoElement: "::view-transition-new(root)" })).catch(() => {});
+      vt.finished.finally(() => document.documentElement.classList.remove("rv-theme-vt"));
+      return;
+    } catch {
+      document.documentElement.classList.remove("rv-theme-vt");
+    }
+  }
+  applyTheme(true);
+}
+root.querySelectorAll(".theme-switch .side").forEach((b) =>
+  b.addEventListener("click", () => {
+    if (b.dataset.t === themePick) return;
+    themePick = b.dataset.t;
+    try { localStorage.setItem("review.theme", themePick); } catch {}
+    switchTheme(b); /* the ripple starts at the side clicked */
+  }),
+);
+darkMq?.addEventListener?.("change", () => switchTheme());
+applyTheme();
 /* page mode: the panel is the page; "go to" hands over to the app */
 if (PAGE_MODE) {
   host.setAttribute("data-page", "");

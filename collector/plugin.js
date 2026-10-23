@@ -61,7 +61,14 @@ export default function review(options = {}) {
   const hubs = new Map();
   let peopleCache = { at: 0, map: {} };
   const peopleFor = async (store) => {
-    if (Date.now() - peopleCache.at > 60_000) peopleCache = { at: Date.now(), map: store.kind === "hub" ? await store.people().catch(() => ({})) : {} };
+    /* the people always come from the hub, whichever store answers: a local test session used to fill the shared
+       cache with nothing, and for a minute every face on the real list fell back to its initial */
+    if (Date.now() - peopleCache.at > 60_000) {
+      const hub = store.kind === "hub" ? store : cfg.hub ? storeFor(cfg, hubs) : null;
+      const map = hub ? await hub.people().catch(() => null) : {};
+      if (map && (Object.keys(map).length || !Object.keys(peopleCache.map).length)) peopleCache = { at: Date.now(), map }; // a miss (the hub answers {}) keeps the last good list
+      else peopleCache.at = Date.now() - 50_000; // and tries again in about ten seconds
+    }
     return mergePeople(cfg.people, peopleCache.map);
   };
   const shownWith = (people) => (c) => ({ ...withNames(c, people), avatars: avatarsOf(c, people) });
@@ -93,7 +100,7 @@ export default function review(options = {}) {
           if (url === "/__review/hub") {
             const on = store.kind === "hub";
             const ppl = await peopleFor(store);
-            return send(res, 200, { on, project: store.project, who: ppl[reviewer]?.name || reviewer, avatar: ppl[reviewer]?.avatar || null, usage: on ? await store.usage().catch(() => null) : null });
+            return send(res, 200, { on, project: store.project, who: ppl[reviewer]?.name || reviewer, avatar: ppl[reviewer]?.avatar || null, approver: (cfg.approvers || []).includes(reviewer), usage: on ? await store.usage().catch(() => null) : null });
           }
           if (url === "/__review" || url === "/__review/") return send(res, 200, listPage(), "text/html");
           if (url.startsWith("/__review/shot/")) {
