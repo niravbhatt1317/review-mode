@@ -19,7 +19,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { loadConfig, pkgDir } from "./config.js";
 import { storeFor, prepare } from "./stores.js";
-import { withNames, applyChange, mergePeople, avatarsOf, normalise, sentence, newId } from "../hub-core.js";
+import { withNames, applyChange, mergePeople, avatarsOf, normalise, sentence, newId, teamOf, waitingOf } from "../hub-core.js";
 
 /* who is reviewing on this machine: the git name, mapped to a person by the people map */
 let reviewer = "";
@@ -71,6 +71,15 @@ export default function review(options = {}) {
     }
     return mergePeople(cfg.people, peopleCache.map);
   };
+  /* who approves: the hub's members table (the list the hub enforces), else hub.json's approvers */
+  let membersCache = { at: 0, map: null };
+  const approverIs = async (store, handle) => {
+    if (Date.now() - membersCache.at > 60_000) {
+      const hub = store.kind === "hub" ? store : cfg.hub ? storeFor(cfg, hubs) : null;
+      membersCache = { at: Date.now(), map: hub?.members ? await hub.members() : null };
+    }
+    return membersCache.map ? membersCache.map[handle] === "approver" : (cfg.approvers || []).includes(handle);
+  };
   const shownWith = (people) => (c) => ({ ...withNames(c, people), avatars: avatarsOf(c, people) });
   return {
     name: "review-mode",
@@ -100,7 +109,22 @@ export default function review(options = {}) {
           if (url === "/__review/hub") {
             const on = store.kind === "hub";
             const ppl = await peopleFor(store);
-            return send(res, 200, { on, project: store.project, who: ppl[reviewer]?.name || reviewer, avatar: ppl[reviewer]?.avatar || null, approver: (cfg.approvers || []).includes(reviewer), usage: on ? await store.usage().catch(() => null) : null });
+            return send(res, 200, { on, project: store.project, who: ppl[reviewer]?.name || reviewer, avatar: ppl[reviewer]?.avatar || null, approver: await approverIs(store, reviewer), usage: on ? await store.usage().catch(() => null) : null });
+          }
+          if (url === "/__review/rules") {
+            const hub = store.kind === "hub" ? store : cfg.hub ? storeFor(cfg, hubs) : null;
+            return send(res, 200, (hub?.rules ? await hub.rules() : null) || []); // empty: the drawer's own defaults
+          }
+          if (url === "/__review/members") {
+            /* the waiting list to read; letting someone in needs the approver's sign-in, so the drawer sends that
+               through the extension */
+            if (req.method === "POST") return send(res, 401, { error: "Sign in first: letting people in goes through the extension" });
+            await approverIs(store, reviewer);
+            return send(res, 200, waitingOf(membersCache.map, await peopleFor(store)));
+          }
+          if (url === "/__review/people") {
+            await approverIs(store, reviewer); // fills the members cache
+            return send(res, 200, teamOf(await peopleFor(store), membersCache.map));
           }
           if (url === "/__review" || url === "/__review/") return send(res, 200, listPage(), "text/html");
           if (url.startsWith("/__review/shot/")) {
@@ -163,7 +187,7 @@ export default function review(options = {}) {
           }
           return send(res, 404, { error: "unknown" });
         } catch (e) {
-          return send(res, 500, { error: String(e?.message || e) });
+          return send(res, e?.status || 500, { error: String(e?.message || e) }); // a refusal from the hub keeps its 403 and its words
         }
       });
     },

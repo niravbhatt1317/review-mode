@@ -4,7 +4,7 @@
 //      per site, so the overlay works on any page without the dev server;
 //   3. hosting: on a site switched on with the toolbar button it injects the overlay into the page.
 // On the console (localhost:4178) the dev server injects and answers itself; the extension only takes the picture.
-import { makeHub, prepare, withNames, applyChange, bytesOf, newId, sentence, normalise, mergePeople, avatarsOf } from "./hub-core.js";
+import { makeHub, prepare, withNames, applyChange, bytesOf, newId, sentence, normalise, mergePeople, avatarsOf, teamOf, waitingOf, roleIn } from "./hub-core.js";
 import { makeAuth } from "./auth.js";
 
 /* ---------- configuration: hub.json beside this file, with what the options page saved over it ---------- */
@@ -103,6 +103,12 @@ async function peopleOn(hub) {
   else peopleCache.at = Date.now() - 50_000; // try again in about ten seconds
   return peopleCache.map;
 }
+/* who approves: the hub's members table (what the hub enforces), else hub.json's approvers; a minute's cache */
+let membersCache = { at: 0, map: null };
+async function approverIs(hub, handle) {
+  if (Date.now() - membersCache.at > 60_000) membersCache = { at: Date.now(), map: await hub.members().catch(() => null) };
+  return membersCache.map ? membersCache.map[handle] === "approver" : (bundled.approvers || []).includes(handle);
+}
 /* the names shown: the team's map first (a first name chosen by the team), else the GitHub name's first word */
 function namesFrom(cfg, hubPeople, me) {
   const people = mergePeople(cfg.people, hubPeople);
@@ -134,8 +140,27 @@ async function answer(origin, { path, query, method, body }) {
   const ok = (b) => ({ ok: true, status: 200, body: b });
   const no = (status, error) => ({ ok: false, status, body: { error } });
   switch (path) {
-    case "/__review/hub":
-      return ok({ on: true, project, who: people[who]?.name || who, avatar: people[who]?.avatar || me.avatar || null, approver: me.signedIn && (bundled.approvers || []).includes(me.handle), signedIn: me.signedIn, usage: await hub.usage().catch(() => null) });
+    case "/__review/hub": {
+      const approver = me.signedIn && (await approverIs(hub, me.handle));
+      return ok({ on: true, project, who: people[who]?.name || who, avatar: people[who]?.avatar || me.avatar || null, approver, signedIn: me.signedIn, role: me.signedIn ? roleIn(membersCache.map, me.handle) : null, usage: await hub.usage().catch(() => null) });
+    }
+    case "/__review/members": {
+      /* the waiting list: who asked to join (GET); an approver lets them in or refuses them (POST) */
+      if (method === "POST") {
+        if (!me.signedIn) return no(401, "Sign in first: the Review icon, then Sign in with GitHub");
+        if (!(await approverIs(hub, me.handle))) return no(403, "Only an approver can let people in");
+        await hub.setMember(String(data.handle || ""), data.role);
+        membersCache.at = 0;
+      }
+      await approverIs(hub, me.handle);
+      return ok(waitingOf(membersCache.map, people));
+    }
+    case "/__review/rules":
+      return ok((await hub.rules().catch(() => null)) || []);
+    case "/__review/people": {
+      await approverIs(hub, me.handle);
+      return ok(teamOf(people, membersCache.map));
+    }
     case "/__review/list": {
       hub.sweep().catch(() => {});
       const list = prepare(await hub.list());
@@ -174,6 +199,7 @@ async function answer(origin, { path, query, method, body }) {
     }
     case "/__review/delete": {
       if (method !== "POST") return no(405, "POST");
+      if (!me.signedIn) return no(401, "Sign in first: the Review icon, then Sign in with GitHub");
       const gone = (await hub.list()).find((c) => c.id === data.id);
       if (gone) await hub.remove(gone);
       return ok({ ok: true, count: (await hub.list()).length });
@@ -250,7 +276,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   }
   if (msg?.type === "review-api") {
     const origin = msg.origin || (sender.tab?.url ? new URL(sender.tab.url).origin : sender.origin);
-    answer(origin, msg).then(reply, (e) => reply({ ok: false, status: 500, body: { error: String(e?.message || e) } }));
+    answer(origin, msg).then(reply, (e) => reply({ ok: false, status: e?.status || 500, body: { error: String(e?.message || e) } })); // a refusal keeps its 403
     return true;
   }
   if (msg?.type === "review-switch-on") {

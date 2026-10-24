@@ -39,8 +39,10 @@ if (EXT) window.addEventListener("message", (e) => {
   rvWaiting.delete(e.data.id);
   w(e.data);
 });
-function rv(path, init = {}) {
-  if (!EXT) return fetch(path, init);
+/* the two guarded moves, approving and removing, need the signer's GitHub session (hub/roles.sql): on the dev server
+   they go through the extension, which holds it; a test session stays local */
+function rv(path, init = {}, viaExt = false) {
+  if (!EXT && !(viaExt && extHere() && !window.__reviewSession)) return fetch(path, init);
   const id = ++rvSeq;
   const [p, qs] = String(path).split("?");
   return new Promise((resolve) => {
@@ -117,6 +119,17 @@ host.id = "__review-host";
 /* the UA's popover styles are overridden here (inline beats them): the host is a manual popover so it lives in the
    browser's top layer, above a page's modal <dialog> or popover, which no z-index can reach */
 host.style.cssText = "position:fixed;inset:0;z-index:2147483000;pointer-events:none;margin:0;border:0;padding:0;width:auto;height:auto;background:transparent;color:inherit;overflow:visible;";
+/* the card's hover strip grows inside the card and makes room once the pointer rests on the card for a moment (the
+   default since 2026-10-24, "pushpause"); ?strip=push opens it at once, ?strip=float floats it over the cards below
+   (tried, not kept); the choice is remembered */
+{
+  let strip = new URLSearchParams(location.search).get("strip");
+  try {
+    if (strip === "push" || strip === "float" || strip === "pushpause") localStorage.setItem("review.strip", strip);
+    else strip = localStorage.getItem("review.strip");
+  } catch {}
+  host.dataset.strip = strip === "float" || strip === "push" ? strip : "pushpause";
+}
 document.body.appendChild(host);
 /* THE TOP LAYER. A page's modal <dialog> (showModal) sits in the browser's top layer, above everything, and makes
    the rest of the page inert: the review layer would be blurred under the backdrop and deaf to clicks (a design
@@ -457,7 +470,7 @@ root.innerHTML = `
   .status-switch .group-switch .side[aria-pressed="true"] { background: transparent; box-shadow: none; color: var(--rv-ink-3); }
   .status-switch .group-switch:hover .side[aria-pressed="true"], .status-switch .group-switch:has(.side:focus-visible) .side[aria-pressed="true"] { background: hsl(var(--rv-bg)); box-shadow: 0 1px 2px rgba(29,43,62,.12); color: var(--rv-ink); }
   .group-switch .side svg { stroke-width: 1.7; }
-  .status-switch .tag[data-s="progress"] .dot, .card-status[data-s="progress"]::before, .gh-shape[data-s="progress"] { border-radius: 1.5px; transform: rotate(45deg) scale(.86); }
+  .status-switch .tag[data-s="progress"] .dot, .card-status[data-s="progress"]::before, .gh-shape[data-s="progress"] { border-radius: 1.5px; transform: rotate(45deg) scale(.91); } /* .91: the diamond looks as big as the square and the circle (Nirav, 2026-10-24) */
   .status-switch .tag[data-s="approval"] .dot, .card-status[data-s="approval"]::before, .gh-shape[data-s="approval"] { border-radius: 2px; }
   .status-switch .all-mark { flex: 0 0 auto; color: var(--rv-ink-2); }
   .status-switch .tag[data-s="all"][aria-pressed="true"] .all-mark { color: var(--rv-ink); }
@@ -466,6 +479,7 @@ root.innerHTML = `
   .gh-shape[data-s="open"] { background: var(--rv-st-new-dot); } .gh-shape[data-s="progress"] { background: var(--rv-st-prog-dot); } .gh-shape[data-s="approval"] { background: var(--rv-st-appr-dot); }
   .list-group { display: flex; align-items: center; width: calc(100% + 4px); margin: 4px -2px 8px; padding: 4px 6px 4px 4px; border: 0; border-radius: 6px; background: transparent; font: 600 11px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); cursor: pointer; text-align: left; }
   .panel-body > .list-sec:first-of-type > .list-group { margin-top: -8px; } /* the first heading sits where the first card would, not lower */
+  .panel-body > .join-box + .list-sec > .list-group { margin-top: 4px; } /* under the waiting list the first heading keeps its place, so its ground band does not cover the box's edge and shadow */
   /* pinned while its group scrolls by (Nirav, 2026-10-24); the next group's heading pushes it out */
   .list-group { position: sticky; top: -16px; z-index: 2; background: hsl(var(--rv-n10)); box-shadow: 0 -10px 0 hsl(var(--rv-n10)), 0 6px 8px -6px hsl(var(--rv-n10)); } /* flush with the top edge (the list has 16 px padding), the ground carried up and a soft fade under it */
   .list-group:hover { background: color-mix(in srgb, var(--rv-ink) 5%, hsl(var(--rv-n10))); }
@@ -595,6 +609,7 @@ root.innerHTML = `
   .card-sev[data-k="must"] { background: var(--tag-must-fill); color: var(--tag-must-ink); } .card-sev[data-k="should"] { background: var(--tag-should-fill); color: var(--tag-should-ink); } .card-sev[data-k="idea"] { background: var(--tag-idea-fill); color: var(--tag-idea-ink); } .card-sev[data-k="question"] { background: var(--tag-question-fill); color: var(--tag-question-ink); }
   .card-sev[data-k="fix"] { background: var(--tag-fix-fill); color: var(--tag-fix-ink); }
   .card-text { font-size: 14px; line-height: 1.5; color: var(--rv-ink); margin: 0 0 10px; white-space: pre-wrap; border-radius: 6px; padding: 2px 4px; margin-left: -4px; box-shadow: 0 0 0 1px transparent; }
+  .card-text.ro, .card-text.ro:hover { cursor: default; background: transparent; box-shadow: none; }
   .card-text:hover { background: hsl(var(--rv-n10)); box-shadow: 0 0 0 1px var(--rv-line); }
   .card-text[contenteditable="true"] { background: var(--rv-surface); outline: 2px solid #2563eb; outline-offset: 0; }
   .card-shot { display: block; width: 100%; border: 1px solid var(--rv-fill); border-radius: 6px; cursor: zoom-in; }
@@ -646,16 +661,43 @@ root.innerHTML = `
   /* TRY (Nirav, 2026-10-23): under the pointer the card grows a light strip at its foot with who raised it and where;
      the foot keeps the status and the actions. To go back: the face on the picture (byPicHtml) and the where in footHtml */
   .card-foot .where { display: none; }
-  .card-meta { display: grid; grid-template-rows: 0fr; margin: 0 -15px 0; border-radius: 0 0 10px 10px; /* out over the card's 1 px edge, so no white rim shows round the strip */ transition: grid-template-rows .22s cubic-bezier(.32,.72,0,1), margin .22s cubic-bezier(.32,.72,0,1); }
-  .card-meta-in { min-height: 0; overflow: hidden; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: hsl(var(--rv-n10)); border-radius: 0 0 10px 10px; font-size: 11px; color: var(--rv-ink-3); opacity: 0; transition: opacity .18s ease, padding .22s cubic-bezier(.32,.72,0,1); }
-  .card:hover .card-meta, .card:focus-visible .card-meta, .card:has(:focus-visible) .card-meta { grid-template-rows: 1fr; margin-top: 9px; margin-bottom: -10px; } /* over the card's padding and edge only while open; at rest the card keeps its own bottom padding */
-  .card:hover .card-meta-in, .card:focus-visible .card-meta-in, .card:has(:focus-visible) .card-meta-in { opacity: 1; padding: 9px 15px; }
+  /* THE STRIP FLOATS (Nirav, 2026-10-24, after Google's cards): it hangs below the card over the cards under it, so a
+     hover never moves the list; the card's bottom corners square off while it is out, so the two read as one */
+  /* two ways, the first the default: the strip grows inside the card and pushes the list; ?strip=float floats it over the
+     cards below (tried 2026-10-24, not kept); the choice is remembered (localStorage review.strip) */
+  /* closing: the words fade out first, then the strip folds, so they never slide up under the status or the note
+     (Nirav, 2026-10-24); opening: the strip grows, then the words fade in */
+  .card-meta { display: grid; grid-template-rows: 0fr; border-radius: 0 0 10px 10px; transition: grid-template-rows .32s cubic-bezier(.4,0,.2,1) .05s, margin .32s cubic-bezier(.4,0,.2,1) .05s; } /* a gentle in-out over a third of a second (Nirav, 2026-10-24: smoother) */
+  .card:is(:hover, :focus-visible, :has(:focus-visible), .menu-open, .hist-open) .card-meta { grid-template-rows: 1fr; transition: grid-template-rows .32s cubic-bezier(.4,0,.2,1), margin .32s cubic-bezier(.4,0,.2,1); }
+  .card:is(:hover, :focus-visible, :has(:focus-visible), .menu-open, .hist-open) .card-meta-in { opacity: 1; padding: 9px 15px; transform: none; transition: opacity .24s ease .1s, padding .32s cubic-bezier(.4,0,.2,1), transform .32s cubic-bezier(.4,0,.2,1) .06s; }
+  :host([data-strip="float"]) .card-meta { position: absolute; left: -1px; right: -1px; top: 100%; pointer-events: none; }
+  :host([data-strip="float"]) .card:is(:hover, :focus-visible, :has(:focus-visible), .menu-open, .hist-open) { z-index: 3; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  :host([data-strip="float"]) .card:is(:hover, :focus-visible, :has(:focus-visible), .menu-open, .hist-open) .card-meta { pointer-events: auto; }
+  /* one outline round the card and its strip while it floats (Nirav, 2026-10-24: the near-white strip blended into the
+     card under it): the card's sides and top, the strip's sides and bottom, nothing where they meet */
+  :host([data-strip="float"]:not([data-theme="dark"])) .card.card-fill:is(:hover, :focus-visible, :has(:focus-visible), .menu-open, .hist-open) { border-color: var(--rv-line-2); border-bottom-color: transparent; }
+  :host([data-strip="float"]:not([data-theme="dark"])) .card-meta-in { box-shadow: inset 1px 0 0 var(--rv-line-2), inset -1px 0 0 var(--rv-line-2), inset 0 -1px 0 var(--rv-line-2), 0 16px 32px -6px rgba(29,43,62,.2), 0 3px 8px -2px rgba(29,43,62,.08); } /* a deeper shadow, the strip's own colour kept (Nirav, 2026-10-24) */ /* lifted a little off the cards under it (Nirav, 2026-10-24); the negative spread keeps it below, off the card */
+  :host([data-strip="float"][data-theme="dark"]) .card-meta-in { box-shadow: inset 1px 0 0 hsl(216.77 40.26% 15.1%), inset -1px 0 0 hsl(216.77 40.26% 15.1%), inset 0 -1px 0 hsl(216.77 40.26% 15.1%), 0 12px 22px -8px rgba(0,0,0,.6); } /* the card's own edge, so the strip does not melt into the card under it (dark keeps its drawn edge) */
+  :host([data-strip="float"]) .list-group.pinned { z-index: 5; } /* a pinned heading stays over a floating strip; the others go under it */
+  /* the old way: inside the card, out over its padding and edge, the list making room */
+  :host(:not([data-strip="float"])) .card-meta { margin: 0 -15px 0; }
+  :host(:not([data-strip="float"])) .card:is(:hover, :focus-visible, :has(:focus-visible), .menu-open, .hist-open) .card-meta { margin-top: 9px; margin-bottom: -10px; }
+  :host(:not([data-strip="float"])) .list-spacer { transition: height .32s cubic-bezier(.4,0,.2,1) .05s; } /* in step with the strip folding */
+  :host(:not([data-strip="float"])) .panel-body:has(.card:hover, .card:focus-visible, .card.menu-open, .card :focus-visible) .list-spacer { height: 0; transition-delay: 0s; } /* no :has() inside :has(): that voids the whole rule */
+  /* ?strip=pushpause (Nirav, 2026-10-24): the same push, but only once the pointer rests on a card for a moment, so
+     running the mouse down the list does not open and shut every card it passes; it closes at once. Keyboard focus,
+     an open menu or history open without waiting */
+  :host([data-strip="pushpause"]) .card:hover .card-meta { transition-delay: .45s, .45s; }
+  :host([data-strip="pushpause"]) .card:hover .card-meta-in { transition-delay: .55s, .45s, .51s; } /* the words a beat after the strip */
+  :host([data-strip="pushpause"]) .panel-body:has(.card:hover) .list-spacer { transition-delay: .45s; }
+  :host([data-strip="pushpause"]) .card:is(:focus-visible, :has(:focus-visible), .menu-open, .hist-open) .card-meta { transition-delay: 0s, 0s; }
+  :host([data-strip="pushpause"]) .card:is(:focus-visible, :has(:focus-visible), .menu-open, .hist-open) .card-meta-in { transition-delay: .1s, 0s, .06s; }
+  .card-meta-in { min-height: 0; overflow: hidden; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: hsl(var(--rv-n10)); border-radius: 0 0 10px 10px; font-size: 11px; color: var(--rv-ink-3); opacity: 0; transform: translateY(-3px); transition: opacity .14s ease, padding .32s cubic-bezier(.4,0,.2,1) .05s, transform .2s ease; } /* the words drift a few pixels as they fade */
   :host([data-theme="dark"]) .card-meta-in { box-shadow: inset 1px 0 0 hsl(216.77 40.26% 15.1%), inset -1px 0 0 hsl(216.77 40.26% 15.1%), inset 0 -1px 0 hsl(216.77 40.26% 15.1%); } /* the card's dark edge carried round the strip */
   .card-meta .cm-by { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; }
   .card-meta .cm-by .by-who { display: inline-flex; align-items: center; color: var(--rv-ink-2); font-weight: 500; }
   .card-meta .cm-by .av { margin-left: 0; }
-  .list-spacer { height: var(--strip-h, 33px); transition: height .22s cubic-bezier(.32,.72,0,1); pointer-events: none; }
-  .panel-body:has(.card:hover, .card:focus-visible, .card.menu-open, .card :focus-visible) .list-spacer { height: 0; } /* no :has() inside :has(): that voids the whole rule */
+  .list-spacer { height: var(--strip-h, 33px); pointer-events: none; transition: height .22s cubic-bezier(.32,.72,0,1); } /* room for the last card's floating strip */
   .card-meta .cm-type { font-weight: 500; }
   .card-meta .cm-type[data-k="fix"] { color: var(--tag-fix-ink); }
   .card-meta .cm-type[data-k="question"] { color: var(--tag-question-ink); }
@@ -667,14 +709,79 @@ root.innerHTML = `
   .card-menu .card-mi { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--rv-ink); font: 400 13px/1.3 -apple-system, system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
   .card-menu .mi-ico { flex: 0 0 auto; color: var(--rv-ink); }
   .card-menu .card-mi:hover { background: var(--rv-hover); }
+  .card-menu .hand-title { display: block; padding: 6px 10px 4px; font-size: 11px; color: var(--rv-ink-3); }
+  .card-menu .hand-list { display: flex; flex-direction: column; max-height: 240px; overflow: auto; }
+  .card-menu .hand-wait { display: block; padding: 6px 10px 8px; font-size: 12px; color: var(--rv-ink-3); }
+  .card-menu .hand-to .av { width: 18px; height: 18px; margin: 0; }
   .card-menu-sep { display: block; height: 1px; margin: 4px -5px; background: var(--rv-line); opacity: .7; }
   .card-menu .card-rm.card-mi, .card-menu .card-rm.card-mi .mi-ico { color: hsl(353 84% 47%); }
   .card-menu .card-rm.card-mi:hover:not(.sure) { background: hsl(var(--rv-danger-bg)); } /* Remove hovers light red (Nirav, 2026-10-23) */
   .card-menu .card-rm.card-mi.sure { background: hsl(353 84% 47%); color: #fff; }
   .card-menu .card-rm.card-mi.sure .mi-ico { color: #fff; }
   .card.menu-open .card-foot .acts { opacity: 1; }
-  .card.menu-open .card-meta { grid-template-rows: 1fr; margin-top: 9px; margin-bottom: -10px; }
-  .card.menu-open .card-meta-in { opacity: 1; padding: 9px 15px; }
+  .card-meta .cm-hist { height: 22px; margin: -4px 0 -4px -7px; padding: 0 7px; border: 0; border-radius: 11px; background: transparent; font: inherit; color: var(--rv-ink-3); cursor: pointer; }
+  .card-meta .cm-hist:hover, .card-meta .cm-hist:focus-visible { background: hsl(var(--rv-n20)); color: var(--rv-ink-2); outline: none; }
+  .card-meta .cm-hist[aria-expanded="true"] { color: var(--rv-ink-2); }
+  /* under the pointer (and while open) the face turns into the history mark, laid over it so nothing moves */
+  .card-meta .cm-hist { position: relative; }
+  .card-meta .cm-hico { position: absolute; left: 7px; top: 50%; width: 16px; height: 16px; margin-top: -8px; display: flex; align-items: center; justify-content: center; color: var(--rv-ink); opacity: 0; transition: opacity .15s ease; }
+  .card-meta .cm-hist .by-who .av { transition: opacity .15s ease; }
+  /* the count after the time, unfolding under the pointer (Nirav, 2026-10-24); at the end, so nothing before it moves */
+  .card-meta .cm-steps { display: inline-flex; align-items: center; gap: 5px; max-width: 0; margin-left: -5px; overflow: hidden; white-space: nowrap; opacity: 0; transition: max-width .22s cubic-bezier(.32,.72,0,1), margin .22s cubic-bezier(.32,.72,0,1), opacity .15s ease; } /* no gap at rest */
+  .card-meta .cm-hist:is(:hover, :focus-visible, [aria-expanded="true"]) .cm-steps { max-width: 80px; margin-left: 0; opacity: 1; }
+  .card-meta .cm-hist.no-face .cm-hico { position: static; margin: 0; opacity: 1; color: var(--rv-ink-3); } /* no author, no face to swap: the mark stays in line */
+  .card-meta .cm-hist:is(:hover, :focus-visible, [aria-expanded="true"]) .cm-hico { opacity: 1; }
+  .card-meta .cm-hist:is(:hover, :focus-visible, [aria-expanded="true"]) .by-who .av { opacity: 0; }
+  .card.hist-open .card-meta-in { flex-wrap: wrap; row-gap: 0; }
+  .card-hist { position: relative; flex: 0 0 100%; margin-top: 12px; padding: 0 0 2px; }
+  .card-hist::before { content: ""; position: absolute; left: 7.5px; top: -10px; height: 15px; width: 1px; background: hsl(var(--rv-n30)); } /* the thread starts at the author's face in the strip */
+  .hs-list { list-style: none; margin: 0; padding: 0; }
+  .hs-step { position: relative; display: flex; align-items: flex-start; gap: 0; padding: 0 0 8px; font-size: 12px; line-height: 1.4; color: var(--rv-ink-2); }
+  .hs-step:last-child { padding-bottom: 0; }
+  .hs-step::before { content: ""; position: absolute; left: 7.5px; top: 13px; bottom: -1px; width: 1px; background: hsl(var(--rv-n30)); } /* the thread from one step to the next */
+  .hs-step:last-child::before { display: none; }
+  .hs-step .gh-shape { margin: 5px 10px 0 4.5px; position: relative; } /* centred under the author's 16 px face */
+  .gh-shape[data-s="approved"] { background: var(--rv-st-done-dot); border-radius: 2px; }
+  .hs-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .hs-line b { font-weight: 500; color: var(--rv-ink); }
+  .hs-face { flex: 0 0 auto; display: flex; margin: 1.5px 5px 0 0; } /* 14 px in a 17 px line: centred on the first line */
+  .hs-face .av { display: block; width: 14px; height: 14px; margin: 0; }
+  .hs-face .av-i { display: flex; align-items: center; justify-content: center; font-size: 8px; line-height: 1; }
+  .hs-words { color: var(--rv-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .hs-more { display: inline-flex; align-items: flex-start; border: 0; padding: 0; background: none; font: inherit; color: var(--rv-ink-2); cursor: pointer; }
+  .hs-more:hover, .hs-more:focus-visible { color: var(--rv-ink); outline: none; }
+  .hs-fold-ic { position: relative; display: flex; align-items: center; justify-content: center; width: 13px; height: 13px; margin: 2px 7.5px 0 1.5px; border-radius: 50%; background: hsl(var(--rv-n10)); color: var(--rv-ink-3); } /* centred on the thread, covering it */
+  .hs-more:hover .hs-fold-ic, .hs-more:focus-visible .hs-fold-ic { color: var(--rv-ink); }
+  .hs-more:hover { color: var(--rv-ink); }
+  .hs-when { flex: 0 0 auto; margin-left: 10px; font-size: 11px; color: var(--rv-ink-3); white-space: nowrap; }
+  .card-meta .cm-place { text-decoration: underline dotted; text-decoration-color: currentColor; text-underline-offset: 3px; text-decoration-thickness: 1px; cursor: default; } /* dotted: there is more under the pointer */
+  .card-meta .cm-place:hover { color: var(--rv-ink-2); }
+  .place-tip { position: fixed; z-index: 2147483647; left: 0; top: 0; max-width: 320px; background: #1d2b3e; color: #fff; font: 500 11px/16px -apple-system, system-ui, sans-serif; padding: 4px 8px; border-radius: 4px; pointer-events: none; opacity: 0; visibility: hidden; }
+  .place-tip.on { opacity: 1; visibility: visible; }
+  /* the waiting list: who asks to join (the approver), and the quiet screen of someone waiting */
+  .join-box { margin: 0 0 16px; /* from the number circles' edge to the cards' right edge (Nirav, 2026-10-24) */ padding: 10px 14px 6px; border-radius: 10px; background: var(--rv-surface); box-shadow: 0 1px 2px rgba(29,43,62,.06); }
+  :host([data-theme="dark"]) .join-box { box-shadow: inset 0 0 0 1px hsl(216.77 40.26% 15.1%); }
+  .join-title { display: flex; align-items: center; width: 100%; padding: 0; margin-bottom: 4px; border: 0; background: none; font: 600 11px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); cursor: pointer; text-align: left; }
+  .join-title .lg-chev { margin-left: auto; color: var(--rv-ink-3); transition: transform .2s ease; }
+  .join-box.folded { padding-bottom: 10px; }
+  .join-box.folded .join-title { margin-bottom: 0; }
+  .join-box.folded .lg-chev { transform: rotate(90deg); } /* as the group headings fold */
+  .join-more { display: block; margin: 2px 0 4px 28px; padding: 0; border: 0; background: none; font: 500 11px/1.6 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); cursor: pointer; }
+  .join-more:hover { color: var(--rv-ink); }
+  .join-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; color: var(--rv-ink-2); }
+  .join-row + .join-row::before { content: ""; position: absolute; top: 0; left: 28px; right: 0; height: 1px; background: linear-gradient(to right, hsl(var(--rv-n20)), hsl(var(--rv-n20) / 0)); } /* from the name, lighter, fading out to the right (Nirav, 2026-10-24) */
+  .join-row .av { width: 20px; height: 20px; margin: 0; }
+  .join-row.busy > button:not(.loading) { opacity: .4; pointer-events: none; }
+  .join-who { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .join-who b { font-weight: 500; color: var(--rv-ink); }
+  .join-h { color: var(--rv-ink-3); }
+  .join-no { border: 0; background: none; padding: 3px 6px; font: 500 11px/1.2 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); cursor: pointer; border-radius: 6px; }
+  .join-no:hover { color: var(--rv-ink); background: hsl(var(--rv-n10)); }
+  .join-no { opacity: 0; pointer-events: none; transition: opacity .15s ease; } /* Refuse only under the pointer (Nirav, 2026-10-24); its place is kept, so Let in does not move */
+  .join-row:is(:hover, :focus-within) .join-no { opacity: 1; pointer-events: auto; }
+  .wait-screen { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 56px 24px; text-align: center; color: var(--rv-ink-3); }
+  .wait-screen b { font: 600 14px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink); }
+  .wait-screen span { font-size: 12px; line-height: 1.5; max-width: 260px; }
   .card-meta .cm-where { flex: 1; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card-by { display: flex; align-items: center; gap: 5px; min-height: 18px; margin: 0 0 10px; font-size: 11px; color: var(--rv-ink-3); }
   .card-by:empty { display: none; }
@@ -722,7 +829,8 @@ root.innerHTML = `
   .card-ok.alt:hover { border-color: hsl(var(--rv-n70)); color: var(--rv-ink); background: hsl(var(--rv-n10)); }
   /* where it stands, after the place: a dot in the status colour and the words */
   .card-status { display: none; align-items: center; gap: 5px; flex: 0 0 auto; font-size: 11px; font-weight: 500; white-space: nowrap; }
-  .card-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .card-status::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; margin-right: 3px; border-radius: 50%; background: currentColor; } /* a little air between the shape and the face (Nirav, 2026-10-24) */
+  .card-status[data-s="progress"]::before { transform: rotate(45deg) scale(1); } /* at 6 px on the card the diamond needs its full size to look as big as the square (Nirav, 2026-10-24); the pill keeps .91 */
   .card-status[data-s="open"]::before { background: var(--rv-st-new-dot); } .card-status[data-s="progress"]::before { background: var(--rv-st-prog-dot); } .card-status[data-s="approval"]::before { background: var(--rv-st-appr-dot); } /* the dots in the bright step, the words in the dark one */
   .card-status { flex: 0 1 auto; min-width: 0; }
   .card-status .st-s { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -731,6 +839,9 @@ root.innerHTML = `
   .card-status .st-rest { color: var(--rv-ink-2); font-weight: 400; }
   .card-status .av { margin: 0 4px 0 0; vertical-align: middle; position: relative; top: -1px; }
   .card-note .nt-head .av { vertical-align: middle; position: relative; top: -1px; }
+  /* a reply on a question is talk, not a warning: a quiet box, the answer's teal (the asker's follow-up in New's purple) */
+  .card-note:has(.nt-reply) { background: hsl(var(--rv-n10)); border-left-color: var(--rv-st-appr-dot); }
+  .card-note:has(.nt-reply[data-ask="true"]) { border-left-color: var(--rv-st-new-dot); }
   .av { width: 16px; height: 16px; border-radius: 50%; vertical-align: -3px; margin: 0 4px 0 1px; background: var(--rv-line); object-fit: cover; }
   .av-i { display: inline-flex; align-items: center; justify-content: center; font: 700 9px/1 -apple-system, system-ui, sans-serif; color: var(--rv-ink); background: hsl(var(--rv-n30)); }
   .pin-tip .av-i { color: var(--rv-ink); }
@@ -764,8 +875,8 @@ root.innerHTML = `
   .card-foot .where { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* a button at work: a small ring where its label was, the width kept; its neighbours quiet meanwhile */
   .card-ok, .card-rm, .tip-acts button { position: relative; transition: opacity .15s ease, border-color .12s, background-color .12s, color .12s; }
-  .card-ok.loading, .card-rm.loading, .tip-acts button.loading { color: transparent !important; pointer-events: none; }
-  .card-ok.loading::after, .card-rm.loading::after, .tip-acts button.loading::after { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -6px 0 0 -6px; border: 1.5px solid currentColor; border-color: #5b6b85 #5b6b85 transparent transparent; border-radius: 50%; animation: rv-spin .7s linear infinite; }
+  .card-ok.loading, .card-rm.loading, .note-go.loading, .tip-acts button.loading { color: transparent !important; pointer-events: none; }
+  .card-ok.loading::after, .card-rm.loading::after, .note-go.loading::after, .tip-acts button.loading::after { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -6px 0 0 -6px; border: 1.5px solid currentColor; border-color: #5b6b85 #5b6b85 transparent transparent; border-radius: 50%; animation: rv-spin .7s linear infinite; }
   .tip-acts button.loading::after { border-color: #fff #fff transparent transparent; }
   @keyframes rv-spin { to { transform: rotate(360deg); } }
   .acts.busy > :not(.loading), .tip-acts-in.busy > :not(.loading) { opacity: .4; pointer-events: none; }
@@ -787,13 +898,19 @@ root.innerHTML = `
   .card-note .nt-head b { font-weight: 500; font-size: 11px; color: var(--rv-ink); }
   .card-note .av { width: 14px; height: 14px; vertical-align: -3px; margin: 0 4px 0 0; } /* smaller in the note than on the status line (Nirav, 2026-10-23) */
   .card-note .av-i { font-size: 8px; }
+  .av-claude { display: inline-flex; align-items: center; justify-content: center; font: 700 8px/1 -apple-system, system-ui, sans-serif; color: #fff; background: #D97757; } /* Claude's mark where a face would be */
   .tip-note .nt-head { color: inherit; opacity: .75; }
   .tip-note .nt-head b { font-weight: 600; }
   /* the one-line ask in the foot when a comment goes back */
-  .card-foot .note-in { flex: 1; min-width: 0; height: 26px; border: 1px solid var(--rv-line-2); border-radius: 6px; padding: 0 9px; font: 12px/1.2 -apple-system, system-ui, sans-serif; color: var(--rv-ink); background: var(--rv-surface); outline: none; }
-  .card-foot .note-in:focus { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 1px hsl(214 98% 44%); }
+  /* THE NOTE BOX (Nirav, 2026-10-24: the button was small beside a tall field): one control, the button inside the
+     field at its right end, one height */
+  .card-foot .note-box { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; height: 26px; box-sizing: border-box; padding: 0 2px 0 0; border: 1px solid var(--rv-line-2); border-radius: 7px; /* 26: the height of the row of buttons it replaces, so the card does not grow */ background: var(--rv-surface); transition: border-color .12s, box-shadow .12s; }
+  .card-foot .note-box:focus-within { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 1px hsl(214 98% 44%); }
+  .card-foot .note-in { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0 0 0 10px; font: 12px/1.2 -apple-system, system-ui, sans-serif; color: var(--rv-ink); background: transparent; outline: none; }
   .card-foot .note-in::placeholder { color: var(--rv-ink-3); }
-  .card-foot .note-go { flex: 0 0 auto; }
+  .card-foot .note-go { position: relative; flex: 0 0 auto; height: 20px; padding: 0 9px; border: 0; border-radius: 5px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 11px/20px -apple-system, system-ui, sans-serif; cursor: pointer; transition: background-color .12s; }
+  .card-foot .note-go:hover { background: hsl(var(--rv-n30)); }
+  :host([data-theme="dark"]) .card-foot .note-go:hover { background: hsl(var(--rv-n20) / .7); }
   .card-rm { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); border-radius: 6px; padding: 3px 9px; font: 500 11px/1.2 -apple-system, system-ui, sans-serif; cursor: pointer; flex: 0 0 auto; }
   .card-rm:hover { border-color: hsl(353 84% 47%); color: hsl(353 84% 47%); background: hsl(var(--rv-danger-bg)); }
   .card-rm.sure { border-color: hsl(353 84% 47%); color: #fff; background: hsl(353 84% 47%); }
@@ -818,6 +935,8 @@ root.innerHTML = `
   .lb-where { color: #cfd8e6; }
   :host([data-page]) .bar, :host([data-page]) .hover, :host([data-page]) .pins, :host([data-page]) .pin-tip, :host([data-page]) .composer { display: none !important; }
   :host([data-page]) .panel-veil { display: none; }
+  .page-back { position: fixed; left: 16px; top: 12px; z-index: 10; font: 12px/1.4 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); text-decoration: none; }
+  .page-back:hover { color: var(--rv-ink); }
   :host([data-page]) .panel { transform: none; visibility: visible; transition: none; position: relative; width: min(880px, 100%); height: 100vh; margin: 0 auto; box-shadow: none; border-left: 1px solid hsl(var(--rv-n20)); border-right: 1px solid hsl(var(--rv-n20)); }
   :host([data-page]) .panel-head { padding-top: 18px; }
   :host([data-page]) .panel-back { display: inline-flex; }
@@ -1735,7 +1854,7 @@ window.__reviewWhy = (id) => { /* read-only, for drives: why a pin is or is not 
   }
   return out;
 };
-window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: pollTick }); // read-only, for drives
+window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: pollTick, persona: state.persona, approver: isApprover(), sign: canSign() }); // read-only, for drives
 $(".panel-sync").addEventListener("click", () => {
   const first = panelBody.querySelector(".card.unread");
   if (first) first.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1786,13 +1905,71 @@ setInterval(async () => {
 }, 10_000);
 /* where the comments live: on the hub (shared) or on this machine; the page view shows the hub's meter */
 state.hub = null;
+/* a rule changed in Supabase: the open drawer redraws (unless someone is in the middle of something) */
+setInterval(() => panel.classList.contains("on") && loadRules().then((changed) => changed && !panelBusy() && renderPanel()), 60_000);
+/* THE WAITING LIST (Nirav, 2026-10-24): someone from outside the team who signs in waits until an approver lets them
+   in. The approver sees who waits at the top of the list; the person waiting sees a quiet screen, which opens by itself
+   once they are let in (asked again every minute) */
+state.joiners = [];
+const sessQ = () => (window.__reviewSession ? `?session=${window.__reviewSession}` : "");
+async function loadJoiners() {
+  if (!state.hub?.approver) return false;
+  const list = await rv(`/__review/members${sessQ()}`).then((r) => r.json()).catch(() => null);
+  if (!Array.isArray(list)) return false;
+  const changed = JSON.stringify(list) !== JSON.stringify(state.joiners);
+  state.joiners = list;
+  return changed;
+}
+const isWaiting = () => state.hub?.role === "waiting" || state.hub?.role === "refused";
+setInterval(async () => {
+  if (document.hidden) return;
+  if (isWaiting()) {
+    const h = await rv(`/__review/hub${sessQ()}`).then((r) => r.json()).catch(() => null);
+    if (h && h.role !== state.hub.role) {
+      state.hub = h;
+      if (!isWaiting()) toast("You are in: welcome to the review");
+      loadComments().then(() => renderPanel());
+    }
+  } else if (panel.classList.contains("on") && (await loadJoiners()) && !panelBusy()) renderPanel();
+}, 60_000);
+function waitScreenHtml() {
+  const refused = state.hub?.role === "refused";
+  return `<div class="wait-screen"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${refused ? '<circle cx="12" cy="12" r="9"/><path d="M8 8l8 8"/>' : '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'}</svg><b>${refused ? "You are not on this team's list" : "You are on the waiting list"}</b><span>${refused ? "An approver did not let this account in. If that is a mistake, ask them." : "An approver lets new people in. As soon as they do, the comments show up here."}</span></div>`;
+}
+/* many at once (Nirav, 2026-10-24): three rows, then "Show 47 more"; the title folds the whole box to one line,
+   remembered until someone new asks */
+state.joinAll = false;
+const joinKey = () => state.joiners.map((p) => p.handle).sort().join(",");
+const joinFolded = () => {
+  try {
+    return localStorage.getItem("review.join.folded") === joinKey();
+  } catch {
+    return false;
+  }
+};
+function joinHtml() {
+  const folded = joinFolded();
+  const many = state.joiners.length > 3;
+  const list = folded ? [] : many && !state.joinAll ? state.joiners.slice(0, 3) : state.joiners;
+  const rows = list.map((p) => {
+    const face = p.avatar ? `<img class="av" src="${esc(p.avatar)}" alt="" data-i="${esc(String(p.name)[0].toUpperCase())}">` : `<span class="av av-i">${esc(String(p.name)[0].toUpperCase())}</span>`;
+    return `<div class="join-row" data-h="${esc(p.handle)}" data-name="${esc(p.name)}">${face}<span class="join-who"><b>${esc(p.name)}</b> <span class="join-h">@${esc(p.handle)}</span></span><button type="button" class="join-no">Refuse</button><button type="button" class="card-ok join-go">Let in</button></div>`;
+  });
+  const more = !folded && many ? `<button type="button" class="join-more">${state.joinAll ? "Show fewer" : `Show ${state.joiners.length - 3} more`}</button>` : "";
+  return `<div class="join-box${folded ? " folded" : ""}"><button type="button" class="join-title" aria-expanded="${!folded}">Waiting to join · ${state.joiners.length}<svg class="lg-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>${rows.join("")}${more}</div>`;
+}
+/* ?as=team / ?as=approver, read at load: the app may redirect and drop the query before the hub answers */
+{
+  const asQ = new URLSearchParams(location.search).get("as");
+  if (asQ) try { sessionStorage.setItem("review.as", asQ); } catch {}
+}
 rv(`/__review/hub${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`).then((r) => r.json()).then((h) => {
   state.hub = h;
   state.me = h.who || "";
+  loadRules().then((changed) => changed && renderPanel()); // the rules table, once the hub has answered
+  loadJoiners().then((changed) => changed && renderPanel()); // who waits to be let in (approvers)
   /* who is looking (Nirav, 2026-10-23): the approver, or the team. ?as=team / ?as=approver tries the other view; the
      test session shows the team's by default, so both can be seen from one machine */
-  const asQ = new URLSearchParams(location.search).get("as");
-  if (asQ) try { sessionStorage.setItem("review.as", asQ); } catch {}
   let asWas = null;
   try { asWas = sessionStorage.getItem("review.as"); } catch {}
   const persona = asWas === "team" || asWas === "approver" ? asWas : window.__reviewSession ? "team" : h.approver ? "approver" : "team";
@@ -2078,9 +2255,9 @@ let tipHold = null; // the comment id whose tip must stay up whatever the pointe
 function buildTip(c) {
   tip.dataset.id = c.id;
   const sev = SEVERITIES.map(([k, label]) => `<button type="button" data-k="${k}" class="${k === c.severity ? "on" : ""}" aria-label="${label}"><span class="dot"></span><span class="lbl">${label}</span><span class="scope-tip">${label}</span></button>`).join("");
-  tip.innerHTML = `<div class="tip-head"><span class="tip-sev">${sev}</span><button class="tip-open" title="Show it in the list" aria-label="Show it in the list"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 15l3 3 3-3M18 11v7"/></svg></button></div><div class="tip-text" aria-label="Comment, click to edit"></div>${c.note?.text ? '<div class="tip-note"></div>' : ""}<div class="tip-acts"><div class="tip-acts-in"><button class="tip-rm">Remove</button><button class="tip-ok" data-to="${c.status === "progress" ? "approval" : c.status === "approval" ? "approved" : "progress"}">${c.status === "progress" ? "Done" : c.status === "approval" ? "Approve" : "Pick up"}</button></div></div>`;
+  tip.innerHTML = `<div class="tip-head"><span class="tip-sev">${sev}</span><button class="tip-open" title="Show it in the list" aria-label="Show it in the list"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 15l3 3 3-3M18 11v7"/></svg></button></div><div class="tip-text" aria-label="Comment, click to edit"></div>${hasNote(c) ? '<div class="tip-note"></div>' : ""}<div class="tip-acts"><div class="tip-acts-in">${canRemove(c) ? '<button class="tip-rm">Remove</button>' : ""}${(() => { if (isQ(c)) return ""; /* a question is answered in the list */ const to = c.status === "progress" ? "approval" : c.status === "approval" ? "approved" : "progress"; return can(moveOf(c, to), c) ? `<button class="tip-ok" data-to="${to}">${c.status === "progress" ? "Done" : c.status === "approval" ? "Approve" : "Pick up"}</button>` : ""; })()}</div></div>`;
   tip.querySelector(".tip-text").textContent = c.text;
-  if (c.note?.text) tip.querySelector(".tip-note").innerHTML = noteHtml(c);
+  if (hasNote(c)) tip.querySelector(".tip-note").innerHTML = noteHtml(c);
 }
 tip.addEventListener("click", async (e) => {
   const c = state.comments.find((x) => x.id === tip.dataset.id);
@@ -2125,7 +2302,8 @@ tip.addEventListener("click", async (e) => {
       }, 2500);
       return;
     }
-    await api("delete", { id: c.id });
+    const done = await api("delete", { id: c.id }).catch((e) => ({ error: String(e?.message || e) }));
+    if (!done?.ok) return toast(done?.error || "Could not remove it", true);
     await loadComments();
     tip.classList.remove("on");
     delete tip.dataset.id;
@@ -2134,7 +2312,7 @@ tip.addEventListener("click", async (e) => {
     toast(`Removed #${c.n}`);
     return;
   }
-  if (t.classList.contains("tip-text") && t.contentEditable !== "true") {
+  if (t.classList.contains("tip-text") && t.contentEditable !== "true" && canEdit(c)) {
     tipHold = c.id;
     editInPlace(t, c, () => {
       tipHold = null;
@@ -2449,7 +2627,7 @@ function refreshCard(c, animate = false) {
   const st = card.querySelector(".card-status");
   const acts = card.querySelector(".card-foot .acts");
   const chip = () => {
-    st.dataset.s = c.status;
+    st.dataset.s = shownStatus(c);
     st.innerHTML = statusHtml(c);
   };
   const buttons = () => {
@@ -2457,7 +2635,7 @@ function refreshCard(c, animate = false) {
   };
   if (!st || state.asking?.id === c.id) {
     /* the box is in the foot: the words are kept in state and shown when it closes */
-  } else if (animate && (st.textContent.trim() !== statusLine(c).trim() || st.dataset.s !== c.status)) {
+  } else if (animate && (st.textContent.trim() !== statusLine(c).trim() || st.dataset.s !== shownStatus(c))) {
     swapIn(st, chip);
     swapIn(acts, buttons);
   } else {
@@ -2465,7 +2643,7 @@ function refreshCard(c, animate = false) {
     buttons();
   }
   let note = card.querySelector(".card-note");
-  if (c.note?.text) {
+  if (hasNote(c)) {
     if (!note) {
       note = document.createElement("div");
       note.className = "card-note";
@@ -2473,6 +2651,7 @@ function refreshCard(c, animate = false) {
     }
     note.innerHTML = noteHtml(c);
   } else note?.remove();
+  histSync(card, c);
   return true;
 }
 /* one write; the pressed button shows it is working and its neighbours go quiet; the hub's answer then crossfades
@@ -2490,7 +2669,10 @@ async function applyUpdate(body, btn) {
   btn?.classList.remove("loading");
   acts?.classList.remove("busy");
   if (!r?.entry) {
-    toast(`Could not save that: ${r?.error || "the hub did not answer"}`);
+    /* a rule of the hub's ("Already picked up by Pranjal") is said as it is, and the list catches up with what won */
+    const said = r?.error || "the hub did not answer";
+    toast(/picked up|approver|not allowed/i.test(said) ? said : `Could not save that: ${said}`, true);
+    if (/picked up/i.test(said)) loadComments().then(() => renderPanel());
     return null;
   }
   if (applyEntry(r.entry) || !refreshCard(r.entry, !!card)) renderPanel();
@@ -2505,7 +2687,62 @@ function swapIn(el, change) {
     el.classList.remove("swap");
   }, 140);
 }
-const api = (path, body) => rv(`/__review/${path}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+const guarded = (path, body) => path === "delete" || (path === "update" && ((body?.status === "approved" && !body?.resolve) || !!body?.assignTo)); // a question's Got it is not an approval
+const api = (path, body) => rv(`/__review/${path}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, guarded(path, body)).then((r) => r.json());
+let teamCache = { at: 0, list: [] };
+async function teamList() {
+  if (Date.now() - teamCache.at < 60_000 && teamCache.list.length) return teamCache.list;
+  const list = await rv(`/__review/people${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`).then((r) => r.json()).catch(() => []);
+  teamCache = { at: Date.now(), list: Array.isArray(list) ? list : [] };
+  return teamCache.list;
+}
+/* WHO MAY DO WHAT comes from the hub's rules table (hub/roles.sql, review_rules; Nirav, 2026-10-24): change a row in
+   Supabase and every drawer follows within a minute, no new extension. These defaults are the same rows, used until
+   the table answers (or where it does not exist). An approver may always do everything; a signed rule also needs the
+   GitHub sign-in (the extension, or a local test session). ?as=team shows the team's view. */
+const RULES_DEFAULT = [
+  { action: "pick_up", who: "anyone", statuses: ["open"], signed: false },
+  { action: "put_back", who: "assignee", statuses: ["progress"], signed: false },
+  { action: "done", who: "assignee", statuses: ["progress"], signed: false },
+  { action: "approve", who: "approver", statuses: null, signed: true },
+  { action: "send_back", who: "approver", statuses: ["approval"], signed: true },
+  { action: "take_back", who: "assignee", statuses: ["approval"], signed: false },
+  { action: "answer", who: "anyone", statuses: null, signed: false },
+  { action: "follow_up", who: "author", statuses: null, signed: false },
+  { action: "resolve", who: "author", statuses: ["open", "progress", "approval"], signed: false },
+  { action: "reopen", who: "approver", statuses: ["approved"], signed: true },
+  { action: "hand_over", who: "assignee", statuses: ["progress"], signed: true },
+  { action: "assign", who: "approver", statuses: ["open"], signed: true },
+  { action: "edit", who: "author", statuses: null, signed: false },
+  { action: "change_type", who: "anyone", statuses: null, signed: false },
+  { action: "remove", who: "author", statuses: ["open"], signed: true },
+];
+state.rules = RULES_DEFAULT;
+let rulesAt = 0;
+async function loadRules() {
+  if (Date.now() - rulesAt < 55_000) return false;
+  rulesAt = Date.now();
+  const rows = await rv(`/__review/rules${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`).then((r) => r.json()).catch(() => null);
+  if (!Array.isArray(rows) || !rows.length) return false;
+  const changed = JSON.stringify(rows) !== JSON.stringify(state.rules);
+  state.rules = rows;
+  return changed;
+}
+const canSign = () => (window.__reviewSession ? true : EXT ? !!state.hub?.signedIn : extHere());
+const isApprover = () => !!state.hub?.approver && state.persona !== "team";
+const isMe = (name) => !!name && !!state.me && (name === state.me || name.split(/\s+/)[0] === state.me);
+const isMine = (c) => isMe(c.by);
+function can(action, c) {
+  const rows = state.rules.filter((r) => r.action === action);
+  if (!rows.length) return isApprover(); // an action nobody wrote a rule for: the approver's
+  if (rows.some((r) => r.signed) && !canSign()) return false;
+  if (isApprover()) return true;
+  return rows.some((r) => (!r.statuses || r.statuses.includes(c.status)) && (r.who === "anyone" || r.who === "member" || (r.who === "author" && isMine(c)) || (r.who === "assignee" && isMe(c.assignee))));
+}
+/* the move a button makes, as a rule's action */
+const moveOf = (c, to) => (to === "approved" ? "approve" : c.status === "approved" ? "reopen" : c.status === "approval" ? "send_back" : c.status === "progress" ? (to === "approval" ? "done" : "put_back") : "pick_up");
+const canEdit = (c) => can("edit", c);
+const canRemove = (c) => can("remove", c);
 state.filter = new Set(); // the tags pressed; none pressed = every tag
 state.selected = new Set(); // comment ids picked in the list; while any shown one is picked, the copies take those only
 state.scope = { kind: "all" };
@@ -2517,8 +2754,8 @@ const scopeNow = () => (state.scope.kind === "here" ? { kind: "route", route: lo
 /* the card's actions (Nirav, 2026-10-23: one button, the rest in a menu): the next step as the only button, then ⋯
    with the other moves, the type change and Remove */
 function actsHtml(c) {
-  const all = statusActions(c).match(/<button[^>]*>[^<]*<\/button>/g) || [];
-  const main = all.find((x) => !/ alt"/.test(x)) || all[0] || "";
+  const all = isQ(c) ? [] : (statusActions(c).match(/<button[^>]*>[^<]*<\/button>/g) || []).filter((x) => can(moveOf(c, (x.match(/data-to="(\w+)"/) || [])[1]), c)); // each move by the rules
+  let main = all.find((x) => !/ alt"/.test(x)) || all[0] || "";
   /* the product's popover (Nirav, 2026-10-23): an icon before every item */
   const I = (d) => `<svg class="mi-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   const ICO = {
@@ -2529,11 +2766,33 @@ function actsHtml(c) {
     fix: I('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-.4-.4-2.1z"/>'),
     question: I('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17h.01"/>'),
     remove: I('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
+    hand: I('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6 1.4 0 2.6.4 3.6 1.2"/><path d="M15 15h6M18.5 12.5L21 15l-2.5 2.5"/>'),
+    take: I('<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+    reply: I('<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/>'),
+    claude: I('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z"/>'),
   };
   const rest = all.filter((x) => x !== main).map((x) => x.replace('class="card-ok card-st alt"', 'class="card-st card-mi"').replace(/data-to="(\w+)">/, (m, to) => `data-to="${to}">${ICO[to] || ""}`));
   const other = SEVERITIES.find(([k]) => k !== c.severity);
+  /* hand over (in progress: the person on it or the approver) or assign (New: the approver) */
+  const handLabel = c.status === "progress" && can("hand_over", c) ? "Hand over to…" : c.status === "open" && can("assign", c) ? "Assign to…" : "";
+  if (handLabel && !isQ(c)) rest.push(`<button class="card-hand card-mi">${ICO.hand}${handLabel}</button>`);
+  /* A QUESTION'S BUTTONS (Nirav, 2026-10-24): Answer while it is asked (not for the asker); Got it once answered (the
+     asker, or an approver); the asker adds a detail or follows up; anyone may hand it to Claude */
+  if (isQ(c)) {
+    const asker = isMine(c), done = c.status === "approved", answered = c.status === "approval";
+    const item = (cls, ico, label) => `<button class="${cls} card-mi">${ICO[ico]}${label}</button>`;
+    if (!done && (asker || isApprover()) && answered && can("resolve", c)) main = `<button class="card-ok card-resolve">Got it</button>`;
+    else if (!done && !asker && !answered && can("answer", c)) main = `<button class="card-ok card-reply">Answer</button>`;
+    if (asker && can("follow_up", c)) rest.push(item("card-reply", "reply", answered || done ? "Follow up" : "Add a detail"));
+    else if (!asker && (answered || done) && can("answer", c)) rest.push(item("card-reply", "reply", "Add to the answer"));
+    if (!done && !answered && can("resolve", c)) rest.push(item("card-resolve", "approved", "Close it"));
+    if (!done) rest.push(item("card-claude", "claude", "Ask Claude"));
+  }
+  /* TAKE BACK (Nirav, 2026-10-24, backlog 7): whoever did it pulls it back to In progress while it waits for approval,
+     no reason asked; the approver has Send back instead */
+  if (c.status === "approval" && !isApprover() && can("take_back", c)) rest.unshift(`<button class="card-take card-mi">${ICO.take}Take back</button>`);
   /* in groups, a rule between them: where it goes, what it is, and Remove on its own */
-  const groups = [rest.join(""), other ? `<button class="card-type card-mi" data-k="${other[0]}">${ICO[other[0]]}Make it a ${esc(other[1].toLowerCase())}</button>` : "", `<button class="card-rm card-mi">${ICO.remove}<span class="mi-l">Remove</span></button>`].filter(Boolean);
+  const groups = [rest.join(""), other && can("change_type", c) ? `<button class="card-type card-mi" data-k="${other[0]}">${ICO[other[0]]}Make it a ${esc(other[1].toLowerCase())}</button>` : "", canRemove(c) ? `<button class="card-rm card-mi">${ICO.remove}<span class="mi-l">Remove</span></button>` : ""].filter(Boolean);
   const items = groups.join(`<span class="card-menu-sep" role="separator"></span>`);
   return `${main}<span class="card-more-wrap"><button class="card-more" aria-label="More" aria-haspopup="menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button><span class="card-menu" role="menu">${items}</span></span>`;
 }
@@ -2567,12 +2826,12 @@ function agoText(ts) {
 }
 /* who added it and when, under the comment (Nirav, 2026-10-23): their picture and name ("You" for your own), then the
    time; comments from before sign-in carry no author and show the time alone */
-function byHtml(c) {
+function byHtml(c, keepFace) {
   const when = agoText(c.ts);
   const whenHtml = when ? `<span class="by-when" title="${esc(new Date(c.ts).toLocaleString())}">${esc(when)}</span>` : "";
   if (!c.by) return whenHtml;
   const statusWho = c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : c.status === "approved" ? c.approvedBy : null;
-  const sameFace = (!!statusWho && statusWho === c.by) || (!!c.note?.text && c.note.by === c.by); // already on the status line or the note: the name only here
+  const sameFace = !keepFace && ((!!statusWho && statusWho === c.by) || (!!c.note?.text && c.note.by === c.by)); // already on the status line or the note: the name only here (the history's start keeps it)
   const mine = !!state.me && (c.by === state.me || c.by.split(/\s+/)[0] === state.me); // "Nirav Bhatt" from before the first-name list is still you
   const full = personHtml(c, c.by), named = esc(c.by);
   const person = (sameFace ? "" : full.slice(0, full.length - named.length)) + (mine ? "You" : named); // the picture (unless the status line shows it), then the name or "You"
@@ -2614,7 +2873,13 @@ root.addEventListener("error", (e) => {
 /* the status as a sentence with the person's face (Nirav, 2026-10-23): "Pranjal is working on it", "You sent it for
    approval", "Approved by Nirav", "New, waiting for someone to pick it up"; the status words keep the status colour,
    the rest is in the quiet ink */
+const isQ = (c) => c.severity === "question" || c.severity === "idea";
+/* the shape and colour of the status line: an old question someone had picked up is asked, so New's circle */
+const shownStatus = (c) => (isQ(c) && c.status === "progress" ? "open" : c.status);
+/* who spoke last on a question, as shown: "Claude" when Claude answered */
+const replyBy = (c) => (c.note?.kind === "reply" && c.note.via === "claude" ? "Claude" : c.note?.kind === "reply" ? c.note.by : c.doneBy);
 function statusHtml(c) {
+  if (isQ(c)) return qStatusHtml(c);
   const who = c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : c.status === "approved" ? c.approvedBy : null;
   const mine = !!who && !!state.me && (who === state.me || who.split(/\s+/)[0] === state.me);
   const face = (name) => {
@@ -2630,23 +2895,132 @@ function statusHtml(c) {
   if (c.status === "approved") return who ? line(`${k("Approved")}<span class="st-rest"> by</span> ${person}`) : k("Approved");
   return "";
 }
+/* a question's line (Nirav, 2026-10-24): "Asked, waiting for an answer", "Zeni answered, over to you", "Resolved by
+   Kishan"; an old question someone had picked up reads as asked */
+function qStatusHtml(c) {
+  const k = (t) => `<b class="st-k">${esc(t)}</b>`;
+  const line = (h) => `<span class="st-s">${h}</span>`;
+  const person = (name) => {
+    if (!name) return "";
+    if (name === "Claude") return `<span class="av av-claude">✦</span><span class="st-who">Claude</span>`;
+    const full = personHtml(c, name), named = esc(name);
+    return `${full.slice(0, full.length - named.length)}<span class="st-who">${isMe(name) ? "You" : named}</span>`;
+  };
+  if (c.status === "approval") {
+    /* the answer's words and its writer are in the note below; the line says where it stands */
+    const who = replyBy(c);
+    if (c.note?.kind === "reply") return line(`${k("Answered")}${isMine(c) && !isMe(who) ? `<span class="st-rest">, over to you</span>` : ""}`);
+    return line(`${who ? `${person(who)} ` : ""}${k(who ? "answered" : "Answered")}${isMine(c) && !isMe(who) ? `<span class="st-rest">, over to you</span>` : ""}`);
+  }
+  if (c.status === "approved") return c.approvedBy ? line(`${k("Resolved")}<span class="st-rest"> by</span> ${person(c.approvedBy)}`) : k("Resolved");
+  return line(`${k("Asked")}<span class="st-rest">, waiting for an answer</span>`);
+}
+const hasNote = (c) => !!(c.note?.text || c.note?.kind === "hand");
 function noteHtml(c) {
-  if (!c.note?.text) return "";
+  if (!hasNote(c)) return "";
   /* a sentence and the words (Nirav, 2026-10-23): "Nirav sent it back", then what they said on its own line */
   const verb = c.note.from === "approved" ? "reopened it" : c.note.to === "open" ? "put it back" : "sent it back";
   const by = c.note.by;
   const mine = !!by && !!state.me && (by === state.me || by.split(/\s+/)[0] === state.me);
   /* one face per person per card (Nirav, 2026-10-23): the note shows its writer's face unless the status line already
      shows that same person */
-  const statusWho = c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : c.status === "approved" ? c.approvedBy : null;
+  const statusWho = isQ(c) && c.note.kind === "reply" ? null : c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : c.status === "approved" ? c.approvedBy : null; // a question's line shows nobody: the face is here
   let face = "";
   if (by && by !== statusWho) {
     const full = personHtml(c, by), named = esc(by);
     face = full.slice(0, full.length - named.length);
   }
   const who = by ? `${face}<b>${mine ? "You" : esc(by)}</b> ` : "";
+  if (c.note.kind === "reply") {
+    /* the latest word on a question: "Zeni answered: “…”", "You followed up: “…”", "Claude answered: “…”" */
+    const claude = c.note.via === "claude";
+    const ask = !claude && c.note.by === c.by;
+    const head = claude ? `<span class="av av-claude">✦</span><b>Claude</b> answered` : `${who}${ask ? "followed up" : "answered"}`;
+    return `<span class="nt-head nt-reply" data-ask="${ask}">${head}:</span> <span class="nt-text">“${esc(c.note.text)}”</span>`;
+  }
+  if (c.note.kind === "hand") {
+    /* "Pranjal handed it to Kishan", and the reason when there is one */
+    const to = c.note.toWho;
+    const toTxt = to ? (isMe(to) ? "you" : esc(to)) : "someone";
+    const line = `${by ? who : ""}${by ? "handed it to" : "Handed to"} <b>${toTxt}</b>`;
+    return c.note.text ? `<span class="nt-head">${line}:</span> <span class="nt-text">“${esc(c.note.text)}”</span>` : `<span class="nt-head">${line}</span>`;
+  }
   const head = by ? `${who}${esc(verb)}` : esc(verb[0].toUpperCase() + verb.slice(1));
   return `<span class="nt-head">${head}:</span> <span class="nt-text">“${esc(c.note.text)}”</span>`; // one line; long words wrap under
+}
+/* HISTORY ON THE CARD (Nirav, 2026-10-24, backlog 6): every round, not only the last note. "History · 4" in the hover
+   strip opens the comment's story above it, latest first (Nirav, 2026-10-24): each move as a sentence with its face,
+   its time and the words that rode with it ("Nirav sent it back: “…”"), down to who added it. Only when there is more
+   than the status line and the note already say (two moves or more). Open cards are kept in state, so a redraw leaves
+   them open. The face sits in a column of its own, so the words line up under the name. */
+state.histOpen = new Set();
+state.histAll = new Set(); // long ones unfolded
+const hasHist = (c) => Array.isArray(c.history) && c.history.length >= 2;
+function histHtml(c) {
+  const face = (name) => {
+    if (!name) return "";
+    if (name === "Claude") return `<span class="av av-claude">✦</span>`;
+    const full = personHtml(c, name), named = esc(name);
+    return full.slice(0, full.length - named.length);
+  };
+  const row = (st, by, line, at, words) =>
+    `<li class="hs-step"><span class="gh-shape" data-s="${st}"></span>${by ? `<span class="hs-face">${face(by)}</span>` : ""}<span class="hs-body"><span class="hs-line">${by ? `<b>${isMe(by) ? "You" : esc(by)}</b> ` : ""}${line}</span>${words ? `<span class="hs-words">“${esc(words)}”</span>` : ""}</span><span class="hs-when"${at ? ` title="${esc(new Date(at).toLocaleString())}"` : ""}>${esc(agoText(at))}</span></li>`;
+  const cap = (h, name) => (name ? h : h[0].toUpperCase() + h.slice(1)); // "Picked it up" when nobody is named
+  const out = []; // who added it is the strip's own line, where the thread starts
+  let was = "open";
+  for (const s of c.history) {
+    const from = s.from || was; // steps from before 2026-10-24 carry no "from": the one before tells
+    let verb;
+    if (s.kind === "hand") {
+      const to = s.toWho ? (isMe(s.toWho) ? "you" : esc(s.toWho)) : "someone";
+      verb = `${from === "open" ? "assigned" : "handed"} it to <b>${to}</b>`;
+    } else if (s.kind === "take") verb = "took it back";
+    else if (s.kind === "reply") verb = s.via !== "claude" && s.by === c.by ? "followed up" : "answered";
+    else if (s.kind === "to_fix") verb = "made it a fix";
+    else if (isQ(c) && s.status === "approved") verb = "marked it resolved";
+    else if (s.status === "progress") verb = from === "approval" ? "sent it back" : from === "approved" ? "reopened it" : "picked it up";
+    else if (s.status === "approval") verb = "sent it for approval";
+    else if (s.status === "approved") verb = "approved it";
+    else verb = from === "approved" ? "reopened it" : "put it back";
+    const by = s.via === "claude" ? "Claude" : s.by; // Claude's answers under its own mark
+    out.push(row(s.status, by, cap(verb, by), s.at, s.note));
+    was = s.status;
+  }
+  /* in order, down from the author's face (Nirav, 2026-10-24); a long story folds: "Show 90 earlier", then the latest five */
+  /* the fold on the thread itself: chevrons apart to show, chevrons together to hide again (Nirav, 2026-10-24) */
+  if (out.length > 6) {
+    const hidden = out.length - 5, all = state.histAll.has(c.id);
+    const ic = all ? '<path d="M7 20l5-5 5 5"/><path d="M7 4l5 5 5-5"/>' : '<path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/>';
+    const fold = `<li class="hs-step hs-fold"><button type="button" class="hs-more" aria-expanded="${all}"><span class="hs-fold-ic" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${ic}</svg></span>${all ? "Hide" : "Show"} ${hidden} earlier</button></li>`;
+    if (all) out.unshift(fold);
+    else out.splice(0, hidden, fold);
+  }
+  return `<ol class="hs-list">${out.join("")}</ol>`;
+}
+/* the author line in the hover strip is the history's button (Nirav, 2026-10-24: one thing, not two): "Pranjal · 2 h
+   ago" as before; under the pointer (and while open) the face turns into a history mark, a click opens it. Without a
+   history it stays plain words */
+function byLineHtml(c) {
+  if (!hasHist(c)) return `<span class="cm-by">${byHtml(c)}</span>`;
+  const open = state.histOpen.has(c.id);
+  return `<button type="button" class="cm-by cm-hist${c.by ? "" : " no-face"}" aria-expanded="${open}" title="${open ? "Hide the history" : `History, ${c.history.length} steps`}"><span class="cm-hico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></span>${byHtml(c, true)}<span class="cm-steps"><span class="by-sep">·</span>${c.history.length} ${c.history.length === 1 ? "step" : "steps"}</span></button>`;
+}
+/* the history block and its button, matched to the comment (after a redraw or a move) */
+function histSync(card, c) {
+  const open = hasHist(c) && state.histOpen.has(c.id);
+  if (!open) setTimeout(roomBack, 0);
+  card.classList.toggle("hist-open", open);
+  const by = card.querySelector(".cm-by");
+  if (by) by.outerHTML = byLineHtml(c);
+  let box = card.querySelector(".card-hist");
+  if (open) {
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "card-hist";
+      card.querySelector(".card-meta-in")?.appendChild(box); // inside the hover strip, under its line (Nirav, 2026-10-24)
+    }
+    box.innerHTML = histHtml(c);
+  } else box?.remove();
 }
 function statusLine(c) {
   if (c.status === "progress") return `${STATUS.progress}${c.assignee ? ` · ${c.assignee}` : ""}`;
@@ -2658,6 +3032,7 @@ const statusToast = { progress: "picked up", approval: "done, for approval", app
 const backToast = { progress: "sent back", open: "put back" };
 /* "Sent back · Nirav: the hover colour is still the old one"; the reason a comment came back, under the foot */
 function noteLine(c) {
+  if (c.note?.kind === "hand") return `Handed to ${c.note.toWho || "someone"}${c.note.by ? ` by ${c.note.by}` : ""}${c.note.text ? `: ${c.note.text}` : ""}`;
   if (!c.note?.text) return "";
   const what = c.note.from === "approved" ? "Reopened" : c.note.to === "open" ? "Put back" : "Sent back";
   return `${what}${c.note.by ? ` · ${c.note.by}` : ""}: ${c.note.text}`;
@@ -2671,13 +3046,39 @@ function askNote(card, c, to, label) {
   state.asking = { id: c.id, to, label, text: "", focused: true };
   mountAsk(card, c);
 }
+/* the box grows out of the button that opened it (the foot's right end) and folds back into it when sent or let go
+   (Nirav, 2026-10-24); the foot's own line fades back in after it */
+const BOX_EASE = { duration: 220, easing: "cubic-bezier(.32,.72,0,1)" };
+function boxFrom(box) {
+  const go = box.querySelector(".note-go");
+  return `inset(0 0 0 ${Math.max(0, box.offsetWidth - (go?.offsetWidth || 60) - 6)}px round 7px)`;
+}
+function openBox(box) {
+  if (!box?.animate) return;
+  box.animate([{ clipPath: boxFrom(box), opacity: 0.4 }, { clipPath: "inset(0 0 0 0 round 7px)", opacity: 1 }], BOX_EASE);
+}
+function closeBox(foot, then) {
+  const box = foot?.querySelector(".note-box");
+  const back = () => {
+    then();
+    foot?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: "ease-out" });
+  };
+  if (!box?.animate) return back();
+  const a = box.animate([{ clipPath: "inset(0 0 0 0 round 7px)", opacity: 1 }, { clipPath: boxFrom(box), opacity: 0 }], { ...BOX_EASE, duration: 180, fill: "forwards" });
+  a.onfinish = back;
+}
 function cancelAsk() {
   const a = state.asking;
   if (!a) return;
   state.asking = null;
   const card = panelBody.querySelector(`.card[data-id="${a.id}"]`);
   const c = state.comments.find((x) => x.id === a.id) || state.done.find((x) => x.id === a.id);
-  if (card && c) card.querySelector(".card-foot").innerHTML = footHtml(c);
+  if (card && c) {
+    const foot = card.querySelector(".card-foot");
+    closeBox(foot, () => {
+      if (!state.asking || state.asking.id !== a.id) foot.innerHTML = footHtml(c);
+    });
+  }
   if (state.stale && !panelBusy()) {
     state.stale = false;
     renderPanel(); // what arrived while the box was open
@@ -2687,17 +3088,20 @@ function mountAsk(card, c) {
   const a = state.asking;
   const foot = card.querySelector(".card-foot");
   if (!a || !foot) return;
-  foot.innerHTML = `<input class="note-in" type="text" maxlength="600" placeholder="Why? Enter sends it, Esc keeps it here"><button class="card-ok note-go">${a.label}</button>`;
+  foot.innerHTML = `<span class="note-box"><input class="note-in" type="text" maxlength="${a.reply ? 1200 : 600}" placeholder="${a.reply ? esc(a.ph) : a.assignTo ? `A note for ${esc(isMe(a.toName) ? "yourself" : a.toName)}? (optional) Enter hands it over` : "Why? Enter sends it, Esc keeps it here"}"><button class="note-go">${a.label}</button></span>`;
   const input = foot.querySelector(".note-in");
   const btn = foot.querySelector(".note-go");
+  if (!a.shown) openBox(foot.querySelector(".note-box")); // only the first time: a redraw puts it back still
+  a.shown = true;
   input.value = a.text;
   input.addEventListener("input", () => (a.text = input.value));
   const go = async () => {
     if (state.asking !== a) return;
     const note = input.value.trim();
+    if (a.reply && !note) return input.focus(); // an answer needs words
     input.disabled = true;
     btn.classList.add("loading");
-    const r = await api("update", { id: c.id, status: a.to, note }).catch(() => null);
+    const r = await api("update", a.reply ? { id: c.id, reply: note } : a.assignTo ? { id: c.id, assignTo: a.assignTo, note } : { id: c.id, status: a.to, note }).catch(() => null);
     if (state.asking === a) state.asking = null;
     if (!r?.entry) {
       input.disabled = false;
@@ -2708,11 +3112,13 @@ function mountAsk(card, c) {
     }
     const crossed = applyEntry(r.entry);
     if (crossed) renderPanel();
-    else {
-      foot.innerHTML = footHtml(r.entry);
-      settle(card, r.entry);
-    }
-    toast(`#${c.n} ${a.to === "open" && c.status === "approved" ? "reopened" : backToast[a.to]}${note ? " with a note" : ""}`);
+    else
+      closeBox(foot, () => {
+        foot.innerHTML = footHtml(r.entry);
+        settle(card, r.entry);
+      });
+    if (a.reply) return toast(`#${c.n} ${isMine(c) ? "followed up" : "answered"}`);
+    toast(a.assignTo ? `#${c.n} handed to ${isMe(a.toName) ? "you" : a.toName}` : `#${c.n} ${a.to === "open" && c.status === "approved" ? "reopened" : backToast[a.to]}${note ? " with a note" : ""}`);
   };
   input.addEventListener("keydown", (e) => {
     e.stopPropagation();
@@ -2734,12 +3140,12 @@ window.addEventListener("pointerdown", (e) => {
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
 /* the foot's normal content: where, the status chip, the actions */
 function footHtml(c) {
-  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${c.status}">${statusHtml(c)}</span>${c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${actsHtml(c)}</span>`}`;
+  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${shownStatus(c)}">${statusHtml(c)}</span>${c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${actsHtml(c)}</span>`}`;
 }
 /* the note under the foot, added, changed or removed to match the comment */
 function settle(card, c) {
   let note = card.querySelector(".card-note");
-  if (c.note?.text) {
+  if (hasNote(c)) {
     if (!note) {
       note = document.createElement("div");
       note.className = "card-note";
@@ -2747,6 +3153,7 @@ function settle(card, c) {
     }
     note.innerHTML = noteHtml(c);
   } else note?.remove();
+  histSync(card, c);
 }
 function renderPanel() {
   if (!panel.classList.contains("on")) return;
@@ -3027,6 +3434,11 @@ function renderPanel() {
     }
   }
   clearBody();
+  if (isWaiting()) {
+    panelBody.insertAdjacentHTML("beforeend", waitScreenHtml());
+    return;
+  }
+  if (isApprover() && state.joiners.length && view === "open") panelBody.insertAdjacentHTML("beforeend", joinHtml());
   const shown = inTab.filter((c) => (state.type === "all" || c.severity === state.type) && matchesQ(c, state.q));
   if (!shown.length) {
     const EMPTY = { open: "Nothing new.", progress: "Nothing in progress.", approval: "Nothing waiting for approval." };
@@ -3100,15 +3512,19 @@ function renderPanel() {
     card.tabIndex = 0; // the keyboard walks the cards (↑ ↓, Space selects)
     const sevLabel = SEVERITIES.find(([k]) => k === c.severity)?.[1] || c.severity;
     card.innerHTML = `
-      <div class="card-line"><span class="card-n out${onPage ? "" : " away"}" title="Show it on the page">${c.n}</span><div class="card-text" title="Click to edit"></div></div>
+      <div class="card-line"><span class="card-n out${onPage ? "" : " away"}" title="Show it on the page">${c.n}</span><div class="card-text${canEdit(c) ? "" : " ro"}"${canEdit(c) ? ' title="Click to edit"' : ""}></div></div>
       ${"" /* TRY 2026-10-23 (hover strip): was c.shot ? "" : the card-by line */}
       <button class="card-pick" aria-label="Select for copying" aria-pressed="${state.selected.has(c.id)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></button>
       ${c.shot ? `<div class="card-pic"><img class="card-shot" data-id="${c.id}" src="${thumbUrl(c)}" alt=""></div>` /* TRY 2026-10-23: byPicHtml(c) was here */ : ""}
-      <div class="card-foot">${footHtml(c)}</div>${c.note?.text ? `<div class="card-note"></div>` : ""}
+      <div class="card-foot">${footHtml(c)}</div>${hasNote(c) ? `<div class="card-note"></div>` : ""}
       <div class="card-meta"><div class="card-meta-in"><span class="cm-by">${byHtml(c)}</span><span class="cm-where"></span></div></div>`;
     card.querySelector(".card-text").textContent = c.text;
-    card.querySelector(".cm-where").innerHTML = `<b class="cm-type" data-k="${c.severity}">${esc(sevLabel)}</b> · ${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}`;
-    if (c.note?.text) card.querySelector(".card-note").innerHTML = noteHtml(c);
+    /* quiet on the right (Nirav, 2026-10-24): the kind and the page only; the place on the page and "no picture" in the
+       tooltip */
+    const where = card.querySelector(".cm-where");
+    where.innerHTML = `<b class="cm-type" data-k="${c.severity}">${esc(sevLabel)}</b> · <span class="cm-place" data-tip="${esc(`${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}">${esc(c.pageTitle || c.route)}</span>`;
+    if (hasNote(c)) card.querySelector(".card-note").innerHTML = noteHtml(c);
+    histSync(card, c);
     if (c.shot && c.rect) card.querySelector(".card-pic").appendChild(liveBadge(c, card.querySelector(".card-shot")));
     into.appendChild(card);
     if (state.asking?.id === c.id) mountAsk(card, c); // the note box back, once the card is on the page
@@ -3119,6 +3535,10 @@ function renderPanel() {
   /* a spacer at the very end that gives back exactly what a card's hover strip takes, so the list's height never
      changes on hover; at the bottom of the list the scroll then has nothing to jump for (the last card shook) */
   panelBody.insertAdjacentHTML("beforeend", `<div class="list-spacer" aria-hidden="true"></div>`);
+  for (const id of state.histOpen) {
+    const open = panelBody.querySelector(`.card[data-id="${id}"]`);
+    if (open) roomFor(open, true); // a redraw keeps an open history's room
+  }
   renderPickPill();
   if (focusWas) panelBody.querySelector(`.card[data-id="${focusWas}"]`)?.focus({ preventScroll: true });
   markPinned();
@@ -3243,7 +3663,135 @@ for (const b of $(".panel-view").querySelectorAll("button"))
     renderPanel();
   });
 $(".panel-veil").addEventListener("click", () => openPanel(false));
+/* an instant tip for the place on the page (Nirav, 2026-10-24: the browser's own title waits a second); one element
+   at the top of the shadow root, so the card's clipped hover strip cannot cut it */
+const placeTip = document.createElement("div");
+placeTip.className = "place-tip";
+root.appendChild(placeTip);
+panelBody.addEventListener("pointerover", (e) => {
+  const el = e.target.closest?.(".cm-place");
+  if (!el) return;
+  placeTip.textContent = el.dataset.tip;
+  const r = el.getBoundingClientRect();
+  placeTip.classList.add("on");
+  const w = placeTip.offsetWidth;
+  placeTip.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+  placeTip.style.top = `${r.top - placeTip.offsetHeight - 6}px`;
+});
+panelBody.addEventListener("pointerout", (e) => {
+  if (e.target.closest?.(".cm-place")) placeTip.classList.remove("on");
+});
+panelBody.addEventListener("scroll", () => placeTip.classList.remove("on"), { passive: true });
+/* an open history closes when the pointer moves on to another card, and that card goes back to normal (Nirav,
+   2026-10-24) */
+/* the history slides open and shut instead of jumping (Nirav, 2026-10-24) */
+const HIST_EASE = { duration: 240, easing: "cubic-bezier(.32,.72,0,1)" };
+function slideHist(box, open, then) {
+  if (!box) return then?.();
+  const h = box.offsetHeight;
+  box.style.overflow = "hidden";
+  const shut = { height: "0px", marginTop: "0px", opacity: 0 }, full = { height: `${h}px`, marginTop: "12px", opacity: 1 };
+  const a = box.animate(open ? [shut, full] : [full, shut], HIST_EASE);
+  a.onfinish = a.oncancel = () => {
+    box.style.overflow = "";
+    then?.();
+  };
+}
+/* a floating strip near the end of the list (the last card's history) gets room under it and scrolls into view above
+   the bottom bar (Nirav, 2026-10-24); a closed history gives the room back */
+function roomFor(card, still) {
+  const spacer = panelBody.querySelector(".list-spacer");
+  if (!spacer || host.dataset.strip !== "float") return;
+  const meta = card.querySelector(".card-meta");
+  if (!meta) return;
+  const bar = (tools.offsetHeight || 56) + 12;
+  spacer.style.transition = "none"; // the room is there at once, so the scroll below is not cut short
+  spacer.style.height = "";
+  const need = meta.getBoundingClientRect().bottom + bar - spacer.getBoundingClientRect().bottom;
+  if (need > 0) spacer.style.height = `${spacer.offsetHeight + need}px`;
+  spacer.offsetHeight;
+  spacer.style.transition = "";
+  if (still) return;
+  const over = meta.getBoundingClientRect().bottom - (panelBody.getBoundingClientRect().bottom - bar);
+  if (over > 0) panelBody.scrollBy({ top: over, behavior: "smooth" });
+}
+function roomBack() {
+  if (state.histOpen.size) return;
+  const spacer = panelBody.querySelector(".list-spacer");
+  if (spacer?.style.height) spacer.style.height = "";
+}
+/* while something above folds, the card under the pointer stays where it is (its own scrolling still moves it) */
+function holdStill(el, ms) {
+  let top = el.getBoundingClientRect().top, scroll = panelBody.scrollTop;
+  const end = performance.now() + ms;
+  const tick = () => {
+    if (!el.isConnected) return;
+    const shift = el.getBoundingClientRect().top - top + (panelBody.scrollTop - scroll); // what the layout moved, less any scroll
+    if (shift) panelBody.scrollTop += shift;
+    top = el.getBoundingClientRect().top;
+    scroll = panelBody.scrollTop;
+    if (performance.now() < end) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+panelBody.addEventListener("pointerover", (e) => {
+  if (!state.histOpen.size) return;
+  const over = e.target.closest?.(".card");
+  if (!over) return;
+  let closing = false;
+  for (const id of [...state.histOpen]) {
+    if (id === over.dataset.id) continue;
+    state.histOpen.delete(id);
+    state.histAll.delete(id);
+    closing = true;
+    const card = panelBody.querySelector(`.card[data-id="${id}"]`);
+    const c = state.comments.find((x) => x.id === id) || state.done.find((x) => x.id === id);
+    if (!card || !c) continue;
+    /* one fold, not two (Nirav, 2026-10-24): the history lives inside the hover strip, so letting the strip close folds
+       both together; the history leaves the page once the strip is shut */
+    const btn = card.querySelector(".cm-hist");
+    btn?.blur();
+    btn?.setAttribute("aria-expanded", "false");
+    card.classList.remove("hist-open");
+    setTimeout(() => {
+      if (!state.histOpen.has(id)) histSync(card, c);
+    }, 260);
+  }
+  if (closing) holdStill(over, HIST_EASE.duration + 300);
+});
 panelBody.addEventListener("click", async (e) => {
+  if (e.target.closest(".join-title")) {
+    try {
+      if (joinFolded()) localStorage.removeItem("review.join.folded");
+      else localStorage.setItem("review.join.folded", joinKey());
+    } catch {}
+    renderPanel();
+    return;
+  }
+  if (e.target.closest(".join-more")) {
+    state.joinAll = !state.joinAll;
+    renderPanel();
+    return;
+  }
+  const join = e.target.closest(".join-go, .join-no");
+  if (join) {
+    /* let in or refuse: the approver's sign-in decides, so it goes through the extension */
+    const row = join.closest(".join-row");
+    const role = join.classList.contains("join-go") ? "member" : "refused";
+    join.classList.add("loading");
+    row.classList.add("busy");
+    const r = await rv(`/__review/members${sessQ()}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: row.dataset.h, role }) }, true).then(async (x) => ({ ok: x.ok, body: await x.json() })).catch(() => null);
+    if (!r?.ok || !Array.isArray(r.body)) {
+      join.classList.remove("loading");
+      row.classList.remove("busy");
+      return toast(r?.body?.error || "Could not save that: the hub did not answer", true);
+    }
+    state.joiners = r.body;
+    teamCache.at = 0; // the hand-over list takes them in
+    toast(role === "member" ? `${row.dataset.name} is in` : `${row.dataset.name} was refused`);
+    renderPanel();
+    return;
+  }
   const head = e.target.closest(".list-group");
   if (head) {
     const set = new Set(state.folded || []);
@@ -3266,6 +3814,31 @@ panelBody.addEventListener("click", async (e) => {
   if (!card) return;
   const c = state.comments.find((x) => x.id === card.dataset.id) || state.done.find((x) => x.id === card.dataset.id);
   if (!c) return;
+  if (e.target.closest(".hs-more")) {
+    if (state.histAll.has(c.id)) state.histAll.delete(c.id);
+    else state.histAll.add(c.id);
+    histSync(card, c);
+    roomFor(card);
+    return;
+  }
+  if (e.target.closest(".cm-hist")) {
+    if (state.histOpen.has(c.id)) {
+      state.histOpen.delete(c.id);
+      state.histAll.delete(c.id);
+      card.querySelector(".cm-hist")?.setAttribute("aria-expanded", "false");
+      slideHist(card.querySelector(".card-hist"), false, () => {
+        histSync(card, c);
+        card.querySelector(".cm-hist")?.focus({ preventScroll: true });
+      });
+    } else {
+      state.histOpen.add(c.id);
+      histSync(card, c);
+      roomFor(card); // measured before the slide starts: the strip's full height
+      slideHist(card.querySelector(".card-hist"), true);
+      card.querySelector(".cm-hist")?.focus({ preventScroll: true });
+    }
+    return;
+  }
   if (e.target.classList.contains("card-retry")) {
     delete c.failed;
     renderPanel();
@@ -3291,12 +3864,83 @@ panelBody.addEventListener("click", async (e) => {
     toast(`#${c.n} ${statusToast[to]}`);
     return;
   }
+  if (btn?.classList.contains("card-reply")) {
+    card.querySelector(".card-more-wrap.open")?.classList.remove("open");
+    card.classList.remove("menu-open");
+    if (state.asking?.id === c.id) return;
+    const asker = isMine(c);
+    state.asking = { id: c.id, reply: true, label: asker ? "Send" : "Answer", ph: asker ? "Add a detail or ask again. Enter sends it" : "Your answer. Enter sends it, Esc keeps it here", text: "", focused: true };
+    mountAsk(card, c);
+    return;
+  }
+  if (btn?.classList.contains("card-resolve")) {
+    card.querySelector(".card-more-wrap.open")?.classList.remove("open");
+    card.classList.remove("menu-open");
+    await applyUpdate({ id: c.id, status: "approved", resolve: true }, btn);
+    toast(`#${c.n} resolved`);
+    return;
+  }
+  if (btn?.classList.contains("card-claude")) {
+    card.querySelector(".card-more-wrap.open")?.classList.remove("open");
+    card.classList.remove("menu-open");
+    /* CLAUDE ANSWERS (Nirav, 2026-10-24): a brief to paste into a Claude session in the project; Claude reads the code
+       the question points at and answers on the hub with the review command (marked as Claude's answer) */
+    const talk = (c.history || []).filter((h) => h.kind === "reply").map((h) => `  ${h.via === "claude" ? "Claude" : h.by}: ${h.note}`).join("\n");
+    const brief = [
+      `Answer this design-review question from the code, then post the answer on the review hub.`,
+      ``,
+      `#${c.n} (${c.id}), asked by ${c.by || "someone"}: "${c.text}"`,
+      `Where: ${c.pageTitle || c.route} (${c.route})${c.context ? `, ${c.context}` : ""}${typeof c.element === "string" && c.element ? `, on ${c.element}` : ""}`,
+      talk ? `So far:\n${talk}` : "",
+      ``,
+      `Run \`npx review show ${c.id}\` for the element, the trail and the picture. Answer in one or two plain sentences, as you`,
+      `would to a designer, and post it: npx review reply ${c.id} --claude "<your answer>"`,
+      `If the answer is that something should change, say so; the asker can make it a fix.`,
+    ].filter((l, i, xs) => l || xs[i - 1]).join("\n");
+    try {
+      await navigator.clipboard.writeText(brief);
+      toast(`#${c.n} copied for Claude: paste it into a Claude session`);
+    } catch {
+      toast("Could not copy: the browser said no", true);
+    }
+    return;
+  }
+  if (btn?.classList.contains("card-take")) {
+    card.querySelector(".card-more-wrap.open")?.classList.remove("open");
+    card.classList.remove("menu-open");
+    await applyUpdate({ id: c.id, status: "progress", take: true }, btn);
+    toast(`#${c.n} taken back`);
+    return;
+  }
   if (e.target.closest(".card-more")) {
-    const wrap = e.target.closest(".card-more-wrap");
+    let wrap = e.target.closest(".card-more-wrap");
     const open = !wrap.classList.contains("open");
+    /* a picker left half-way (the team list) comes back as the menu */
+    if (open && wrap.querySelector(".hand-list")) {
+      const acts = card.querySelector(".card-foot .acts");
+      acts.innerHTML = actsHtml(c);
+      wrap = acts.querySelector(".card-more-wrap");
+    }
     root.querySelectorAll(".card-more-wrap.open").forEach((w) => w.classList.remove("open"));
     wrap.classList.toggle("open", open);
     card.classList.toggle("menu-open", open);
+    return;
+  }
+  if (e.target.closest(".card-hand")) {
+    const menu = card.querySelector(".card-menu");
+    menu.innerHTML = `<span class="hand-title">${c.status === "open" ? "Assign to" : "Hand over to"}</span><span class="hand-list"><span class="hand-wait">Loading the team…</span></span>`;
+    const team = await teamList();
+    const list = menu.querySelector(".hand-list");
+    const pickable = team.filter((p) => p.name !== c.assignee);
+    list.innerHTML = pickable.length ? pickable.map((p) => `<button class="card-mi hand-to" data-h="${esc(p.handle)}" data-n="${esc(p.name)}">${p.avatar ? `<img class="av" src="${esc(p.avatar)}" alt="" data-i="${esc(p.name[0])}">` : `<span class="av av-i">${esc(p.name[0])}</span>`}${isMe(p.name) ? "You" : esc(p.name)}</button>`).join("") : `<span class="hand-wait">Nobody else on the team yet</span>`;
+    return;
+  }
+  if (e.target.closest(".hand-to")) {
+    const b = e.target.closest(".hand-to");
+    card.querySelector(".card-more-wrap")?.classList.remove("open");
+    card.classList.remove("menu-open");
+    state.asking = { id: c.id, to: "progress", label: "Hand over", text: "", focused: true, assignTo: b.dataset.h, toName: b.dataset.n };
+    mountAsk(card, c);
     return;
   }
   if (e.target.closest(".card-type")) {
@@ -3338,14 +3982,15 @@ panelBody.addEventListener("click", async (e) => {
       }, 2500);
       return;
     }
-    await api("delete", { id: c.id });
+    const done = await api("delete", { id: c.id }).catch((e) => ({ error: String(e?.message || e) }));
+    if (!done?.ok) return toast(done?.error || "Could not remove it", true);
     await loadComments();
 $(".bar .k").textContent = `${MOD} + click to comment`;
     renderPanel();
     toast(`Removed #${c.n}`);
     return;
   }
-  if (e.target.classList.contains("card-text") && e.target.contentEditable !== "true") editInPlace(e.target, c, () => {});
+  if (e.target.classList.contains("card-text") && e.target.contentEditable !== "true" && canEdit(c)) editInPlace(e.target, c, () => {});
 });
 /* SELECTING (Nirav, 2026-10-24): one click on the circle, Shift-click for a range, a drag across the circles to paint
    many (starting on a picked card unpicks), and the keyboard: ↑ ↓ walk the cards, Space picks, Shift with an arrow
@@ -4453,6 +5098,16 @@ if (PAGE_MODE) {
   host.style.pointerEvents = "auto";
   document.title = "Review comments";
   openPanel(true);
+  /* the extension's list page: "Back to the site" lives here, in the overlay, because the overlay sits in the
+     browser's top layer and covers anything the page itself draws (the old link showed but could not be clicked) */
+  const site = window.__reviewExt?.siteOrigin;
+  if (site) {
+    const back = document.createElement("a");
+    back.className = "page-back";
+    back.href = site;
+    back.textContent = "← Back to the site";
+    root.appendChild(back);
+  }
 }
 /* the app, arriving from the page with a comment to open */
 const pendingGoto = (() => {

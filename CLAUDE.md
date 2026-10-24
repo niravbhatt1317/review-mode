@@ -29,6 +29,56 @@ file map; read it next.
 - **Site**: GitHub Pages from `docs/` (install page, privacy, auth page, `firefox/` with signed xpi + `updates.json`).
   `site.mjs` holds the address.
 
+## A comment's life (Nirav, 2026-10-24)
+
+```
+New ──Pick up──▶ In progress ──Done──▶ For approval ──Approve──▶ Approved
+ ▲                  │                      │                       │
+ └────Put back──────┘                      │                       │
+                    ▲──────Send back───────┘                       │
+New ◀──────────────────────Reopen──────────────────────────────────┘
+```
+
+| Move | Who | Note |
+|---|---|---|
+| Add a comment | everyone | kinds: Fix or Question |
+| Pick up (New to In progress) | everyone | the picker becomes the assignee; the first one wins, a second a moment later is refused |
+| Put back (In progress to New) | the assignee (and the approver) | the doer gives it up, with a reason |
+| Done (In progress to For approval) | the assignee (and the approver) | Claude asks the person first, then marks it |
+| Approve (to Approved) | approver only | |
+| Send back (For approval to In progress) | approver only | with a reason; it returns to whoever did the work |
+| Take back (For approval to In progress) | whoever did it (the assignee) | until the approver acts; no reason asked; history says "took it back" |
+| Reopen (Approved to New) | approver only | |
+| Hand over (In progress, to someone) | the assignee (and the approver) | optional note; moves at once |
+| Assign (New, to someone) | the approver | |
+| Make it a fix / question | everyone | |
+| Edit the words | its author, or the approver | |
+| Remove | its author while still New, or the approver | once picked up, only the approver |
+| Everything | the approver (Nirav) | sees and does all of it |
+
+**A question's life** (Nirav, 2026-10-24): answered, not worked. Asked (`open`) ──Answer──▶ Answered (`approval`)
+──Got it──▶ Resolved (`approved`); the asker's Follow up sends it back to Asked; Make it a fix starts it over as a
+New fix with its talk kept. Anyone answers (`answer`), the asker follows up or closes it (`follow_up`, `resolve`), an
+approver closes any. Replies are history steps of kind `reply` (`via: "claude"` for Claude's, from `npx review reply
+<id> --claude`); the card's note is the latest reply. "Ask Claude" copies a brief for a Claude session. Old questions
+someone picked up read as Asked.
+
+**The waiting list** (Nirav, 2026-10-24): whoever signs in with GitHub and is not in `review_members` joins it as
+`waiting` (a trigger on `review_people`); an approver sees "Waiting to join" at the top of the drawer and lets them in
+(`member`) or refuses them (`refused`). A signed-in person who is not a member reads and writes nothing and sees a
+waiting screen, which opens by itself once they are let in. The publishable key alone (dev server, `npx review`,
+Claude) is not gated yet: that is the later "lock the hub to signed-in users" step.
+
+**The rules live in the hub's `review_rules` table** (`hub/roles.sql`), not in code: one row per action and who may
+do it (`anyone`, `member`, `author`, `assignee`, `approver`), in which states, and whether it is `signed` (needs a
+GitHub sign-in; the hub refuses others) or drawer-only (the dev server, `npx review` and Claude act without a
+sign-in). An approver may always do everything. Change a row in Supabase and every drawer follows within a minute; the
+hub checks the same rows on every change (`review_allowed`, the `review_guard` trigger, the delete policy). The drawer
+keeps the shipped rows as `RULES_DEFAULT` for when the table is missing. Who has it changes only by a hand-over or an
+approver; a second pick-up landing late is refused (the first wins). Who approves comes from `review_members`.
+Defaults: the team's list opens on New + In progress, the approver's on For approval + In progress, grouped by status
+(`?as=team` / `?as=approver` previews the other).
+
 ## Releasing
 
 - `node pack.mjs` bumps the patch version and writes `dist/review-mode-<v>.zip` (Chrome) and `-firefox.zip`.

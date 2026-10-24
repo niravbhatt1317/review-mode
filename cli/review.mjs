@@ -5,6 +5,8 @@
 //   npx review list                       every comment of the project, one line each
 //   npx review show <id>                  one comment as JSON
 //   npx review status <id> <status> [note…]   open | progress | approval | approved
+//   npx review reply <id> <text…>         answer a question (or follow it up); --claude marks Claude's answer
+//   npx review resolve <id>               close a question (the asker's Got it)
 //   npx review pull <id> [<id>…]          the full pictures to .review/sessions/<project>/export/
 // The project and the hub come from review.config.json (REVIEW_PROJECT overrides the project).
 import fs from "node:fs";
@@ -52,7 +54,9 @@ try {
 } catch {}
 const people = mergePeople(cfg.people, store.kind === "hub" ? await store.people().catch(() => ({})) : {});
 const kind = (k) => (k === "question" || k === "idea" ? "question" : "fix"); // the old four read as the two kinds
-const line = (c) => `${String(c.n).padStart(3)}  ${c.id}  ${c.status.padEnd(8)}  ${kind(c.severity).padEnd(8)}  ${c.text}${c.note?.text ? `  [${c.note.to === "open" ? "put back" : "sent back"}: ${c.note.text}]` : ""}`;
+const QSTATUS = { open: "asked", progress: "asked", approval: "answered", approved: "resolved" }; // a question's words for the same states
+const noteWord = (c) => (c.note?.kind === "reply" ? (c.note.via === "claude" ? "Claude answered" : c.note.by === c.by ? "followed up" : "answered") : c.note?.to === "open" ? "put back" : "sent back");
+const line = (c) => `${String(c.n).padStart(3)}  ${c.id}  ${(kind(c.severity) === "question" ? QSTATUS[c.status] : c.status).padEnd(8)}  ${kind(c.severity).padEnd(8)}  ${c.text}${c.note?.text ? `  [${noteWord(c)}: ${c.note.text}]` : ""}`;
 
 if (cmd === "list" || !cmd) {
   const list = prepare(await store.list()).map((c) => withNames(c, people));
@@ -70,6 +74,21 @@ if (cmd === "list" || !cmd) {
   applyChange(c, { status, note: note.join(" ") }, who || "cli");
   await store.put(c);
   console.log(line({ ...withNames(c, people), n: prepare(await store.list()).find((x) => x.id === id)?.n }));
+} else if (cmd === "reply") {
+  const claude = args.includes("--claude");
+  const [id, ...words] = args.filter((a) => a !== "--claude");
+  if (!words.join(" ").trim()) throw new Error("reply <id> <text…>");
+  const c = await store.get(id);
+  if (!c) throw new Error("no such comment");
+  applyChange(c, { reply: words.join(" "), ...(claude ? { via: "claude" } : {}) }, who || "cli");
+  await store.put(c);
+  console.log(line({ ...withNames(c, people), n: prepare(await store.list()).find((x) => x.id === id)?.n }));
+} else if (cmd === "resolve") {
+  const c = await store.get(args[0]);
+  if (!c) throw new Error("no such comment");
+  applyChange(c, { status: "approved" }, who || "cli");
+  await store.put(c);
+  console.log(line({ ...withNames(c, people), n: prepare(await store.list()).find((x) => x.id === args[0])?.n }));
 } else if (cmd === "pull") {
   const list = prepare(await store.list());
   const dir = path.join(cfg.sessionsDir, cfg.project, "export");
@@ -86,6 +105,6 @@ if (cmd === "list" || !cmd) {
     console.log(path.relative(process.cwd(), file));
   }
 } else {
-  console.error("review init [project] | list | show <id> | status <id> <status> [note] | pull <id…>");
+  console.error("review init [project] | list | show <id> | status <id> <status> [note] | reply <id> <text…> [--claude] | resolve <id> | pull <id…>");
   process.exit(1);
 }

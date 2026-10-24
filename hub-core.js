@@ -44,21 +44,69 @@ export const newId = () => `${Date.now().toString(36)}-${Math.random().toString(
 export function applyChange(c, body, who) {
   const { text, severity, status, resolved, note } = body;
   if (typeof text === "string" && text.trim()) c.text = sentence(text);
+  const wasQuestion = c.severity === "question" || c.severity === "idea";
   if (["fix", "question", "must", "should", "idea"].includes(severity)) c.severity = severity; // fix and question since 2026-10-23; the old four still accepted
+  /* THE QUESTION FLOW (Nirav, 2026-10-24): a question is answered, not worked. Asked (open) -> Answered (approval) ->
+     Resolved (approved). A reply from anyone but the asker answers it; a reply from the asker follows up and it is
+     Asked again; the asker (or an approver) closes it with Got it. Replies are history steps of kind "reply", so the
+     conversation and the history are one list. A question made into a fix starts over as a New fix, its talk kept. */
+  if (wasQuestion && (severity === "fix" || severity === "must" || severity === "should") && c.status !== "open") {
+    const at = Date.now();
+    (c.history ||= []).push({ at, by: who, status: "open", from: c.status, kind: "to_fix" });
+    Object.assign(c, { status: "open", assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null, note: null });
+    normalise(c);
+  }
+  const reply = typeof body.reply === "string" ? body.reply.trim().slice(0, 1200) : "";
+  if (reply) {
+    const at = Date.now();
+    const from = c.status;
+    const claude = body.via === "claude"; // Claude answering (npx review reply): an answer even when run by the asker
+    const asker = !claude && !!c.by && who === c.by;
+    const isQ = c.severity === "question" || c.severity === "idea";
+    const to = !isQ ? from : asker ? "open" : "approval";
+    if (to !== from) {
+      c.status = to;
+      if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at, assignee: null });
+      if (to === "open") Object.assign(c, { assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null });
+    } else if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at }); // the latest answer's face on the card
+    c.note = { text: reply, by: who, at, from, to, kind: "reply", ...(claude ? { via: "claude" } : {}) };
+    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}) });
+    normalise(c);
+    c.edited = Date.now();
+    return c;
+  }
+  /* HAND OVER (Nirav, 2026-10-24): the doer passes it on, or the approver assigns it (New or in progress); it moves at
+     once and stays in progress, with the new person on it; an optional reason rides along as the card's note */
+  if (typeof body.assignTo === "string" && body.assignTo && body.assignTo !== c.assignee) {
+    const at = Date.now();
+    const from = c.status;
+    const words = typeof note === "string" ? note.trim().slice(0, 600) : "";
+    Object.assign(c, { status: "progress", assignee: body.assignTo, pickedAt: at, handedBy: who, handedAt: at });
+    c.note = { text: words, by: who, at, from, to: "progress", kind: "hand", toWho: body.assignTo };
+    (c.history ||= []).push({ at, by: who, status: "progress", from, kind: "hand", toWho: body.assignTo, ...(words ? { note: words } : {}) });
+    normalise(c);
+    c.edited = Date.now();
+    return c;
+  }
   const to = STATUSES.includes(status) ? status : typeof resolved === "boolean" ? (resolved ? "approved" : "open") : null;
   if (to && to !== c.status) {
     const at = Date.now();
     const from = c.status;
     c.status = to;
-    if (to === "progress") Object.assign(c, { assignee: who, pickedAt: at });
+    /* sent back (for approval -> in progress): it goes back to whoever did the work, not to the approver who sent it */
+    if (to === "progress") Object.assign(c, from === "approval" ? { assignee: c.doneBy || c.assignee || who, pickedAt: at } : { assignee: who, pickedAt: at });
     if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at });
     if (to === "approved") Object.assign(c, { approvedBy: who, approvedAt: at, resolvedAt: at });
     if (to === "open") Object.assign(c, { assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null });
-    const step = { at, by: who, status: to };
+    const step = { at, by: who, status: to, from };
+    /* TAKE BACK (Nirav, 2026-10-24): the doer pulls it back from For approval before the approver acts; the hub's guard
+       reads this step's kind to tell it from a send back. No reason asked, and a send-back note riding on it stays */
+    const take = body.take === true && from === "approval" && to === "progress";
+    if (take) step.kind = "take";
     const back = STATUSES.indexOf(to) < STATUSES.indexOf(from);
     const words = typeof note === "string" ? note.trim().slice(0, 600) : "";
     if (back && words) step.note = words;
-    if (back) c.note = words ? { text: words, by: who, at, from, to } : null;
+    if (back && !take) c.note = words ? { text: words, by: who, at, from, to } : null;
     if (to === "approved") c.note = null;
     (c.history ||= []).push(step);
     normalise(c);
@@ -70,8 +118,8 @@ export function applyChange(c, body, who) {
 export function withNames(c, people = {}) {
   const name = (id) => (id && (typeof people[id] === "string" ? people[id] : people[id]?.name)) || id;
   const out = { ...c, by: name(c.by), assignee: name(c.assignee), doneBy: name(c.doneBy), approvedBy: name(c.approvedBy) };
-  if (c.note) out.note = { ...c.note, by: name(c.note.by) };
-  if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by) }));
+  if (c.note) out.note = { ...c.note, by: name(c.note.by), ...(c.note.toWho ? { toWho: name(c.note.toWho) } : {}) };
+  if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by), ...(h.toWho ? { toWho: name(h.toWho) } : {}) }));
   return out;
 }
 /* the people shown: the hub's (first word of the GitHub name, the picture) under the team's own map (a chosen name) */
@@ -84,8 +132,26 @@ export function mergePeople(teamMap = {}, hubPeople = {}) {
 /* the pictures of the people on a comment, keyed by the name shown, for the cards and the pin card */
 export function avatarsOf(c, people) {
   const out = {};
-  for (const h of [c.by, c.assignee, c.doneBy, c.approvedBy, c.note?.by]) if (h && people[h]?.avatar) out[people[h].name] = people[h].avatar;
+  const steps = Array.isArray(c.history) ? c.history.flatMap((s) => [s.by, s.toWho]) : []; // the faces in the card's history too
+  for (const h of [c.by, c.assignee, c.doneBy, c.approvedBy, c.note?.by, c.note?.toWho, ...steps]) if (h && people[h]?.avatar) out[people[h].name] = people[h].avatar;
   return out;
+}
+/* who waits to be let in, with their name and picture when they have signed in */
+export function waitingOf(members = null, people = {}) {
+  if (!members) return [];
+  return Object.entries(members)
+    .filter(([, role]) => role === "waiting")
+    .map(([handle]) => ({ handle, name: people[handle]?.name || handle, avatar: people[handle]?.avatar || null }));
+}
+/* a signed-in person's place: approver, member, waiting or refused; someone not listed yet is waiting (the hub adds
+   them as they sign in); with no members table everyone is a member */
+export const roleIn = (members, handle) => (!members ? "member" : members[handle] || "waiting");
+/* the people a comment can be handed to: the team's map and everyone signed in, without the waiting list */
+export function teamOf(people = {}, members = null) {
+  return Object.entries(people)
+    .filter(([h]) => !members || (members[h] && members[h] !== "waiting"))
+    .map(([handle, p]) => ({ handle, name: p.name, avatar: p.avatar || null }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 /* a data URL or base64 string to bytes */
 export function bytesOf(s) {
@@ -112,7 +178,16 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
       headers: { ...(await auth()), "Content-Type": "application/json", Prefer: "return=representation", ...extra },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (!r.ok) throw new Error(`hub ${method} ${q.split("?")[0]}: ${r.status} ${(await r.text()).slice(0, 200)}`);
+    if (!r.ok) {
+      const text = (await r.text()).slice(0, 300);
+      /* the hub's own refusal ("Only an approver can approve") is said as it is */
+      const body = (() => { try { return JSON.parse(text); } catch { return null; } })();
+      const rule = !!body?.message && (body.code === "42501" || /approver|picked up/i.test(body.message)); // one of the hub's own rules (hub/roles.sql)
+      const said = rule ? String(body.message).replace(/^Not allowed: (.+)$/, "Not allowed to $1 this comment") : null; // "Not allowed to send back this comment"
+      const e = new Error(rule ? said : `hub ${method} ${q.split("?")[0]}: ${r.status} ${text}`);
+      e.status = rule ? 403 : r.status;
+      throw e;
+    }
     const t = await r.text();
     return t ? JSON.parse(t) : null;
   };
@@ -225,9 +300,16 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
       if (row) hold(row);
       else fresh();
     },
+    /* the comment first, then its pictures: the hub may refuse (only its author or an approver, signed in, may
+       remove it; hub/roles.sql), and a refused comment must keep its pictures */
     async remove(c) {
-      await removeFiles([c.shot, c.thumb].filter(Boolean));
-      await rest("DELETE", `review_comments?id=eq.${encodeURIComponent(c.id)}`);
+      const gone = await rest("DELETE", `review_comments?id=eq.${encodeURIComponent(c.id)}`);
+      if (Array.isArray(gone) && !gone.length) {
+        const e = new Error("Only its author or an approver can remove this comment");
+        e.status = 403;
+        throw e;
+      }
+      await removeFiles([c.shot, c.thumb].filter(Boolean)).catch(() => {});
       drop(c.id);
     },
     /* a picture's bytes: from the cache, else downloaded once and kept */
@@ -250,6 +332,31 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
       return out;
     },
     /* the people: everyone who has signed in, with name and picture; the signed-in person writes their own row */
+    /* the rules (hub/roles.sql, review_rules): who may do what; null when the table is not there yet */
+    async rules() {
+      try {
+        return await rest("GET", "review_rules?select=action,who,statuses,signed");
+      } catch {
+        return null;
+      }
+    },
+    /* the members and their roles (hub/roles.sql): who approves; null when the table is not there yet */
+    async members() {
+      try {
+        const rows = await rest("GET", "review_members?select=handle,role");
+        return Object.fromEntries(rows.map((r) => [r.handle, r.role]));
+      } catch {
+        return null;
+      }
+    },
+    /* THE WAITING LIST (Nirav, 2026-10-24): an approver lets someone in (member) or refuses them; the hub allows it to
+       approvers only, so no row changed means no */
+    async setMember(handle, role) {
+      if (!["member", "refused", "approver"].includes(role)) throw Object.assign(new Error("role: member | refused"), { status: 400 });
+      const rows = await rest("PATCH", `review_members?handle=eq.${encodeURIComponent(handle)}`, { role }, { Prefer: "return=representation" });
+      if (!Array.isArray(rows) || !rows.length) throw Object.assign(new Error("Only an approver can let people in"), { status: 403 });
+      return rows[0];
+    },
     async people() {
       try {
         const rows = await rest("GET", "review_people?select=handle,name,avatar");

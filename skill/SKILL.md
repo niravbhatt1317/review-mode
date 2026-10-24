@@ -23,9 +23,12 @@ npx review show <id>                              # one comment as JSON (route, 
 npx review status <id> progress                   # started on it
 npx review status <id> approval                   # done, and the reviewer confirmed it in the chat
 npx review pull <id> [<id>…]                      # the full pictures to .review/sessions/<project>/export/
+npx review reply <id> --claude "<answer>"         # answer a question (marked as Claude's answer)
 ```
 
 Statuses: `open` → `progress` (picked up) → `approval` (done, waiting for the reviewer) → `approved` (the reviewer only, from the panel). `open` again reopens; `progress` from `approval` is "sent back", and carries a note with the reason. **A comment with a note is rework: do what the note says first, then the rest.** Never change a comment's text without being asked.
+
+**Questions are answered, not worked.** A question goes Asked (`open`) → Answered (`approval`) → Resolved (`approved`, the asker's "Got it"). Never set a question's status: answer it with `npx review reply <id> --claude "<answer>"` after reading the code it points at (one or two plain sentences, as to a designer). If the honest answer is that something should change, say so in the answer; the asker can make it a fix. Replies are in the comment's `history` (kind `reply`).
 
 ## How to work a brief
 

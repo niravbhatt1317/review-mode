@@ -11,9 +11,7 @@ window.addEventListener("message", (e) => {
 chrome.storage.local.get(["who", "sites"]).then((saved) => {
   const site = Object.entries(saved.sites || {}).find(([, s]) => s.project === project);
   document.title = `Review · ${project}`;
-  const back = document.querySelector("#back");
-  if (site) back.href = site[0];
-  else back.remove();
+  document.querySelector("#back")?.remove(); // the overlay draws its own (it covers the page's)
   const s = document.createElement("script");
   s.src = "overlay.js";
   s.dataset.project = project;

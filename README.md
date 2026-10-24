@@ -53,7 +53,10 @@ npx review list            # the project's comments; also show, status, pull
 `review.config.json` holds the project's name on the hub and the port; add a `hub` block ({ url, anonKey, people })
 for another team's hub. `.review/sessions/_*/` are local test sessions (`?session=_test`); everything else is on the
 hub. The skill at `.claude/skills/review/SKILL.md` tells Claude the same commands. The hub itself is set up once per
-team with `hub/schema.sql` and `hub/people.sql` in the Supabase SQL Editor.
+team with `hub/schema.sql`, `hub/people.sql` and `hub/roles.sql` in the Supabase SQL Editor. `roles.sql`
+holds the members (approver, member, waiting) and the hub's own rules: only an approver approves; only a comment's
+author or an approver removes it, signed in with GitHub; the approvers in `hub.json` only set who sees the approver's
+view.
 
 ### Sign-in on your own hub
 
