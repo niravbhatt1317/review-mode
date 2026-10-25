@@ -2008,7 +2008,7 @@ window.__reviewWhy = (id) => { /* read-only, for drives: why a pin is or is not 
   }
   return out;
 };
-window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: pollTick, persona: state.persona, approver: isApprover(), sign: canSign() }); // read-only, for drives
+window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: lastCheck, persona: state.persona, approver: isApprover(), sign: canSign() }); // read-only, for drives
 $(".panel-sync").addEventListener("click", () => {
   const first = panelBody.querySelector(".card.unread");
   if (first) first.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -2058,20 +2058,45 @@ let loadComments = async function () {
    edited, a "sure?" pending, a menu open) */
 /* every 10 s while something on screen follows the list (the drawer open, or pins showing on the page); once a
    minute otherwise, for the count on the bar; not at all in a background tab or while review is hidden */
-let pollTick = 0;
-setInterval(async () => {
-  if (document.hidden || state.off) return;
-  pollTick++;
-  const watching = panel.classList.contains("on") || state.showPins || PAGE_MODE;
-  if (!watching && pollTick % 6) return;
+/* SMART TIMING (Nirav, 2026-10-25: near-live, for any number of comments and people): a check costs a few bytes, so
+   while you are using the page with the drawer open (or pins showing) it checks every 2.5 s; stepped away, every 10 s;
+   drawer shut, once a minute; a hidden tab not at all, and once at once when it comes back. For 30 s after a change
+   arrives it stays quick, a conversation is likely going on. */
+state.lastActive = Date.now();
+let quickUntil = 0;
+for (const ev of ["pointermove", "pointerdown", "keydown", "wheel", "scroll"]) window.addEventListener(ev, () => (state.lastActive = Date.now()), { passive: true, capture: true });
+async function checkNow() {
   const before = state.unread.size;
-  await loadComments(); // redraws only when the list changed and nobody is mid-edit
+  const changed = await loadComments(); // redraws only when the list changed and nobody is mid-edit
+  if (changed) quickUntil = Date.now() + 30_000;
   if (PAGE_MODE && window.__reviewView === "resolved" && state.doneLoaded && (await loadDone()) && !panelBusy()) renderPanel(); // the Approved view keeps up too
   if (state.unread.size !== before) {
     if (panel.classList.contains("on")) updateUnread();
     else toast(`${state.unread.size} new comment${state.unread.size > 1 ? "s" : ""}`);
   }
-}, 10_000);
+}
+function nextCheckIn() {
+  const watching = panel.classList.contains("on") || state.showPins || PAGE_MODE;
+  if (!watching) return 60_000;
+  const active = Date.now() - state.lastActive < 30_000 || Date.now() < quickUntil;
+  return active ? 2_500 : 10_000;
+}
+let checkTimer = 0, lastCheck = 0;
+async function checkLoop() {
+  clearTimeout(checkTimer);
+  if (!document.hidden && !state.off && Date.now() - lastCheck >= nextCheckIn() - 50) {
+    lastCheck = Date.now();
+    await checkNow().catch(() => {});
+  }
+  checkTimer = setTimeout(checkLoop, document.hidden ? 5_000 : Math.min(2_500, nextCheckIn()));
+}
+checkTimer = setTimeout(checkLoop, 2_500);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    lastCheck = 0; // back on the tab: look at once
+    checkLoop();
+  }
+});
 /* where the comments live: on the hub (shared) or on this machine; the page view shows the hub's meter */
 state.hub = null;
 /* a rule changed in Supabase: the open drawer redraws (unless someone is in the middle of something) */

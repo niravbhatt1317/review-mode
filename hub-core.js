@@ -249,8 +249,12 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
   let cached = null; // { rows, sig, at }
   const where = `review_comments?project=eq.${encodeURIComponent(project)}`;
   const sigOf = (rows) => rows.map((r) => `${r.id}@${r.updated_at}`).sort().join("|");
-  const fresh = () => (cached = null);
+  const fresh = () => {
+    cached = null;
+    lean.answers = {};
+  };
   const hold = (row) => {
+    lean.answers = {}; // our own write: the next look is fresh
     if (!cached) return;
     const i = cached.rows.findIndex((r) => r.id === row.id);
     if (i < 0) cached.rows.push(row);
@@ -260,13 +264,14 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
     cached.at = Date.now();
   };
   const drop = (id) => {
+    lean.answers = {};
     if (!cached) return;
     cached.rows = cached.rows.filter((r) => r.id !== id);
     cached.sig = sigOf(cached.rows);
     cached.at = Date.now();
   };
   let lastSweep = 0;
-  const lean = { stamps: null, total: -1, latest: "", open: new Map(), done: new Map(), table: "review_comments_light" }; // lightList's own
+  const lean = { stamps: null, total: -1, latest: "", open: new Map(), done: new Map(), table: "review_comments_light", answers: {} }; // lightList's own
   return {
     kind: "hub",
     project,
@@ -308,6 +313,14 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
           that are new or changed; from the light view (hub/light.sql: no app snapshot) when it is there.
        Writes never use these rows: get() reads the full row. */
     async lightList({ approved = false } = {}) {
+      /* several tabs on one project ask within moments of each other: one answer serves them all for 2 s */
+      const key = approved ? "done" : "open";
+      if (lean.answers[key] && Date.now() - lean.answers[key].at < 2000) return lean.answers[key].value;
+      const value = await this.lightListFresh({ approved });
+      lean.answers[key] = { at: Date.now(), value };
+      return value;
+    },
+    async lightListFresh({ approved = false } = {}) {
       const r = await fetchFn(`${url}/rest/v1/${where}&select=updated_at&order=updated_at.desc&limit=1`, { headers: { ...(await auth()), Prefer: "count=exact" } });
       if (!r.ok) throw new Error(`hub GET review_comments: ${r.status}`);
       const total = Number((r.headers.get("content-range") || "").split("/")[1]) || 0;

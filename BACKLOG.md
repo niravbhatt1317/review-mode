@@ -77,6 +77,20 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   for approval), a small happy moment for them: a smiling face, a word of praise ("Nice one, Pranjal"), something light
   that makes the work feel good. In the same family as the approval and removal effects.
 
+## Data and sync
+
+- [x] **Lean data** (done 2026-10-25): batches of 40 cards (this page first), pictures as they near the screen, a
+  refresh that answers "no change" in a few bytes, the light list (no people's pictures per comment, short app values,
+  approved on demand), the hub asked one tiny question first and only changed rows after (`hub/light.sql`). The
+  console's real project: 1,109 KB every 10 s down to 27 KB once and a few bytes per check.
+- [x] **Smart timing** (done 2026-10-25): checks every 2.5 s while someone is active with the drawer open, 10 s when
+  stepped away, once a minute with it shut, none in a hidden tab; one hub check shared across tabs. Others' changes
+  show in 0.8 to 2.8 s while active.
+- [ ] **Realtime push for a big team** (Nirav, 2026-10-25): instead of every person asking, the hub tells everyone
+  when something changes (Supabase Realtime, `postgres_changes` on `review_comments`). One SQL line to switch it on for
+  the table, a live connection in the extension's background (and the dev server), the checks kept as a slow fallback.
+  Changes would show in well under a second and the hub traffic would no longer grow with the number of people.
+
 ## Notifications
 
 - [ ] **More in-drawer notices, with avatars**: today "2 new" exists; add "Your comment was approved", "Nirav picked
