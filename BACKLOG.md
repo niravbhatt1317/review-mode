@@ -62,13 +62,20 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   `take_back`, assignee, unsigned); no reason asked; history "took it back"; the approver keeps Send back.
 - [x] **The question flow** (2026-10-24): Asked → Answered → Resolved; anyone answers, the asker follows up or says
   Got it (Nirav closes any), a conversation in the history, Make it a fix keeps the talk, Ask Claude copies a brief and
-  Claude answers with `npx review reply <id> --claude`. Later: the status pill and group headings still say "For
-  approval" for answered questions.
+  Claude answers with `npx review reply <id> --claude`. Answered questions have their own group; the pill says "For
+  approval or answered" (2026-10-25).
 
-- [ ] **A goodbye for a removed card** (Nirav, 2026-10-24): removing a comment should not just vanish; the card fades,
-  shreds or turns to dust and disappears (a short effect), the list closing the gap after it.
-- [ ] **A small moment for an approval** (Nirav, 2026-10-24): approving a comment gets its own effect too (for example
-  the green tick drawing itself and the card settling into the approved list); pick from a few trials.
+- [x] **A goodbye for a removed card** (done 2026-10-25): dust, the Infinity War snap; the ash takes over the whole card
+  while a hint of the card stays for a moment, then the list closes the gap (about 1 s). Tried: grain, shred, fade.
+- [x] **A small moment for an approval** (done 2026-10-25): lock, HUD corner brackets and a scan line, then the Approve
+  button closes into Stripe's green check (about 1.3 s). Tried and dropped: tick, stamp, burst, Tron, hyperspace, ink,
+  Matrix, beam, glitch, mischief, fold, balloons, Linear, Things, Stripe, shine, HUD alone.
+
+- [x] **A feel-good moment for Done** (done 2026-10-25, and for Pick up too: a small pill where the button was, a drawn
+  face per line with its own animation and a bold extra, confetti, sparkles, hearts, a glint; teal for Done, orange
+  for Pick up). Asked (Nirav, 2026-10-24): when someone who picked a comment up marks it Done (it goes
+  for approval), a small happy moment for them: a smiling face, a word of praise ("Nice one, Pranjal"), something light
+  that makes the work feel good. In the same family as the approval and removal effects.
 
 ## Notifications
 

@@ -935,6 +935,109 @@ root.innerHTML = `
   .lb-where { color: #cfd8e6; }
   :host([data-page]) .bar, :host([data-page]) .hover, :host([data-page]) .pins, :host([data-page]) .pin-tip, :host([data-page]) .composer { display: none !important; }
   :host([data-page]) .panel-veil { display: none; }
+  /* the Done moment */
+  .fx-done { position: absolute; z-index: 5; display: inline-flex; align-items: center; gap: 5px; height: 26px; box-sizing: border-box; padding: 0 10px 0 3px; border-radius: 13px; background: var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n20)), 0 6px 16px -6px rgba(29,43,62,.25); font: 500 11px/1 -apple-system, system-ui, sans-serif; /* the height of the card's buttons, Done and ⋯ (Nirav, 2026-10-25) */ color: var(--rv-ink); white-space: nowrap; pointer-events: none; transform: translateY(-50%); animation: rv-done-in .38s cubic-bezier(.22,1.4,.36,1) both; }
+  :host([data-theme="dark"]) .fx-done { box-shadow: 0 0 0 1px hsl(var(--rv-n20)), 0 8px 20px -6px rgba(0,0,0,.6); }
+  @keyframes rv-done-in { from { opacity: 0; transform: translateY(-50%) scale(.7); } to { opacity: 1; transform: translateY(-50%) scale(1); } }
+  .fx-done.below { transform: none; transform-origin: 85% 100%; animation-name: rv-done-in-below; } /* "below" by name: above the pin card */
+  .fx-done.pin-add { position: fixed; z-index: 3; transform: none; transform-origin: 0 50%; animation: rv-pin-pill .4s cubic-bezier(.22,1.4,.36,1) .3s both; background: hsl(216 36% 18%); color: #fff; box-shadow: 0 0 0 1px hsl(0 0% 100% / .1), 0 8px 20px -6px rgba(0,0,0,.55); }
+  @keyframes rv-pin-pill { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+  .fx-done.below { background: hsl(216 36% 18%); color: #fff; box-shadow: 0 0 0 1px hsl(0 0% 100% / .1), 0 8px 20px -6px rgba(0,0,0,.55); } /* the pin card's own colour (Nirav, 2026-10-25) */
+  @keyframes rv-done-in-below { from { opacity: 0; transform: translateY(6px) scale(.7); } to { opacity: 1; transform: none; } }
+  .fx-done .f-face { flex: 0 0 auto; overflow: visible; }
+  .fx-done .f-face * { transform-box: fill-box; transform-origin: 50% 50%; }
+  .fx-done .f-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rv-tick-draw .34s cubic-bezier(.4,0,.2,1) .22s forwards; }
+  .fx-done .f-blink { animation: rv-blink .22s ease-in-out .9s; }
+  @keyframes rv-blink { 50% { transform: scaleY(.1); } }
+  .fx-done .f-wink { animation: rv-wink .5s ease-in-out .55s both; }
+  @keyframes rv-wink { 30%, 70% { transform: scaleY(.12); } }
+  .fx-done .f-pulse { animation: rv-pulse .5s ease-in-out .3s 2; }
+  @keyframes rv-pulse { 50% { transform: scale(1.3); } }
+  .fx-done .f-twinkle { animation: rv-twinkle2 .7s ease-in-out .3s 2; }
+  @keyframes rv-twinkle2 { 50% { transform: scale(1.25) rotate(20deg); } }
+  .fx-done .f-shades { animation: rv-shades .45s cubic-bezier(.3,1.4,.5,1) .2s both; }
+  @keyframes rv-shades { from { transform: translateY(-9px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .fx-done .f-look { animation: rv-look 1s ease-in-out .3s both; }
+  @keyframes rv-look { 25%, 55% { transform: translateX(1.6px); } 80% { transform: translateX(-.6px); } }
+  .fx-done .f-sparkle { animation: rv-sparkle .8s ease-in-out .25s 2 both; }
+  @keyframes rv-sparkle { 0%, 100% { transform: scale(.3) rotate(0deg); opacity: 0; } 50% { transform: scale(1.35) rotate(45deg); opacity: 1; } }
+  .fx-done .f-sparkle.s2 { animation-delay: .5s; }
+  .fx-done .f-confetti { opacity: 0; animation: rv-confetti .9s cubic-bezier(.2,.8,.3,1) calc(.2s + var(--d)) both; }
+  @keyframes rv-confetti { 0% { opacity: 0; transform: translate(calc(var(--x) * -1.4), calc(var(--y) * -1.4)) scale(.4) rotate(0deg); } 25% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(1.1) rotate(var(--r)); } }
+  .fx-done .f-whoosh path { animation: rv-whoosh .5s ease-out .15s 2 both; }
+  .fx-done .f-whoosh path:nth-child(2) { animation-delay: .22s; }
+  @keyframes rv-whoosh { from { transform: translateX(3px); opacity: 0; } 50% { opacity: 1; } to { transform: translateX(-3px); opacity: 0; } }
+  .fx-done .f-heart { animation: rv-heart 1.1s ease-out .3s both; }
+  @keyframes rv-heart { 0% { opacity: 0; transform: translateY(4px) scale(.5); } 30% { opacity: 1; transform: scale(1.25); } 100% { opacity: 0; transform: translateY(-8px) scale(1); } }
+  .fx-done .f-heart.h2 { animation-delay: .5s; }
+  .fx-done .f-glint { opacity: 0; animation: rv-glint .55s ease-in-out .6s both; }
+  @keyframes rv-glint { 0% { opacity: 0; transform: skewX(-20deg) translateX(0); } 30% { opacity: .95; } 100% { opacity: 0; transform: skewX(-20deg) translateX(9px); } }
+  .fx-done .f-bang { transform-origin: 50% 100%; animation: rv-bang .5s cubic-bezier(.3,1.6,.5,1) .35s both; }
+  @keyframes rv-bang { 0% { opacity: 0; transform: translateY(4px) scale(.3); } 60% { opacity: 1; transform: translateY(-1px) scale(1.15); } 100% { opacity: 1; transform: none; } }
+  .fx-done .f-arcs path { animation: rv-arcs .45s ease-in-out .3s 2 both; }
+  @keyframes rv-arcs { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+  /* the added pin's own */
+  .fx-done .f-peek { animation: rv-peek 1s ease-in-out .35s both; }
+  @keyframes rv-peek { 30%, 60% { transform: translate(-.8px, -.4px); } }
+  .fx-done .f-blush { opacity: 0; animation: rv-blush .5s ease-out .3s forwards; }
+  @keyframes rv-blush { to { opacity: 1; } }
+  .fx-done .f-glasses { animation: rv-glasses .4s cubic-bezier(.3,1.4,.5,1) .15s both; }
+  @keyframes rv-glasses { from { transform: translateY(-6px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .fx-done .f-glimmer { animation: rv-glimmer .7s ease-in-out .3s 2; }
+  @keyframes rv-glimmer { 50% { transform: scale(1.35) rotate(45deg); } } /* the star in each eye twinkles */
+  .fx-done .f-monocle { animation: rv-monocle .4s cubic-bezier(.3,1.6,.5,1) .2s both; }
+  @keyframes rv-monocle { from { transform: scale(.2); opacity: 0; } to { transform: none; opacity: 1; } }
+  .fx-done .f-tongue { transform-origin: 50% 0; animation: rv-tongue .5s ease-in-out .35s 2; }
+  @keyframes rv-tongue { 50% { transform: scaleY(1.35); } }
+  .fx-done .f-o { animation: rv-o .5s ease-in-out .3s 2; }
+  @keyframes rv-o { 50% { transform: scale(1.35); } }
+  .fx-done .f-bulb { animation: rv-bulb .5s cubic-bezier(.3,1.5,.5,1) .2s both; }
+  @keyframes rv-bulb { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+  .fx-done .f-rays { opacity: 0; animation: rv-rays .5s ease-out .55s 2 alternate both; }
+  @keyframes rv-rays { from { opacity: 0; } to { opacity: 1; } }
+  .fx-done .f-flag { transform-origin: 0 100%; animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .2s both; }
+  .fx-done .f-cloth { transform-origin: 0 50%; animation: rv-wave .4s ease-in-out .5s 3 alternate; }
+  .fx-done .f-widen { transform-origin: 50% 40%; animation: rv-widen .5s cubic-bezier(.3,1.5,.5,1) .6s both; }
+  @keyframes rv-widen { 0% { transform: none; } 50% { transform: scale(1.22, 1.15); } 100% { transform: scale(1.1, 1.06); } }
+  @keyframes rv-wave { to { transform: skewY(-8deg) scaleX(.9); } }
+  .fx-done .f-check { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rv-tick-draw .35s cubic-bezier(.4,0,.2,1) .35s forwards; }
+  .fx-done .f-star3 { opacity: 0; animation: rv-sparkle .7s ease-in-out calc(.25s + var(--d)) 2 both; }
+  .fx-done .f-mag { transform-origin: 100% 100%; animation: rv-mag .7s cubic-bezier(.3,1.3,.5,1) .2s both; }
+  @keyframes rv-mag { 0% { transform: rotate(-50deg) scale(.4); opacity: 0; } 60% { transform: rotate(12deg) scale(1.05); opacity: 1; } 100% { transform: none; opacity: 1; } }
+  .fx-done .f-target { animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .25s both, rv-pulse .4s ease-in-out .8s; }
+  .fx-done .f-bubble { transform-origin: 20% 100%; animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .3s both; }
+  .fx-done .f-beat { animation: rv-beat .5s ease-in-out .75s 2; }
+  @keyframes rv-beat { 30% { transform: scale(1.25); } 60% { transform: scale(.95); } }
+  .fx-done .f-pinmark { transform-origin: 50% 100%; animation: rv-pinmark .7s cubic-bezier(.3,1.6,.5,1) .2s both; }
+  @keyframes rv-pinmark { 0% { transform: translateY(-7px) scale(.6); opacity: 0; } 50% { transform: none; opacity: 1; } 70% { transform: translateY(-2px); } 100% { transform: none; opacity: 1; } }
+  .fx-done .f-bounce { animation: rv-bounce .5s cubic-bezier(.3,1.6,.5,1) .3s 2; }
+  @keyframes rv-bounce { 50% { transform: translateY(-2.5px); } }
+  .fx-done .f-nod { transform-origin: 50% 90%; animation: rv-nod .45s ease-in-out .3s 2; }
+  @keyframes rv-nod { 50% { transform: rotate(9deg); } }
+  .fx-done span { animation: rv-done-text .3s ease-out .12s both; }
+  @keyframes rv-done-text { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: none; } }
+  .pin-tip.fx-pick-glow { box-shadow: 0 0 0 2px hsl(26 100% 50% / .55), 0 10px 26px -10px hsl(26 100% 50% / .5); }
+  .pin-tip.fx-done-glow { box-shadow: 0 0 0 2px hsl(174 59% 47% / .6), 0 10px 26px -10px hsl(174 59% 47% / .55); }
+  .card.fx-pick-glow { box-shadow: 0 0 0 2px hsl(26 100% 50% / .4), 0 8px 22px -10px hsl(26 100% 50% / .45) !important; transition: box-shadow .3s ease; }
+  .card.fx-done-glow { box-shadow: 0 0 0 2px hsl(174 59% 47% / .45), 0 8px 22px -10px hsl(174 59% 47% / .5) !important; transition: box-shadow .3s ease; }
+  /* the approval: corner brackets lock on, a line scans down, the Approve button closes into a green check */
+  .fx-lock { position: absolute; inset: -1px; pointer-events: none; z-index: 4; }
+  .fx-lock .br { position: absolute; width: 14px; height: 14px; border: 2px solid var(--rv-st-done-dot); opacity: 0; animation: rv-lock .24s cubic-bezier(.22,1,.36,1) forwards; }
+  .fx-lock .tl { left: 0; top: 0; border-right: 0; border-bottom: 0; border-top-left-radius: 8px; --x: -12px; --y: -12px; }
+  .fx-lock .tr { right: 0; top: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 8px; --x: 12px; --y: -12px; }
+  .fx-lock .bl { left: 0; bottom: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 8px; --x: -12px; --y: 12px; }
+  .fx-lock .br2 { right: 0; bottom: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; --x: 12px; --y: 12px; }
+  @keyframes rv-lock { from { opacity: 0; transform: translate(var(--x), var(--y)); } to { opacity: 1; transform: none; } }
+  .fx-lock .scan { position: absolute; left: 6px; right: 6px; top: 0; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--rv-st-done-dot), transparent); box-shadow: 0 0 8px var(--rv-st-done-dot); opacity: 0; animation: rv-scan .38s cubic-bezier(.45,0,.25,1) .14s forwards; }
+  @keyframes rv-scan { 0% { top: 0; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { top: calc(100% - 2px); opacity: 0; } }
+  .fx-lock .stp { position: absolute; width: 0; height: 0; }
+  .fx-lock .stp::before { content: ""; position: absolute; left: calc(var(--w) / -2); top: calc(var(--h) / -2); width: var(--w); height: var(--h); border-radius: 7px; background: var(--rv-st-done-dot); animation: rv-stp-close .26s cubic-bezier(.22,1,.36,1) forwards; }
+  @keyframes rv-stp-close { to { left: -13px; top: -13px; width: 26px; height: 26px; border-radius: 50%; } }
+  .fx-lock .stp svg { position: absolute; left: -8px; top: -8px; }
+  .fx-lock .stp .ring { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px; border-radius: 50%; border: 2px solid var(--rv-st-done-dot); opacity: 0; animation: rv-ring .5s cubic-bezier(.22,1,.36,1) .2s forwards; }
+  @keyframes rv-ring { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(2.6); } }
+  .fx-lock .stp-tick { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rv-tick-draw .22s cubic-bezier(.4,0,.2,1) .2s forwards; }
+  @keyframes rv-tick-draw { to { stroke-dashoffset: 0; } } /* not rv-draw: that one is the bar's, from 20 */
   .page-back { position: fixed; left: 16px; top: 12px; z-index: 10; font: 12px/1.4 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); text-decoration: none; }
   .page-back:hover { color: var(--rv-ink); }
   :host([data-page]) .panel { transform: none; visibility: visible; transition: none; position: relative; width: min(880px, 100%); height: 100vh; margin: 0 auto; box-shadow: none; border-left: 1px solid hsl(var(--rv-n20)); border-right: 1px solid hsl(var(--rv-n20)); }
@@ -1756,6 +1859,8 @@ async function save() {
      already on screen, shimmering while the picture goes up; the hub's record replaces it when it arrives */
   const tmp = { id: `tmp-${Date.now().toString(36)}`, n: state.lastN + 1, ts: Date.now(), by: state.me, ...meta, shotHow: how, status: "open", shot: png ? "pending" : null, thumb: null, localShot: png, pending: true, resolved: false };
   state.comments.push(tmp);
+  state.dropPin = { id: tmp.id, t0: performance.now() }; // its landing (renderPins)
+  state.pinMoment = { id: tmp.id, t0: performance.now(), pill: addPill("add") }; // and its pill beside the number
   state.count = state.comments.length;
   state.lastN = tmp.n;
   state.pinEls.set(tmp.id, el);
@@ -1775,6 +1880,8 @@ async function sendComment(tmp, el) {
     if (!j.ok) throw new Error(j.error || "save failed");
     state.pinEls.delete(id);
     state.pinEls.set(j.entry.id, el);
+    if (state.dropPin?.id === id) state.dropPin.id = j.entry.id; // the landing carries on under its real id
+    if (state.pinMoment?.id === id) state.pinMoment.id = j.entry.id;
     state.mine.add(j.entry.id);
     state.comments = state.comments.filter((c) => c.id !== id);
     listSeen = "";
@@ -2227,11 +2334,41 @@ function renderPins() {
     d.textContent = c.n;
     d.dataset.id = c.id;
     wrap.appendChild(d);
+    /* A NEW PIN LANDS (Nirav, 2026-10-25): it drops onto its place with a small bounce (the ring that spread from it
+       and the box's flash were taken out the same day). Pins are redrawn every frame, so the moment is worked out from the time, not a CSS animation */
+    if (state.dropPin?.id === c.id && !calm()) {
+      const k = (now - state.dropPin.t0) / 750;
+      if (k < 1) {
+        const fall = Math.min(1, k / 0.45);
+        const bounce = k < 0.45 ? 0 : Math.sin(((k - 0.45) / 0.55) * Math.PI) * Math.exp(-((k - 0.45) / 0.55) * 3);
+        d.style.translate = `0 ${-(1 - fall) * (1 - fall) * 22 - bounce * 6}px`;
+        d.style.scale = String(k < 0.45 ? 0.6 + 0.4 * fall : 1 + bounce * 0.12);
+        d.style.opacity = String(Math.min(1, k / 0.2));
+      }
+      else state.dropPin = null;
+    }
+    /* A PIN'S MOMENT (Nirav, 2026-10-25): added, picked up or done, the pill shows beside the number and follows the
+       pin, the pin card stays shut ("just the pill beside the pin number") */
+    if (state.pinMoment?.id === c.id) {
+      const pill = state.pinMoment.pill;
+      if (pill) {
+        /* right of the number when it fits, else to its left; never past the window's edge (Nirav, 2026-10-25) */
+        const w = pill.offsetWidth || 160;
+        const right = r.left + 30;
+        const x = right + w <= window.innerWidth - 8 ? right : Math.max(8, r.left - w - 8);
+        pill.style.left = `${x}px`;
+        pill.style.top = `${Math.max(8, r.top - 2)}px`;
+        pill.style.transformOrigin = x < r.left ? "100% 50%" : "0 50%";
+        pill.style.visibility = "visible";
+      }
+      if (now - state.pinMoment.t0 > 2600) state.pinMoment = null;
+    }
     /* the tip follows the mouse, not events: pins are redrawn every frame, so a "mouse left" would never fire */
     const { x, y } = state.mouse;
     if (x >= r.left - 9 && x <= r.left + 15 && y >= r.top - 9 && y <= r.top + 15) over = { c, r };
     /* just arrived by go-to: the comment reads itself out for the flash's time, no hover needed */
     if (hot && !over) over = { c, r };
+    if (state.pinMoment?.id === c.id && over?.c.id === c.id) over = null; // no pin card while its pill shows
   }
   /* the tip already up stays while something is pending on it (an edit, a "sure?") or the pointer is on it */
   if (!over && tip.classList.contains("on") && rects.has(tip.dataset.id)) {
@@ -2243,7 +2380,10 @@ function renderPins() {
     if (tip.dataset.id !== over.c.id) buildTip(over.c);
     if (tipHold === over.c.id) tip.classList.add("held");
     tip.style.left = `${Math.min(over.r.left, window.innerWidth - 310)}px`;
-    tip.style.top = `${over.r.top + 18}px`;
+    /* below the pin when it fits, else above it, so a pin near the bottom never opens a card cut off by the window
+       (Nirav, 2026-10-25) */
+    const th = tip.offsetHeight || 140;
+    tip.style.top = `${over.r.top + 18 + th <= window.innerHeight - 8 ? over.r.top + 18 : Math.max(8, over.r.top - th - 6)}px`;
     tip.classList.add("on");
   } else {
     tip.classList.remove("on", "held");
@@ -2279,7 +2419,20 @@ tip.addEventListener("click", async (e) => {
   }
   if (t.classList.contains("tip-ok")) {
     const to = t.dataset.to;
-    await applyUpdate({ id: c.id, status: to }, t);
+    const was = c.status;
+    const ok = await applyUpdate({ id: c.id, status: to }, t);
+    if (ok && to === "approved") await tipGoodbye("ok").catch(() => {}); // its lock, as in the list
+    /* picked up or done from the pin card: the same happy moment, on the pin card (Nirav, 2026-10-25) */
+    const moment = ok && !isQ(ok) ? (was === "open" && ok.status === "progress" ? "pick" : was === "progress" && ok.status === "approval" ? "done" : null) : null;
+    if (moment) {
+      /* the pin card closes and the pill shows beside the pin's number, as for a new pin (Nirav, 2026-10-25) */
+      tip.classList.remove("on");
+      delete tip.dataset.id;
+      tipHold = null;
+      state.pinMoment = { id: c.id, t0: performance.now(), pill: addPill(moment) };
+      toast(`#${c.n} ${statusToast[to]}`);
+      return;
+    }
     const fresh = state.comments.find((x) => x.id === c.id);
     if (fresh) buildTip(fresh);
     else {
@@ -2304,6 +2457,11 @@ tip.addEventListener("click", async (e) => {
     }
     const done = await api("delete", { id: c.id }).catch((e) => ({ error: String(e?.message || e) }));
     if (!done?.ok) return toast(done?.error || "Could not remove it", true);
+    {
+      /* its dust, on the pin card and on its card in the list when that is open */
+      const inList = panelBody.querySelector(`.card[data-id="${c.id}"]`);
+      await Promise.all([tipGoodbye("rm").catch(() => {}), inList ? removeFx(inList).catch(() => {}) : null]);
+    }
     await loadComments();
     tip.classList.remove("on");
     delete tip.dataset.id;
@@ -2659,6 +2817,7 @@ function refreshCard(c, animate = false) {
    changed list (to or from Approved). */
 async function applyUpdate(body, btn) {
   const card = panelBody.querySelector(`.card[data-id="${body.id}"]`);
+  const was = (state.comments.find((x) => x.id === body.id) || state.done.find((x) => x.id === body.id))?.status;
   const acts = btn?.closest(".acts, .tip-acts-in");
   btn?.classList.add("loading");
   acts?.classList.add("busy");
@@ -2675,8 +2834,253 @@ async function applyUpdate(body, btn) {
     if (/picked up/i.test(said)) loadComments().then(() => renderPanel());
     return null;
   }
+  if (r.entry.status === "approved" && body.status === "approved" && card && !PAGE_MODE_RESOLVED()) await approveFx(card).catch((e) => console.warn("[review] approval effect:", e)); // its moment before it leaves; an effect that fails never stops the approval
   if (applyEntry(r.entry) || !refreshCard(r.entry, !!card)) renderPanel();
+  /* Done or picked up by your own hand: a small happy moment for you */
+  const moment = isQ(r.entry) ? null : was === "progress" && r.entry.status === "approval" && body.status === "approval" ? "done" : was === "open" && r.entry.status === "progress" && body.status === "progress" ? "pick" : null;
+  if (moment) {
+    const now = panelBody.querySelector(`.card[data-id="${body.id}"]`);
+    if (now) doneFx(now, moment).catch(() => {});
+  }
   return r.entry;
+}
+/* GOODBYES (Nirav, 2026-10-24, picked from many trials): a removed card turns to dust, the Infinity War snap, the ash
+   taking over while a hint of the card stays; an approved one is locked on, HUD corner brackets and a scan line, then
+   the Approve button closes into Stripe's green check. Then it folds away and the list closes the gap. Nothing moves
+   for someone who asked the system for less motion. */
+const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+/* the card folds away: height, margin and padding to nothing, so the cards below glide up */
+async function foldAway(card, ms = 240) {
+  const h = card.offsetHeight;
+  const mb = getComputedStyle(card).marginBottom;
+  card.style.overflow = "hidden";
+  await card.animate([{ height: `${h}px`, marginBottom: mb, paddingTop: getComputedStyle(card).paddingTop, paddingBottom: getComputedStyle(card).paddingBottom }, { height: "0px", marginBottom: "0px", paddingTop: "0px", paddingBottom: "0px" }], { duration: ms, easing: "cubic-bezier(.65,0,.35,1)", fill: "forwards" }).finished.catch(() => {});
+}
+async function removeFx(card) {
+  if (!card?.isConnected || calm()) return;
+  card.classList.remove("menu-open");
+  card.querySelector(".card-more-wrap.open")?.classList.remove("open");
+  await snapAway(card);
+  await foldAway(card);
+}
+/* THE SNAP (Nirav, 2026-10-24: "Avengers: Infinity War kinda dust"): the card crumbles into ash from the left and blows
+   away up and to the right. Two dozen copies of the card each keep a random scatter of 3 px specks (a mask drawn on a
+   canvas); the specks on the left belong to the early copies, so the crumbling sweeps across; each copy drifts,
+   turns a little and fades, one after another */
+async function snapAway(card) {
+  /* the real card stays solid and a soft edge eats it from left to right; ash appears only where the edge has passed
+     and blows away up and to the right (Nirav, 2026-10-24: "some part of the card still looks, then turns to dust") */
+  const rect = card.getBoundingClientRect();
+  const w = rect.width, h = rect.height;
+  const K = 24, CELL = 2, STEP = 32; // the edge crosses in about 0.8 s (Nirav, 2026-10-24: a bit faster)
+  const cw = Math.ceil(w / CELL), ch = Math.ceil(h / CELL);
+  const imgs = Array.from({ length: K }, () => new ImageData(cw, ch));
+  for (let y = 0; y < ch; y++)
+    for (let x = 0; x < cw; x++) {
+      const k = Math.min(K - 1, Math.floor(((x / cw) * 0.88 + Math.random() * 0.12) * K)); // in step with the edge, a little ragged
+      const d = imgs[k].data, i = (y * cw + x) * 4;
+      d[i] = d[i + 1] = d[i + 2] = d[i + 3] = 255;
+    }
+  const urls = imgs.map((im) => {
+    const cv = document.createElement("canvas");
+    cv.width = cw;
+    cv.height = ch;
+    cv.getContext("2d").putImageData(im, 0, 0);
+    return `url(${cv.toDataURL()})`;
+  });
+  /* the ash floats above everything, at the card's place on the screen */
+  const layer = document.createElement("div");
+  layer.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${w}px;height:${h}px;pointer-events:none;z-index:20;`;
+  const pieces = urls.map((url) => {
+    const piece = card.cloneNode(true);
+    piece.classList.remove("menu-open", "hist-open", "picked");
+    piece.style.cssText = `position:absolute;inset:0;margin:0;width:100%;height:100%;box-sizing:border-box;-webkit-mask-image:${url};mask-image:${url};-webkit-mask-size:100% 100%;mask-size:100% 100%;`;
+    layer.appendChild(piece);
+    return piece;
+  });
+  root.appendChild(layer);
+  /* the edge: the card masked away from the left, as the ash leaves */
+  const T = K * STEP, t0 = performance.now();
+  /* a wide, soft edge and the card itself fading as the ash takes over (Nirav, 2026-10-24: mostly the dust, a hint of
+     the solid card before it goes) */
+  const edge = (p) => `linear-gradient(to right, transparent ${p - 20}%, #000 ${p + 20}%)`;
+  card.animate([{ opacity: 1 }, { offset: 0.35, opacity: 0.85 }, { opacity: 0 }], { duration: T, easing: "ease-in", fill: "forwards" });
+  const sweep = new Promise((done) => {
+    const step = (now) => {
+      const p = Math.min(125, ((now - t0) / T) * 145 - 20);
+      card.style.webkitMaskImage = card.style.maskImage = edge(p);
+      if (p < 125 && card.isConnected) requestAnimationFrame(step);
+      else done();
+    };
+    requestAnimationFrame(step);
+  });
+  const blown = Promise.all(
+    pieces.map((piece, k) => {
+      const dx = 70 + Math.random() * 110, dy = -(35 + Math.random() * 85), r = (Math.random() - 0.4) * 22;
+      return piece.animate([{ opacity: 1, transform: "none", filter: "blur(0)" }, { offset: 0.3, opacity: 0.95 }, { opacity: 0, transform: `translate(${dx}px, ${dy}px) rotate(${r}deg)`, filter: "blur(1.2px)" }], { duration: 760, delay: k * STEP, easing: "cubic-bezier(.3,.1,.6,1)", fill: "both" }).finished.catch(() => {}); // grain on the whole card from the start
+    }),
+  );
+  await sweep;
+  card.style.visibility = "hidden";
+  card.style.webkitMaskImage = card.style.maskImage = "";
+  blown.then(() => layer.remove()); // the last ash drifts on while the list already closes the gap
+}
+async function approveFx(card, btn = card?.querySelector(".card-foot .acts > .card-st, .card-foot .acts > button"), fold = true) {
+  if (!card?.isConnected || calm()) return;
+  const cr = card.getBoundingClientRect();
+  const layer = document.createElement("div");
+  layer.className = "fx-lock";
+  layer.innerHTML = `<b class="br tl"></b><b class="br tr"></b><b class="br bl"></b><b class="br br2"></b><span class="scan"></span>`;
+  card.appendChild(layer);
+  if (btn) {
+    await wait(380); // as the scan ends
+    const br = btn.getBoundingClientRect();
+    btn.style.visibility = "hidden";
+    layer.insertAdjacentHTML("beforeend", `<span class="stp" style="left:${br.left - cr.left + br.width / 2}px;top:${br.top - cr.top + br.height / 2}px;--w:${br.width}px;--h:${br.height}px"><i class="ring"></i><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" pathLength="1" class="stp-tick"/></svg></span>`);
+    await wait(480);
+  } else await wait(640);
+  await card.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.99)" }], { duration: 200, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" }).finished.catch(() => {});
+  if (fold) await foldAway(card);
+}
+/* the pin card's goodbye (Nirav, 2026-10-25): a copy of it plays the dust or the lock where it stands while the real
+   one closes, so the real one is never left half-animated for its next use */
+async function tipGoodbye(kind) {
+  if (calm() || !tip.classList.contains("on")) return;
+  const ghost = tip.cloneNode(true);
+  ghost.classList.add("on");
+  ghost.style.pointerEvents = "none";
+  tip.parentNode.appendChild(ghost);
+  tip.classList.remove("on");
+  try {
+    if (kind === "rm") await snapAway(ghost);
+    else await approveFx(ghost, ghost.querySelector(".tip-ok"), false);
+  } finally {
+    ghost.remove();
+  }
+}
+/* A FEEL-GOOD MOMENT FOR DONE (Nirav, 2026-10-24): whoever marks their work Done gets a small bubble where the button
+   was, a teal face whose smile draws itself and whose eyes blink, and a word of praise with their name; the card
+   glows softly; then it floats away. The card stays, now for approval. */
+/* each line has its own face and its own little animation (Nirav, 2026-10-25: "not only the smile, different ones") */
+const PRAISE = [ // each with a bold extra (Nirav, 2026-10-25: "same as the confetti and sparkles for the rest")
+  { w: "Nice one", eyes: "wink", mouth: "smile", extra: "sparkle1" },
+  { w: "Done and dusted", eyes: "dots", mouth: "grin", extra: "sparkle" },
+  { w: "Great work", eyes: "hearts", mouth: "smile", extra: "hearts" },
+  { w: "That's a wrap", eyes: "happy", mouth: "grin", extra: "confetti" },
+  { w: "Another one down", eyes: "shades", mouth: "smirk", extra: "glint" },
+  { w: "Smooth", eyes: "happy", mouth: "smile", move: "bounce", extra: "sparkle" },
+];
+const CHEER = [ // picking up (Nirav, 2026-10-24: "that for the pick moment too")
+  { w: "You've got this", eyes: "dots", mouth: "grin", extra: "sparkle" },
+  { w: "On it", eyes: "look", mouth: "smile", extra: "bang" },
+  { w: "Let's go", eyes: "dots", mouth: "open", extra: "whoosh" },
+  { w: "All yours", eyes: "happy", mouth: "smile", extra: "hearts" },
+  { w: "Game on", eyes: "stars", mouth: "grin", extra: "confetti" },
+  { w: "Here we go", eyes: "dots", mouth: "smile", move: "nod", extra: "arcs" },
+];
+/* a small face, drawn flat (Nirav, 2026-10-25: the flat style was the best; a shaded, emoji-like try was dropped the
+   same day): the circle in the moment's colour, white eyes and mouth, and a little extra outside it */
+function faceSvg(f, fill) {
+  const W = "#fff";
+  const EYES = {
+    dots: `<g class="f-blink"><circle cx="7" cy="8" r="1.3" fill="${W}"/><circle cx="13" cy="8" r="1.3" fill="${W}"/></g>`,
+    wink: `<circle cx="7" cy="8" r="1.3" fill="${W}"/><g class="f-wink"><circle cx="13" cy="8" r="1.3" fill="${W}"/></g>`,
+    happy: `<path d="M5.4 8.7 Q7 6.9 8.6 8.7 M11.4 8.7 Q13 6.9 14.6 8.7" fill="none" stroke="${W}" stroke-width="1.4" stroke-linecap="round"/>`,
+    hearts: `<g class="f-pulse"><path d="M7 9.6 L5.4 8 a1 1 0 0 1 1.6 -1.2 a1 1 0 0 1 1.6 1.2 Z M13 9.6 L11.4 8 a1 1 0 0 1 1.6 -1.2 a1 1 0 0 1 1.6 1.2 Z" fill="${W}"/></g>`,
+    stars: `<g class="f-twinkle"><path d="M7 5.9 L7.6 7.4 L9.1 8 L7.6 8.6 L7 10.1 L6.4 8.6 L4.9 8 L6.4 7.4 Z M13 5.9 L13.6 7.4 L15.1 8 L13.6 8.6 L13 10.1 L12.4 8.6 L10.9 8 L12.4 7.4 Z" fill="${W}"/></g>`,
+    shades: `<g class="f-shades"><rect x="4.2" y="6.6" width="11.6" height="1.2" rx=".6" fill="#1d2b3e"/><rect x="4.6" y="6.9" width="4.6" height="3.1" rx="1.2" fill="#1d2b3e"/><rect x="10.8" y="6.9" width="4.6" height="3.1" rx="1.2" fill="#1d2b3e"/></g>`,
+    look: `<g class="f-look"><circle cx="7" cy="8" r="1.3" fill="${W}"/><circle cx="13" cy="8" r="1.3" fill="${W}"/></g>`,
+    big: `<g class="f-blink"><circle cx="6.8" cy="7.2" r="2.3" fill="${W}"/><circle cx="13.2" cy="7.2" r="2.3" fill="${W}"/><circle class="f-peek" cx="7.2" cy="7.6" r="1.1" fill="#1d2b3e"/><circle class="f-peek" cx="13.6" cy="7.6" r="1.1" fill="#1d2b3e"/></g>`,
+    blush: `<circle cx="7" cy="8" r="1.3" fill="${W}"/><circle cx="13" cy="8" r="1.3" fill="${W}"/><ellipse class="f-blush" cx="4.7" cy="11.3" rx="1.9" ry="1.1" fill="#ffc2d1"/><ellipse class="f-blush" cx="15.3" cy="11.3" rx="1.9" ry="1.1" fill="#ffc2d1"/>`,
+    glasses: `<g class="f-glasses"><g fill="none" stroke="#1d2b3e" stroke-width="1.3"><circle cx="6.7" cy="8.2" r="2.5"/><circle cx="13.3" cy="8.2" r="2.5"/><path d="M9.2 8.2 H10.8"/></g><circle cx="6.7" cy="8.2" r="1" fill="${W}"/><circle cx="13.3" cy="8.2" r="1" fill="${W}"/></g>`,
+    /* a clear gap between eyes and mouth (Nirav, 2026-10-25): smaller eyes, set higher */
+    sparkly: `<circle cx="6.9" cy="7.3" r="2.1" fill="${W}"/><circle cx="13.1" cy="7.3" r="2.1" fill="${W}"/>${[6.9, 13.1].map((x) => `<path class="f-glimmer" d="M${x} 5.9 L${x + 0.4} 6.9 L${x + 1.4} 7.3 L${x + 0.4} 7.7 L${x} 8.7 L${x - 0.4} 7.7 L${x - 1.4} 7.3 L${x - 0.4} 6.9 Z" fill="${fill}"/>`).join("")}`,
+    monocle: `<circle cx="7" cy="8" r="1.35" fill="${W}"/><circle cx="13.1" cy="8" r="1.35" fill="${W}"/><g class="f-monocle"><circle cx="13.1" cy="8" r="2.75" fill="hsl(48 100% 85% / .25)" stroke="#ffc83d" stroke-width="1.2"/><path d="M15.3 9.8 Q16.8 12.8 15.6 15.6" fill="none" stroke="#ffc83d" stroke-width=".7" stroke-linecap="round"/></g>`,
+    aim: `<path d="M5.3 8.2 Q7 7.2 8.7 8.2" fill="none" stroke="${W}" stroke-width="1.5" stroke-linecap="round"/><g class="f-blink"><circle cx="13" cy="8" r="1.45" fill="${W}"/></g>`,
+    joy: `<path d="M5.2 8.9 Q7 6.4 8.8 8.9 M11.2 8.9 Q13 6.4 14.8 8.9" fill="none" stroke="${W}" stroke-width="1.6" stroke-linecap="round"/>`,
+    squint: `<path d="M5.1 6.9 L7.7 8.4 L5.1 9.9 M14.9 6.9 L12.3 8.4 L14.9 9.9" fill="none" stroke="${W}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+  };
+  const MOUTH = {
+    smile: `<path class="f-draw" d="M6 11.6 Q10 15.4 14 11.6" fill="none" stroke="${W}" stroke-width="1.6" stroke-linecap="round" pathLength="1"/>`,
+    grin: `<path d="M5.8 11.2 Q10 16.8 14.2 11.2 Z" fill="${W}"/>`,
+    smirk: `<path class="f-draw" d="M7 12.6 Q11 14.4 14 11.4" fill="none" stroke="${W}" stroke-width="1.6" stroke-linecap="round" pathLength="1"/>`,
+    open: `<ellipse cx="10" cy="13.2" rx="2.1" ry="2" fill="${W}"/>`,
+    wide: `<path d="M5.8 11.7 H14.2 Q13.8 16.9 10 16.9 Q6.2 16.9 5.8 11.7 Z" fill="${W}"/><path d="M7.6 15.6 Q10 14.3 12.4 15.6 Q11.5 16.7 10 16.7 Q8.5 16.7 7.6 15.6 Z" fill="#ff8fab"/>`,
+    cat: `<path class="f-draw" d="M6.4 12 Q8.2 14.4 10 12 Q11.8 14.4 13.6 12" fill="none" stroke="${W}" stroke-width="1.5" stroke-linecap="round" pathLength="1"/>`,
+    calm: `<path class="f-draw" d="M7.2 12.8 Q10 14.4 12.8 12.8" fill="none" stroke="${W}" stroke-width="1.5" stroke-linecap="round" pathLength="1"/>`,
+    tongue: `<path d="M6 11.6 Q10 15.4 14 11.6" fill="none" stroke="${W}" stroke-width="1.6" stroke-linecap="round"/><path class="f-tongue" d="M8.8 13.5 Q10 17 11.2 13.5 Z" fill="#ff8fab"/>`,
+    o: `<circle class="f-o" cx="10" cy="13.4" r="1.7" fill="none" stroke="${W}" stroke-width="1.5"/>`,
+    ooh: `<ellipse class="f-o" cx="10" cy="13.4" rx="1.6" ry="1.95" fill="${W}"/>`,
+    beam: `<path d="M6.7 12.3 Q10 16.5 13.3 12.3 Z" fill="${W}" stroke="${W}" stroke-width=".8" stroke-linejoin="round"/>`,
+    soft: `<g class="f-widen"><path class="f-draw" d="M6.9 12.3 Q10 15 13.1 12.3" fill="none" stroke="${W}" stroke-width="1.6" stroke-linecap="round" pathLength="1"/></g>`,
+    side: `<path class="f-draw" d="M7.2 12.7 Q10.4 14.6 13 12.1" fill="none" stroke="${W}" stroke-width="1.6" stroke-linecap="round" pathLength="1"/>`,
+    teeth: `<rect x="6.3" y="11.4" width="7.4" height="3.6" rx="1.7" fill="${W}"/><path d="M6.5 13.2 H13.5 M8.8 11.5 V15 M11.2 11.5 V15" stroke="${fill}" stroke-width=".6"/>`,
+  };
+  const EXTRA = {
+    sparkle: `<path class="f-sparkle" d="M21 -3 L22.1 0.2 L25.3 1.3 L22.1 2.4 L21 5.6 L19.9 2.4 L16.7 1.3 L19.9 0.2 Z" fill="#ffc83d"/><path class="f-sparkle s2" d="M-2 15 L-1.4 16.6 L0.2 17.2 L-1.4 17.8 L-2 19.4 L-2.6 17.8 L-4.2 17.2 L-2.6 16.6 Z" fill="#ffc83d"/>`,
+    sparkle1: `<path class="f-sparkle" d="M21 -3 L22.1 0.2 L25.3 1.3 L22.1 2.4 L21 5.6 L19.9 2.4 L16.7 1.3 L19.9 0.2 Z" fill="#ffc83d"/>`,
+    confetti: [[-3, -2, "#ff6b8a", 0], [23, -2, "#ffc83d", 1], [-4, 14, "#4dabff", 1], [24, 15, "#a77bff", 0], [10, -5, "#2bd47d", 1], [3, 24, "#ff9f43", 0], [18, 24, "#ff6b8a", 1], [-5, 6, "#2bd47d", 0]].map(([x, y, c, strip], i) => (strip ? `<rect class="f-confetti" style="--x:${(x - 10) * 0.55}px;--y:${(y - 10) * 0.55}px;--d:${i * 25}ms;--r:${i % 2 ? 60 : -50}deg" x="${x - 1.6}" y="${y - 0.7}" width="3.2" height="1.4" rx=".5" fill="${c}"/>` : `<circle class="f-confetti" style="--x:${(x - 10) * 0.55}px;--y:${(y - 10) * 0.55}px;--d:${i * 25}ms;--r:0deg" cx="${x}" cy="${y}" r="1.6" fill="${c}"/>`)).join(""),
+    whoosh: `<g class="f-whoosh" stroke="${fill}" stroke-width="2" stroke-linecap="round"><path d="M-6 5 H-0.5"/><path d="M-8 10 H-1"/><path d="M-6 15 H-0.5"/></g>`,
+    hearts: `<path class="f-heart" d="M20 5 L17.4 2.4 a1.6 1.6 0 0 1 2.6 -2 a1.6 1.6 0 0 1 2.6 2 Z" fill="#ff5277"/><path class="f-heart h2" d="M1 4 L-1.2 1.8 a1.35 1.35 0 0 1 2.2 -1.7 a1.35 1.35 0 0 1 2.2 1.7 Z" fill="#ff8fab"/>`,
+    glint: `<rect class="f-glint" x="4" y="6.4" width="2" height="4" rx="1" fill="#fff" opacity=".9" transform="skewX(-20)"/><path class="f-sparkle" d="M21 -3 L22.1 0.2 L25.3 1.3 L22.1 2.4 L21 5.6 L19.9 2.4 L16.7 1.3 L19.9 0.2 Z" fill="#ffc83d"/>`,
+    bang: `<g class="f-bang"><rect x="19.2" y="-4" width="2.4" height="6" rx="1.2" fill="#ff5277"/><circle cx="20.4" cy="4.4" r="1.3" fill="#ff5277"/></g>`,
+    arcs: `<g class="f-arcs" fill="none" stroke="${fill}" stroke-width="1.6" stroke-linecap="round"><path d="M22.5 5 Q25 10 22.5 15"/><path d="M-2.5 5 Q-5 10 -2.5 15"/></g>`,
+    bulb: `<g class="f-bulb"><circle cx="21" cy="-0.5" r="2.7" fill="#ffd84d"/><rect x="19.8" y="2" width="2.4" height="1.8" rx=".5" fill="#c9a227"/><g class="f-rays" stroke="#ffd84d" stroke-width="1.1" stroke-linecap="round"><path d="M21 -5.2 V-4.2"/><path d="M25.6 -0.5 H24.6"/><path d="M16.4 -0.5 H17.4"/><path d="M24.3 -3.8 L23.6 -3.1"/><path d="M17.7 -3.8 L18.4 -3.1"/></g></g>`,
+    check: `<path class="f-check" d="M20.9 0.2 L22.5 1.8 L25.4 -1.6" fill="none" stroke="#2bd47d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/>`, // smaller, with a gap from the head (Nirav, 2026-10-25)
+    stars3: [[22, -2, 0], [-2.5, -1, 1], [10, -5, 2]].map(([x, y, i]) => `<path class="f-star3" style="--d:${i * 180}ms" d="M${x} ${y - 2.4} L${x + 0.8} ${y - 0.8} L${x + 2.4} ${y} L${x + 0.8} ${y + 0.8} L${x} ${y + 2.4} L${x - 0.8} ${y + 0.8} L${x - 2.4} ${y} L${x - 0.8} ${y - 0.8} Z" fill="#ffc83d"/>`).join(""),
+    magnifier: `<g class="f-mag"><circle cx="21.5" cy="0" r="2.8" fill="hsl(200 100% 85% / .45)" stroke="#8a96a8" stroke-width="1.4"/><path d="M23.5 2 L25.9 4.4" stroke="#8a96a8" stroke-width="1.8" stroke-linecap="round"/></g>`,
+    /* a bigger, clear map pin in blue, so it stands apart from the red face (Nirav, 2026-10-25: "this pin looks small and odd") */
+    target: `<g class="f-target"><circle cx="21.4" cy="-0.6" r="3.3" fill="#3d9bff"/><circle cx="21.4" cy="-0.6" r="2.15" fill="#fff"/><circle cx="21.4" cy="-0.6" r="1.05" fill="#3d9bff"/></g>`,
+    bubble: `<g class="f-bubble"><path d="M18.2 -5.6 H25 A1.6 1.6 0 0 1 26.6 -4 V-0.6 A1.6 1.6 0 0 1 25 1 H20.4 L18.6 2.8 L18.9 1 H18.2 A1.6 1.6 0 0 1 16.6 -0.6 V-4 A1.6 1.6 0 0 1 18.2 -5.6 Z" fill="#fff" stroke="#8a96a8" stroke-width=".6"/><path class="f-beat" d="M21.6 0.2 L19.2 -2.2 a1.2 1.2 0 0 1 2.4 -1.75 a1.2 1.2 0 0 1 2.4 1.75 Z" fill="#ff3d6e"/></g>`, // a bigger heart that beats (Nirav, 2026-10-25)
+  };
+  return `<svg class="f-face${f.move ? ` f-${f.move}` : ""}" width="22" height="22" viewBox="-4 -4 28 28" aria-hidden="true"><circle cx="10" cy="10" r="10" fill="${fill}"/>${EYES[f.eyes] || EYES.dots}${MOUTH[f.mouth] || MOUTH.smile}${f.extra ? EXTRA[f.extra] : ""}</svg>`;
+}
+/* a new pin's pill: beside its number, in the pin card's colour, a red face and a word of thanks (Nirav, 2026-10-25) */
+const ADDED = [ // faces of their own, none borrowed from Pick up or Done (Nirav, 2026-10-25)
+  { w: "Good catch", eyes: "big", mouth: "wide", extra: "bulb" },
+  { w: "Sharp eye", eyes: "aim", mouth: "side", extra: "target" }, // in place of "Pinned it" (Nirav, 2026-10-25)
+  { w: "Noted", eyes: "glasses", mouth: "calm", extra: "check" },
+  { w: "Nice find", eyes: "sparkly", mouth: "beam", extra: "stars3" }, // no tongue, clearer eyes (Nirav, 2026-10-25)
+  { w: "Spotted", eyes: "monocle", mouth: "ooh", extra: "magnifier" }, // a solid "ooh", a gold monocle (Nirav, 2026-10-25)
+  { w: "Thanks for this", eyes: "joy", mouth: "soft", extra: "bubble" }, // in place of "On the map" (Nirav, 2026-10-25)
+];
+function addPill(kind = "add") {
+  if (calm()) return null;
+  const words = kind === "pick" ? CHEER : kind === "done" ? PRAISE : ADDED;
+  const face = words[Math.floor(Math.random() * words.length)];
+  const name = String(state.me || "").split(/\s+/)[0];
+  const b = document.createElement("div");
+  b.className = "fx-done pin-add";
+  b.style.visibility = "hidden"; // until its pin is drawn
+  b.innerHTML = `${faceSvg(face, kind === "pick" ? "#FF6F00" : kind === "done" ? "#31BFB0" : "#e11d48")}<span>${esc(face.w)}${name ? `, ${esc(name)}` : ""}</span>`;
+  root.appendChild(b);
+  setTimeout(async () => {
+    await b.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-8px)" }], { duration: 260, easing: "ease-in", fill: "forwards" }).finished.catch(() => {});
+    b.remove();
+  }, 2300);
+  return b;
+}
+async function doneFx(card, kind = "done") {
+  if (!card?.isConnected || calm()) return;
+  const name = String(state.me || "").split(/\s+/)[0];
+  const words = kind === "pick" ? CHEER : PRAISE;
+  const face = words[Math.floor(Math.random() * words.length)];
+  const line = face.w;
+  const foot = card.querySelector(".card-foot, .tip-acts"); // a list card's foot, or the pin card's buttons
+  const cr = card.getBoundingClientRect(), fr = (foot || card).getBoundingClientRect();
+  const b = document.createElement("div");
+  const below = card.classList.contains("pin-tip"); // on the pin card: above it, so its buttons stay clear (Nirav, 2026-10-25: "at the top")
+  b.className = `fx-done${kind === "pick" ? " pick" : ""}${below ? " below" : ""}`;
+  b.style.cssText = below ? "right:0;top:auto;bottom:calc(100% + 8px);" : `right:14px;top:${fr.top - cr.top + fr.height / 2}px;`;
+  b.innerHTML = `${faceSvg(face, kind === "pick" ? "#FF6F00" : "#31BFB0")}<span>${esc(line)}${name ? `, ${esc(name)}` : ""}</span>`;
+  card.appendChild(b);
+  card.classList.add(kind === "pick" ? "fx-pick-glow" : "fx-done-glow");
+  await wait(1700);
+  const y = below ? "0px" : "-50%"; // floats up and away either way
+  await b.animate([{ opacity: 1, transform: `translateY(${y})` }, { opacity: 0, transform: `translateY(calc(${y} - 10px))` }], { duration: 260, easing: "ease-in", fill: "forwards" }).finished.catch(() => {});
+  b.remove();
+  card.classList.remove("fx-done-glow", "fx-pick-glow");
 }
 /* a part of the card fades out, changes, fades in */
 function swapIn(el, change) {
@@ -2687,6 +3091,7 @@ function swapIn(el, change) {
     el.classList.remove("swap");
   }, 140);
 }
+const PAGE_MODE_RESOLVED = () => PAGE_MODE && window.__reviewView === "resolved"; // the approved list keeps it
 const guarded = (path, body) => path === "delete" || (path === "update" && ((body?.status === "approved" && !body?.resolve) || !!body?.assignTo)); // a question's Got it is not an approval
 const api = (path, body) => rv(`/__review/${path}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, guarded(path, body)).then((r) => r.json());
 let teamCache = { at: 0, list: [] };
@@ -3173,7 +3578,7 @@ function renderPanel() {
     const inScopeT = (c) => { const s2 = scopeNow(); const r = (c.route || "").split("?")[0]; const g = (c.module && c.module.group) || moduleOf(c.route).group || "Other"; return s2.kind === "route" ? r === s2.route : s2.kind === "group" ? g === s2.group : true; };
     const live = state.comments.filter(inScopeT), done = state.done.filter(inScopeT);
     const cnt = (k) => live.filter((c) => c.status === k).length;
-    const ST = { open: ["open", "New", cnt("open")], progress: ["progress", "In progress", cnt("progress")], approval: ["approval", "For approval", cnt("approval")] };
+    const ST = { open: ["open", "New", cnt("open")], progress: ["progress", "In progress", cnt("progress")], approval: ["approval", pool.some((c) => isQ(c) && c.status === "approval") ? "For approval or answered" : "For approval", cnt("approval")] };
     const approver = state.persona === "approver";
     const TABS = [["all", "All", live.length], ...(approver ? [ST.approval, ST.progress, ST.open] : [ST.open, ST.progress, ST.approval])];
     const quietK = approver ? "open" : "approval"; // the one this person rarely needs: last, and quieter
@@ -3458,10 +3863,17 @@ function renderPanel() {
     const groups = []; // { key, label, items }
     const add = (key, label, items) => items.length && groups.push({ key, label, items });
     if (groupBy === "status") {
-      const by = (k) => shown.filter((c) => c.status === k);
-      const order = state.persona === "approver" ? ["approval", "progress", "open"] : ["open", "progress", "approval"];
+      /* a question reads in its own words (Nirav, 2026-10-24): asked ones sit with New, answered ones in their own
+         group, never under For approval (they wait for the asker, not the approver) */
+      const key = (c) => (isQ(c) ? (c.status === "approval" ? "answered" : c.status === "approved" ? "approved" : "open") : c.status);
+      const by = (k) => shown.filter((c) => key(c) === k);
+      const order = state.persona === "approver" ? ["approval", "progress", "open", "answered"] : ["open", "progress", "answered", "approval"];
       for (const k of order) {
         const cs = by(k);
+        if (k === "answered") {
+          add("answered", `${SHAPE("approval")}Answered · ${cs.length}`, cs);
+          continue;
+        }
         if (k === "progress") {
           const ppl = new Map();
           for (const c of cs) { const w = c.assignee || "Someone"; if (!ppl.has(w)) ppl.set(w, []); ppl.get(w).push(c); }
@@ -3984,6 +4396,7 @@ panelBody.addEventListener("click", async (e) => {
     }
     const done = await api("delete", { id: c.id }).catch((e) => ({ error: String(e?.message || e) }));
     if (!done?.ok) return toast(done?.error || "Could not remove it", true);
+    await removeFx(card).catch((e) => console.warn("[review] removal effect:", e)); // its goodbye, then the list closes the gap; a failing effect never stops it
     await loadComments();
 $(".bar .k").textContent = `${MOD} + click to comment`;
     renderPanel();
