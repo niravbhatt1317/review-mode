@@ -19,7 +19,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { loadConfig, pkgDir } from "./config.js";
 import { storeFor, prepare } from "./stores.js";
-import { withNames, applyChange, mergePeople, avatarsOf, normalise, sentence, newId, teamOf, waitingOf } from "../hub-core.js";
+import { withNames, applyChange, mergePeople, avatarsOf, normalise, sentence, newId, teamOf, waitingOf, sigOf, lightList, facesOf } from "../hub-core.js";
 
 /* who is reviewing on this machine: the git name, mapped to a person by the people map */
 let reviewer = "";
@@ -103,7 +103,24 @@ export default function review(options = {}) {
           const store = storeFor(cfg, hubs, sess);
           if (url === "/__review/list") {
             store.sweep().catch((e) => console.warn("[review] sweep:", e.message));
-            return send(res, 200, prepare(await store.list()).map(shownWith(await peopleFor(store))));
+            const ppl = await peopleFor(store);
+            const q0 = new URLSearchParams(qs || "");
+            if (store.lightList && q0.get("light") && q0.get("since") !== null) {
+              /* the lean path (step 3): the hub sends only the rows wanted, only when something moved */
+              const { list: rows, doneCount } = await store.lightList({ approved: !!q0.get("approved") });
+              const body = { ...lightList(rows.map(shownWith(ppl)), { approved: !!q0.get("approved") }), doneCount, faces: facesOf(ppl) };
+              const sig = sigOf(JSON.stringify(body));
+              return send(res, 200, q0.get("since") === sig ? { same: true, sig } : { sig, ...body });
+            }
+            const list = prepare(await store.list()).map(shownWith(ppl));
+            /* ?since=<fingerprint>: the drawer's refresh; an unchanged list answers { same: true }. ?light=1: the light
+               list (no pictures of people, a small app snapshot, approved counted; ?approved=1 sends those instead) */
+            const q = new URLSearchParams(qs || "");
+            const since = q.get("since");
+            if (since === null) return send(res, 200, list);
+            const body = q.get("light") ? { ...lightList(list, { approved: !!q.get("approved") }), faces: facesOf(ppl) } : { list };
+            const sig = sigOf(JSON.stringify(body));
+            return send(res, 200, since === sig ? { same: true, sig } : { sig, ...body });
           }
           if (url === "/__review/next") return send(res, 200, { n: (await store.list()).length + 1 });
           if (url === "/__review/hub") {

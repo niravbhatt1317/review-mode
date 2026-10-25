@@ -615,6 +615,35 @@ root.innerHTML = `
   .card-shot { display: block; width: 100%; border: 1px solid var(--rv-fill); border-radius: 6px; cursor: zoom-in; }
   .card-c { position: relative; margin-left: 32px; }
   .card-c .card-pic { position: relative; container-type: inline-size; }
+  /* the picture's slot while it loads (Nirav, 2026-10-25) */
+  .card-c .card-pic:not(.ready) { aspect-ratio: var(--ar, 16 / 10); border-radius: 6px; overflow: hidden; background: linear-gradient(100deg, hsl(var(--rv-n10)) 30%, hsl(var(--rv-n20)) 50%, hsl(var(--rv-n10)) 70%) 0 0 / 300% 100%; animation: rv-shimmer 1.3s ease-in-out infinite; }
+  .card-c .card-pic:not(.ready) .card-shot { opacity: 0; }
+  .card-c .card-pic.ready .card-shot { animation: rv-fx-fade .3s ease-out; }
+  .card-c .card-pic.broken { animation: none; background: hsl(var(--rv-n10)); display: grid; place-items: center; }
+  .card-c .card-pic.broken::after { content: ""; width: 22px; height: 22px; opacity: .45; background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a96a8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='9' cy='10' r='1.6'/%3E%3Cpath d='M21 16l-5-5-8 9'/%3E%3C/svg%3E"); }
+  .card-c .card-pic.broken .card-shot { display: none; }
+  @keyframes rv-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+  @keyframes rv-fx-fade { from { opacity: 0; } to { opacity: 1; } }
+  /* loading placeholders and empty states */
+  .list-more .skel-card { margin-top: 0; }
+  .skel-card { display: flex; flex-direction: column; gap: 9px; margin: 0 0 16px 32px; padding: 14px; border-radius: 10px; background: var(--rv-surface); box-shadow: 0 1px 2px rgba(29,43,62,.06); }
+  .sk { display: block; border-radius: 6px; background: linear-gradient(100deg, hsl(var(--rv-n10)) 30%, hsl(var(--rv-n20)) 50%, hsl(var(--rv-n10)) 70%) 0 0 / 300% 100%; animation: rv-shimmer 1.3s ease-in-out infinite; }
+  .sk-line { height: 11px; }
+  .sk-pic { height: 120px; margin-top: 2px; }
+  .sk-foot { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .sk-dot { width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto; }
+  .sk-foot .sk-line { height: 9px; }
+  .empty-state { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 48px 24px 32px; text-align: center; }
+  .empty-state .empty-art { overflow: visible; margin-bottom: 10px; --art-fill: var(--rv-surface); --art-line: hsl(var(--rv-n50)); --art-soft: hsl(var(--rv-n20)); --art-ink: #1d2b3e; animation: rv-art-in .5s cubic-bezier(.22,1,.36,1) both; }
+  :host([data-theme="dark"]) .empty-state .empty-art { --art-fill: hsl(var(--rv-n10)); --art-line: hsl(var(--rv-n50)); --art-soft: hsl(var(--rv-n20)); --art-ink: #e6edf7; }
+  @keyframes rv-art-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  /* an empty view stays: its extras keep going, gently, and the face blinks now and then (Nirav, 2026-10-25) */
+  .empty-state :is(.f-sparkle, .f-star3, .f-heart, .f-glimmer, .f-twinkle) { animation-duration: 2.6s; animation-iteration-count: infinite; }
+  .empty-state .f-confetti { animation-duration: 3.2s; animation-iteration-count: infinite; }
+  .empty-state .f-blink { animation: rv-blink-idle 4.5s ease-in-out 1s infinite; }
+  @keyframes rv-blink-idle { 0%, 94%, 100% { transform: none; } 97% { transform: scaleY(.1); } }
+  .empty-state b { font: 600 14px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink); }
+  .empty-state span { font-size: 12px; line-height: 1.5; color: var(--rv-ink-3); max-width: 260px; }
   /* the number, drawn live over the picture at the badge's own spot (the same geometry the baked ones had, so it
      covers them exactly); sized in container units so it scales with the picture */
   .pic-n { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; background: #e11d48; color: #fff; font-weight: 700; text-align: center; box-shadow: 0 0 0 0.15em #fff; pointer-events: none; display: flex; align-items: center; justify-content: center; }
@@ -944,75 +973,75 @@ root.innerHTML = `
   @keyframes rv-pin-pill { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
   .fx-done.below { background: hsl(216 36% 18%); color: #fff; box-shadow: 0 0 0 1px hsl(0 0% 100% / .1), 0 8px 20px -6px rgba(0,0,0,.55); } /* the pin card's own colour (Nirav, 2026-10-25) */
   @keyframes rv-done-in-below { from { opacity: 0; transform: translateY(6px) scale(.7); } to { opacity: 1; transform: none; } }
-  .fx-done .f-face { flex: 0 0 auto; overflow: visible; }
-  .fx-done .f-face * { transform-box: fill-box; transform-origin: 50% 50%; }
-  .fx-done .f-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rv-tick-draw .34s cubic-bezier(.4,0,.2,1) .22s forwards; }
-  .fx-done .f-blink { animation: rv-blink .22s ease-in-out .9s; }
+  :is(.fx-done, .empty-state) .f-face { flex: 0 0 auto; overflow: visible; }
+  :is(.fx-done, .empty-state) .f-face * { transform-box: fill-box; transform-origin: 50% 50%; }
+  :is(.fx-done, .empty-state) .f-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rv-tick-draw .34s cubic-bezier(.4,0,.2,1) .22s forwards; }
+  :is(.fx-done, .empty-state) .f-blink { animation: rv-blink .22s ease-in-out .9s; }
   @keyframes rv-blink { 50% { transform: scaleY(.1); } }
-  .fx-done .f-wink { animation: rv-wink .5s ease-in-out .55s both; }
+  :is(.fx-done, .empty-state) .f-wink { animation: rv-wink .5s ease-in-out .55s both; }
   @keyframes rv-wink { 30%, 70% { transform: scaleY(.12); } }
-  .fx-done .f-pulse { animation: rv-pulse .5s ease-in-out .3s 2; }
+  :is(.fx-done, .empty-state) .f-pulse { animation: rv-pulse .5s ease-in-out .3s 2; }
   @keyframes rv-pulse { 50% { transform: scale(1.3); } }
-  .fx-done .f-twinkle { animation: rv-twinkle2 .7s ease-in-out .3s 2; }
+  :is(.fx-done, .empty-state) .f-twinkle { animation: rv-twinkle2 .7s ease-in-out .3s 2; }
   @keyframes rv-twinkle2 { 50% { transform: scale(1.25) rotate(20deg); } }
-  .fx-done .f-shades { animation: rv-shades .45s cubic-bezier(.3,1.4,.5,1) .2s both; }
+  :is(.fx-done, .empty-state) .f-shades { animation: rv-shades .45s cubic-bezier(.3,1.4,.5,1) .2s both; }
   @keyframes rv-shades { from { transform: translateY(-9px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .fx-done .f-look { animation: rv-look 1s ease-in-out .3s both; }
+  :is(.fx-done, .empty-state) .f-look { animation: rv-look 1s ease-in-out .3s both; }
   @keyframes rv-look { 25%, 55% { transform: translateX(1.6px); } 80% { transform: translateX(-.6px); } }
-  .fx-done .f-sparkle { animation: rv-sparkle .8s ease-in-out .25s 2 both; }
+  :is(.fx-done, .empty-state) .f-sparkle { animation: rv-sparkle .8s ease-in-out .25s 2 both; }
   @keyframes rv-sparkle { 0%, 100% { transform: scale(.3) rotate(0deg); opacity: 0; } 50% { transform: scale(1.35) rotate(45deg); opacity: 1; } }
-  .fx-done .f-sparkle.s2 { animation-delay: .5s; }
-  .fx-done .f-confetti { opacity: 0; animation: rv-confetti .9s cubic-bezier(.2,.8,.3,1) calc(.2s + var(--d)) both; }
+  :is(.fx-done, .empty-state) .f-sparkle.s2 { animation-delay: .5s; }
+  :is(.fx-done, .empty-state) .f-confetti { opacity: 0; animation: rv-confetti .9s cubic-bezier(.2,.8,.3,1) calc(.2s + var(--d)) both; }
   @keyframes rv-confetti { 0% { opacity: 0; transform: translate(calc(var(--x) * -1.4), calc(var(--y) * -1.4)) scale(.4) rotate(0deg); } 25% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(1.1) rotate(var(--r)); } }
-  .fx-done .f-whoosh path { animation: rv-whoosh .5s ease-out .15s 2 both; }
-  .fx-done .f-whoosh path:nth-child(2) { animation-delay: .22s; }
+  :is(.fx-done, .empty-state) .f-whoosh path { animation: rv-whoosh .5s ease-out .15s 2 both; }
+  :is(.fx-done, .empty-state) .f-whoosh path:nth-child(2) { animation-delay: .22s; }
   @keyframes rv-whoosh { from { transform: translateX(3px); opacity: 0; } 50% { opacity: 1; } to { transform: translateX(-3px); opacity: 0; } }
-  .fx-done .f-heart { animation: rv-heart 1.1s ease-out .3s both; }
+  :is(.fx-done, .empty-state) .f-heart { animation: rv-heart 1.1s ease-out .3s both; }
   @keyframes rv-heart { 0% { opacity: 0; transform: translateY(4px) scale(.5); } 30% { opacity: 1; transform: scale(1.25); } 100% { opacity: 0; transform: translateY(-8px) scale(1); } }
-  .fx-done .f-heart.h2 { animation-delay: .5s; }
-  .fx-done .f-glint { opacity: 0; animation: rv-glint .55s ease-in-out .6s both; }
+  :is(.fx-done, .empty-state) .f-heart.h2 { animation-delay: .5s; }
+  :is(.fx-done, .empty-state) .f-glint { opacity: 0; animation: rv-glint .55s ease-in-out .6s both; }
   @keyframes rv-glint { 0% { opacity: 0; transform: skewX(-20deg) translateX(0); } 30% { opacity: .95; } 100% { opacity: 0; transform: skewX(-20deg) translateX(9px); } }
-  .fx-done .f-bang { transform-origin: 50% 100%; animation: rv-bang .5s cubic-bezier(.3,1.6,.5,1) .35s both; }
+  :is(.fx-done, .empty-state) .f-bang { transform-origin: 50% 100%; animation: rv-bang .5s cubic-bezier(.3,1.6,.5,1) .35s both; }
   @keyframes rv-bang { 0% { opacity: 0; transform: translateY(4px) scale(.3); } 60% { opacity: 1; transform: translateY(-1px) scale(1.15); } 100% { opacity: 1; transform: none; } }
-  .fx-done .f-arcs path { animation: rv-arcs .45s ease-in-out .3s 2 both; }
+  :is(.fx-done, .empty-state) .f-arcs path { animation: rv-arcs .45s ease-in-out .3s 2 both; }
   @keyframes rv-arcs { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
   /* the added pin's own */
-  .fx-done .f-peek { animation: rv-peek 1s ease-in-out .35s both; }
+  :is(.fx-done, .empty-state) .f-peek { animation: rv-peek 1s ease-in-out .35s both; }
   @keyframes rv-peek { 30%, 60% { transform: translate(-.8px, -.4px); } }
-  .fx-done .f-blush { opacity: 0; animation: rv-blush .5s ease-out .3s forwards; }
+  :is(.fx-done, .empty-state) .f-blush { opacity: 0; animation: rv-blush .5s ease-out .3s forwards; }
   @keyframes rv-blush { to { opacity: 1; } }
-  .fx-done .f-glasses { animation: rv-glasses .4s cubic-bezier(.3,1.4,.5,1) .15s both; }
+  :is(.fx-done, .empty-state) .f-glasses { animation: rv-glasses .4s cubic-bezier(.3,1.4,.5,1) .15s both; }
   @keyframes rv-glasses { from { transform: translateY(-6px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .fx-done .f-glimmer { animation: rv-glimmer .7s ease-in-out .3s 2; }
+  :is(.fx-done, .empty-state) .f-glimmer { animation: rv-glimmer .7s ease-in-out .3s 2; }
   @keyframes rv-glimmer { 50% { transform: scale(1.35) rotate(45deg); } } /* the star in each eye twinkles */
-  .fx-done .f-monocle { animation: rv-monocle .4s cubic-bezier(.3,1.6,.5,1) .2s both; }
+  :is(.fx-done, .empty-state) .f-monocle { animation: rv-monocle .4s cubic-bezier(.3,1.6,.5,1) .2s both; }
   @keyframes rv-monocle { from { transform: scale(.2); opacity: 0; } to { transform: none; opacity: 1; } }
-  .fx-done .f-tongue { transform-origin: 50% 0; animation: rv-tongue .5s ease-in-out .35s 2; }
+  :is(.fx-done, .empty-state) .f-tongue { transform-origin: 50% 0; animation: rv-tongue .5s ease-in-out .35s 2; }
   @keyframes rv-tongue { 50% { transform: scaleY(1.35); } }
-  .fx-done .f-o { animation: rv-o .5s ease-in-out .3s 2; }
+  :is(.fx-done, .empty-state) .f-o { animation: rv-o .5s ease-in-out .3s 2; }
   @keyframes rv-o { 50% { transform: scale(1.35); } }
-  .fx-done .f-bulb { animation: rv-bulb .5s cubic-bezier(.3,1.5,.5,1) .2s both; }
+  :is(.fx-done, .empty-state) .f-bulb { animation: rv-bulb .5s cubic-bezier(.3,1.5,.5,1) .2s both; }
   @keyframes rv-bulb { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
-  .fx-done .f-rays { opacity: 0; animation: rv-rays .5s ease-out .55s 2 alternate both; }
+  :is(.fx-done, .empty-state) .f-rays { opacity: 0; animation: rv-rays .5s ease-out .55s 2 alternate both; }
   @keyframes rv-rays { from { opacity: 0; } to { opacity: 1; } }
-  .fx-done .f-flag { transform-origin: 0 100%; animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .2s both; }
-  .fx-done .f-cloth { transform-origin: 0 50%; animation: rv-wave .4s ease-in-out .5s 3 alternate; }
-  .fx-done .f-widen { transform-origin: 50% 40%; animation: rv-widen .5s cubic-bezier(.3,1.5,.5,1) .6s both; }
+  :is(.fx-done, .empty-state) .f-flag { transform-origin: 0 100%; animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .2s both; }
+  :is(.fx-done, .empty-state) .f-cloth { transform-origin: 0 50%; animation: rv-wave .4s ease-in-out .5s 3 alternate; }
+  :is(.fx-done, .empty-state) .f-widen { transform-origin: 50% 40%; animation: rv-widen .5s cubic-bezier(.3,1.5,.5,1) .6s both; }
   @keyframes rv-widen { 0% { transform: none; } 50% { transform: scale(1.22, 1.15); } 100% { transform: scale(1.1, 1.06); } }
   @keyframes rv-wave { to { transform: skewY(-8deg) scaleX(.9); } }
-  .fx-done .f-check { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rv-tick-draw .35s cubic-bezier(.4,0,.2,1) .35s forwards; }
-  .fx-done .f-star3 { opacity: 0; animation: rv-sparkle .7s ease-in-out calc(.25s + var(--d)) 2 both; }
-  .fx-done .f-mag { transform-origin: 100% 100%; animation: rv-mag .7s cubic-bezier(.3,1.3,.5,1) .2s both; }
+  :is(.fx-done, .empty-state) .f-check { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rv-tick-draw .35s cubic-bezier(.4,0,.2,1) .35s forwards; }
+  :is(.fx-done, .empty-state) .f-star3 { opacity: 0; animation: rv-sparkle .7s ease-in-out calc(.25s + var(--d)) 2 both; }
+  :is(.fx-done, .empty-state) .f-mag { transform-origin: 100% 100%; animation: rv-mag .7s cubic-bezier(.3,1.3,.5,1) .2s both; }
   @keyframes rv-mag { 0% { transform: rotate(-50deg) scale(.4); opacity: 0; } 60% { transform: rotate(12deg) scale(1.05); opacity: 1; } 100% { transform: none; opacity: 1; } }
-  .fx-done .f-target { animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .25s both, rv-pulse .4s ease-in-out .8s; }
-  .fx-done .f-bubble { transform-origin: 20% 100%; animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .3s both; }
-  .fx-done .f-beat { animation: rv-beat .5s ease-in-out .75s 2; }
+  :is(.fx-done, .empty-state) .f-target { animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .25s both, rv-pulse .4s ease-in-out .8s; }
+  :is(.fx-done, .empty-state) .f-bubble { transform-origin: 20% 100%; animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .3s both; }
+  :is(.fx-done, .empty-state) .f-beat { animation: rv-beat .5s ease-in-out .75s 2; }
   @keyframes rv-beat { 30% { transform: scale(1.25); } 60% { transform: scale(.95); } }
-  .fx-done .f-pinmark { transform-origin: 50% 100%; animation: rv-pinmark .7s cubic-bezier(.3,1.6,.5,1) .2s both; }
+  :is(.fx-done, .empty-state) .f-pinmark { transform-origin: 50% 100%; animation: rv-pinmark .7s cubic-bezier(.3,1.6,.5,1) .2s both; }
   @keyframes rv-pinmark { 0% { transform: translateY(-7px) scale(.6); opacity: 0; } 50% { transform: none; opacity: 1; } 70% { transform: translateY(-2px); } 100% { transform: none; opacity: 1; } }
-  .fx-done .f-bounce { animation: rv-bounce .5s cubic-bezier(.3,1.6,.5,1) .3s 2; }
+  :is(.fx-done, .empty-state) .f-bounce { animation: rv-bounce .5s cubic-bezier(.3,1.6,.5,1) .3s 2; }
   @keyframes rv-bounce { 50% { transform: translateY(-2.5px); } }
-  .fx-done .f-nod { transform-origin: 50% 90%; animation: rv-nod .45s ease-in-out .3s 2; }
+  :is(.fx-done, .empty-state) .f-nod { transform-origin: 50% 90%; animation: rv-nod .45s ease-in-out .3s 2; }
   @keyframes rv-nod { 50% { transform: rotate(9deg); } }
   .fx-done span { animation: rv-done-text .3s ease-out .12s both; }
   @keyframes rv-done-text { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: none; } }
@@ -1885,6 +1914,7 @@ async function sendComment(tmp, el) {
     state.mine.add(j.entry.id);
     state.comments = state.comments.filter((c) => c.id !== id);
     listSeen = "";
+    listSig = ""; // ask for the whole list again
     await loadComments();
     toast(`Saved #${j.entry.n}${localShot ? "" : " (no picture)"}`);
     const card = panelBody.querySelector(`.card[data-id="${id}"]`);
@@ -1897,7 +1927,24 @@ async function sendComment(tmp, el) {
 }
 
 /* ---------- pins: every comment of this session, on its element, wherever it is on screen ---------- */
-const listUrl = () => `/__review/list${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`;
+/* the list, with the fingerprint of the last one seen: an unchanged list answers { same: true } (Nirav, 2026-10-25) */
+let listSig = "";
+const listUrl = () => `/__review/list?light=1&since=${encodeURIComponent(listSig)}${window.__reviewSession ? `&session=${window.__reviewSession}` : ""}`;
+/* the approved ones, asked for only when the Approved view opens (Nirav, 2026-10-25) */
+let doneSig = "";
+async function loadDone() {
+  try {
+    const r = JSON.parse(await (await rv(`/__review/list?light=1&approved=1&since=${encodeURIComponent(doneSig)}${window.__reviewSession ? `&session=${window.__reviewSession}` : ""}`)).text());
+    if (r.same) return false;
+    doneSig = r.sig || "";
+    if (r.faces) state.faces = { ...(state.faces || {}), ...r.faces };
+    state.done = (r.list || []).map((c) => ({ ...c, severity: kindOf(c.severity) }));
+    state.doneCount = state.done.length;
+    return true;
+  } catch {
+    return false;
+  }
+}
 let listSeen = ""; // the last list as text: a poll that brings the same thing changes nothing
 state.known = null; // ids the page has had; null until the first list
 state.mine = new Set(); // ids this page created: never "new"
@@ -1968,28 +2015,42 @@ $(".panel-sync").addEventListener("click", () => {
 });
 let loadComments = async function () {
   try {
-    const text = await (await rv(listUrl())).text();
-    const changed = text !== listSeen;
+    const reply = JSON.parse(await (await rv(listUrl())).text());
+    const recovered = state.loadError;
+    state.loaded = true; // the first answer ends the loading placeholders
+    state.loadError = false;
+    if (reply && reply.same) return recovered; // nothing moved: nothing sent, nothing redrawn
+    const all = Array.isArray(reply) ? reply : reply.list; // an older server sends the bare list
+    if (!Array.isArray(reply)) listSig = reply.sig || "";
+    const text = Array.isArray(reply) ? JSON.stringify(reply) : listSig;
+    const changed = text !== listSeen || recovered;
     listSeen = text;
-    const all = JSON.parse(text);
     for (const c of all) c.severity = kindOf(c.severity);
     if (state.known) {
       for (const c of all) if (!state.known.has(c.id) && !state.mine.has(c.id) && c.status !== "approved") state.unread.add(c.id);
     }
     state.known = new Set(all.map((c) => c.id));
     for (const id of [...state.unread]) if (!state.known.has(id)) state.unread.delete(id);
-    state.done = all.filter((c) => c.status === "approved");
+    const light = !Array.isArray(reply) && typeof reply.doneCount === "number";
+    if (reply.faces) state.faces = { ...(state.faces || {}), ...reply.faces }; // the people's pictures, once
+    if (light) state.doneCount = reply.doneCount; // approved: counted here, the list only when its view opens
+    else {
+      state.done = all.filter((c) => c.status === "approved"); // an older server: everything came
+      state.doneCount = state.done.length;
+    }
     const l = all.filter((c) => c.status !== "approved");
     for (const c of state.comments) if (c.pending) l.push(c); // still on their way to the hub: kept until they arrive
     state.comments = l;
     state.count = l.length;
-    state.lastN = all.length ? Math.max(...all.map((c) => c.n)) : 0;
+    state.lastN = Math.max(all.length ? Math.max(...all.map((c) => c.n)) : 0, l.length + (state.doneCount || 0)); // numbers run over open and approved
     for (const id of state.pinEls.keys()) if (!l.some((c) => c.id === id)) state.pinEls.delete(id);
     updateBar();
     return changed;
   } catch {
-    /* server away: keep what we have */
-    return false;
+    /* server away: keep what we have; the first miss is shown (no list yet: "Can't reach the hub") */
+    const first = !state.loadError;
+    state.loadError = true;
+    return first && !state.loaded;
   }
 };
 /* following the others: the list is asked for every 10 seconds while the tab is visible, and the panel is
@@ -2005,6 +2066,7 @@ setInterval(async () => {
   if (!watching && pollTick % 6) return;
   const before = state.unread.size;
   await loadComments(); // redraws only when the list changed and nobody is mid-edit
+  if (PAGE_MODE && window.__reviewView === "resolved" && state.doneLoaded && (await loadDone()) && !panelBusy()) renderPanel(); // the Approved view keeps up too
   if (state.unread.size !== before) {
     if (panel.classList.contains("on")) updateUnread();
     else toast(`${state.unread.size} new comment${state.unread.size > 1 ? "s" : ""}`);
@@ -2706,6 +2768,85 @@ tools.querySelector(".pt-clear").addEventListener("click", () => {
 /* the group choice is drawn with the head (renderPanel); kept as a name for the persona code */
 function renderGroupPick() {}
 /* clears the list but keeps the toolbar where it is */
+/* the empty views: a simple line drawing with one touch of colour, a title, a kind line (Nirav, 2026-10-25: "simple line
+   illustrations instead of the faces") */
+const ART = (() => {
+  /* production-grade empty-state art (Nirav, 2026-10-25: "make it production grade"): a soft tinted circle behind, a
+     faint shadow under, objects in the surface colour with a crisp outline, one accent as a light fill and a few
+     small details. 128 x 96, drawn at 120 x 90. */
+  const bg = (a) => `<circle cx="64" cy="46" r="40" fill="${a}" opacity=".09"/><ellipse cx="64" cy="86" rx="34" ry="3.2" fill="#1d2b3e" opacity=".07"/>`;
+  const S = `fill="var(--art-fill)" stroke="var(--art-line)" stroke-width="1.6" stroke-linejoin="round"`;
+  const L = `fill="none" stroke="var(--art-line)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"`;
+  const soft = `fill="var(--art-soft)"`;
+  const spark = (x, y, r, a) => `<path d="M${x} ${y - r} Q${x} ${y} ${x + r} ${y} Q${x} ${y} ${x} ${y + r} Q${x} ${y} ${x - r} ${y} Q${x} ${y} ${x} ${y - r} Z" fill="${a}"/>`;
+  return {
+    /* a page with a comment bubble and a cursor clicking */
+    none: (a) => `${bg(a)}<rect x="30" y="20" width="58" height="56" rx="7" ${S}/><path d="M30 31 H88" ${L}/><circle cx="37" cy="25.5" r="1.6" ${soft}/><circle cx="42.5" cy="25.5" r="1.6" ${soft}/><circle cx="48" cy="25.5" r="1.6" ${soft}/><rect x="38" y="39" width="30" height="4" rx="2" ${soft}/><rect x="38" y="48" width="40" height="4" rx="2" ${soft}/><rect x="38" y="57" width="22" height="4" rx="2" ${soft}/><path d="M84 8 H106 A6 6 0 0 1 112 14 V26 A6 6 0 0 1 106 32 H96 L89 38 V32 H84 A6 6 0 0 1 78 26 V14 A6 6 0 0 1 84 8 Z" fill="var(--art-fill)"/><path d="M84 8 H106 A6 6 0 0 1 112 14 V26 A6 6 0 0 1 106 32 H96 L89 38 V32 H84 A6 6 0 0 1 78 26 V14 A6 6 0 0 1 84 8 Z" fill="${a}" fill-opacity=".16" stroke="${a}" stroke-width="1.6" stroke-linejoin="round"/><circle cx="88" cy="20" r="1.8" fill="${a}"/><circle cx="95" cy="20" r="1.8" fill="${a}"/><circle cx="102" cy="20" r="1.8" fill="${a}"/><path d="M72 58 L72 80 L77.5 74.5 L82 84 L86 82 L81.5 72.8 L89 72.5 Z" fill="var(--art-ink)" stroke="var(--art-fill)" stroke-width="1.6" stroke-linejoin="round"/>`,
+    /* a checklist, every row ticked, sparkles */
+    allDone: (a) => `${bg(a)}<rect x="40" y="18" width="52" height="62" rx="7" ${S} transform="rotate(6 66 49)" opacity=".55"/><rect x="34" y="16" width="54" height="64" rx="7" ${S}/>${[30, 46, 62].map((y) => `<circle cx="46" cy="${y}" r="5.5" fill="${a}"/><path d="M43.4 ${y} L45.4 ${y + 2} L48.8 ${y - 1.8}" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><rect x="56" y="${y - 2}" width="${y === 46 ? 18 : 24}" height="4" rx="2" ${soft}/>`).join("")}${spark(100, 22, 5, a)}${spark(24, 58, 3.5, a)}${spark(104, 64, 3, "#ffc83d")}`,
+    /* an open archive box, empty */
+    resolved: (a) => `${bg(a)}<path d="M28 40 H100 L94 78 A5 5 0 0 1 89 82 H39 A5 5 0 0 1 34 78 Z" ${S}/><path d="M24 30 H104 A3 3 0 0 1 107 33 V40 H21 V33 A3 3 0 0 1 24 30 Z" ${S}/><rect x="52" y="50" width="24" height="9" rx="4.5" fill="${a}" fill-opacity=".16" stroke="${a}" stroke-width="1.4"/><path d="M58 54.5 L62 57 L70 52" fill="none" stroke="${a}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M40 22 L46 28 M64 16 V26 M88 22 L82 28" ${L} opacity=".6"/>`,
+    /* an empty inbox tray, all caught up */
+    open: (a) => `${bg(a)}<path d="M26 52 L36 24 A5 5 0 0 1 41 20 H87 A5 5 0 0 1 92 24 L102 52 V74 A6 6 0 0 1 96 80 H32 A6 6 0 0 1 26 74 Z" ${S}/><path d="M26 52 H48 L53 60 H75 L80 52 H102" ${L}/><path d="M26 52 H48 L53 60 H75 L80 52 H102 V74 A6 6 0 0 1 96 80 H32 A6 6 0 0 1 26 74 Z" fill="${a}" fill-opacity=".1"/><path d="M57 36 L62 41 L71 31" fill="none" stroke="${a}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`,
+    /* a coffee mug on a saucer, steam rising: a quiet moment */
+    progress: (a) => `${bg(a)}<ellipse cx="62" cy="78" rx="30" ry="5" ${S}/><path d="M38 40 H82 V64 A14 14 0 0 1 68 78 H52 A14 14 0 0 1 38 64 Z" ${S}/><path d="M82 46 H88 A8 8 0 0 1 88 62 H81" ${L}/><path d="M38 40 H82 V46 H38 Z" fill="${a}" fill-opacity=".16"/><path d="M55.5 58 L60 62.5 L64.5 58 A2.8 2.8 0 1 0 60 54.6 A2.8 2.8 0 1 0 55.5 58 Z" fill="${a}"/><path d="M50 30 Q46 25 50 20 Q54 15 50 10 M60 30 Q56 25 60 20 Q64 15 60 10 M70 30 Q66 25 70 20 Q74 15 70 10" fill="none" stroke="${a}" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>`,
+    /* a stamp resting beside its mark: nothing to approve */
+    stampRest: (a) => `${bg(a)}<rect x="22" y="58" width="38" height="20" rx="4" fill="${a}" fill-opacity=".12" stroke="${a}" stroke-width="1.6" stroke-dasharray="3 3"/><path d="M33 68 L38 72.5 L49 63" fill="none" stroke="${a}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M78 20 A9 9 0 0 1 96 20 V34 H78 Z" ${S}/><path d="M80 34 H94 V44 H80 Z" ${S}/><path d="M68 44 H106 A4 4 0 0 1 110 48 V58 H64 V48 A4 4 0 0 1 68 44 Z" ${S}/><rect x="64" y="58" width="46" height="7" rx="2" fill="${a}" fill-opacity=".5" stroke="var(--art-line)" stroke-width="1.6"/>`,
+    /* a paper plane on its way, a dashed loop behind */
+    plane: (a) => `${bg(a)}<path d="M18 70 Q34 54 26 44 Q20 36 32 34" fill="none" stroke="${a}" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="3.5 4.5"/><path d="M36 46 L104 18 L84 72 L68 56 Z" ${S}/><path d="M104 18 L68 56 L66 74 L76 62" ${S}/><path d="M104 18 L68 56 L84 72 Z" fill="${a}" fill-opacity=".16"/><path d="M104 18 L68 56" ${L}/><circle cx="100" cy="66" r="2" fill="${a}" opacity=".6"/><circle cx="108" cy="54" r="1.4" fill="${a}" opacity=".5"/>`,
+    /* a funnel with the three status shapes above it */
+    statuses: (a) => `${bg(a)}<path d="M28 30 H100 A3 3 0 0 1 102 35 L74 60 V76 A3 3 0 0 1 70 79 L60 75 A3 3 0 0 1 58 72 V60 L26 35 A3 3 0 0 1 28 30 Z" ${S}/><path d="M34 38 H94" ${L} opacity=".5"/><circle cx="48" cy="16" r="5" fill="#A64DFF"/><rect x="60" y="11" width="9" height="9" rx="1.6" fill="#FF6F00" transform="rotate(45 64.5 15.5)"/><rect x="77" y="11" width="9.5" height="9.5" rx="2" fill="#31BFB0"/>`,
+    /* a magnifying glass over a card, nothing found */
+    search: (a) => `${bg(a)}<rect x="22" y="22" width="58" height="50" rx="7" ${S}/><rect x="31" y="33" width="30" height="4" rx="2" ${soft}/><rect x="31" y="42" width="38" height="4" rx="2" ${soft}/><rect x="31" y="51" width="22" height="4" rx="2" ${soft}/><circle cx="78" cy="52" r="17" fill="var(--art-fill)" stroke="var(--art-line)" stroke-width="2.2"/><circle cx="78" cy="52" r="17" fill="${a}" fill-opacity=".12"/><path d="M90.5 64.5 L104 78" stroke="var(--art-line)" stroke-width="5" stroke-linecap="round"/><path d="M72.5 47.5 A5.5 5.5 0 1 1 80.5 52.5 Q78 53.6 78 57" fill="none" stroke="${a}" stroke-width="2" stroke-linecap="round"/><circle cx="78" cy="61.5" r="1.5" fill="${a}"/>`,
+    /* two tags, one tinted */
+    type: (a) => `${bg(a)}<path d="M40 22 H66 A5 5 0 0 1 70 24 L96 50 A5 5 0 0 1 96 57 L77 76 A5 5 0 0 1 70 76 L44 50 A5 5 0 0 1 42 46 V26 A4 4 0 0 1 40 22 Z" ${S} transform="rotate(-14 66 50)" opacity=".55"/><path d="M34 24 H60 A5 5 0 0 1 64 26 L90 52 A5 5 0 0 1 90 59 L71 78 A5 5 0 0 1 64 78 L38 52 A5 5 0 0 1 36 48 V28 A4 4 0 0 1 34 24 Z" ${S}/><path d="M34 24 H60 A5 5 0 0 1 64 26 L90 52 A5 5 0 0 1 90 59 L71 78 A5 5 0 0 1 64 78 L38 52 A5 5 0 0 1 36 48 V28 A4 4 0 0 1 34 24 Z" fill="${a}" fill-opacity=".1"/><circle cx="47" cy="36" r="4.5" fill="var(--art-fill)" stroke="var(--art-line)" stroke-width="1.6"/>`,
+    /* a cloud and a plug pulled out */
+    error: (a) => `${bg(a)}<path d="M38 58 A14 14 0 0 1 36 30 A22 22 0 0 1 78 24 A16 16 0 0 1 90 58 Z" ${S}/><path d="M52 58 V68 Q52 74 46 74 H30" ${L}/><path d="M76 58 V64 Q76 70 82 70 H86" ${L}/><rect x="86" y="64" width="12" height="12" rx="3" ${S}/><path d="M98 67 H103 M98 73 H103" ${L}/><rect x="40" y="52" width="24" height="0" fill="none"/><path d="M64 34 L58 46 H66 L60 58" fill="none" stroke="${a}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>${spark(102, 22, 4, a)}`,
+  };
+})();
+function emptyHtml(kind) {
+  const appr = state.persona === "approver";
+  const typeLabel = (SEVERITIES.find(([k]) => k === state.type)?.[1] || "comment").toLowerCase();
+  const E = {
+    none: ["none", "#A64DFF", "No comments yet", `Hold ${MOD} and click anything to leave one.`],
+    page: ["none", "#A64DFF", "Nothing here yet", `Hold ${MOD} and click anything to leave one.`],
+    allDone: ["allDone", "#2BA66B", "Everything is approved", "Nothing left open. Nice work, everyone."],
+    resolved: ["resolved", "#2BA66B", "Nothing approved yet", "Approved comments gather here."],
+    "st-open": ["open", "#A64DFF", appr ? "Nothing new" : "Nothing new to pick up", "All caught up. New comments show up here."],
+    "st-progress": ["progress", "#FF6F00", "Nothing in progress", "Pick something up and it shows here."],
+    "st-approval": appr ? ["stampRest", "#31BFB0", "Nothing waiting for you", "Sit back. Work for your approval lands here."] : ["plane", "#31BFB0", "Nothing waiting for approval", "Work sent for approval shows here."],
+    statuses: ["statuses", "#8a96a8", "Nothing in these statuses", "Try another status above."],
+    search: ["search", "#3d9bff", "No match", "Try other words, a #number or a name."],
+    type: ["type", "#8a96a8", `No ${typeLabel}s here`, "Switch the filter to see the rest."],
+    error: ["error", "#e11d48", "Can't reach the hub", "Keeping what is here and trying again."],
+  };
+  const [art, accent, title, line] = E[kind] || E.page;
+  return `<div class="empty-state"><svg class="empty-art" width="120" height="90" viewBox="0 0 128 96" aria-hidden="true">${ART[art](accent)}</svg><b>${esc(title)}</b><span>${esc(line)}</span></div>`;
+}
+/* pictures load as their card nears the screen (this page's at once); the next batch is built as its placeholder
+   comes near (Nirav, 2026-10-25) */
+const picSeen = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    const img = e.target;
+    if (img.dataset.src) {
+      img.src = img.dataset.src;
+      delete img.dataset.src;
+    }
+    picSeen.unobserve(img);
+  }
+}, { root: panelBody, rootMargin: "600px 0px" });
+const moreSeen = new IntersectionObserver((entries) => {
+  if (!entries.some((e) => e.isIntersecting)) return;
+  moreSeen.disconnect();
+  state.renderLimit = (state.renderLimit || 40) + 40;
+  if (!panelBusy()) renderPanel();
+}, { root: panelBody, rootMargin: "800px 0px" });
+/* three placeholder cards while the list loads */
+function skeletonHtml() {
+  const one = (pic) => `<div class="skel-card"><span class="sk sk-line" style="width:78%"></span><span class="sk sk-line" style="width:52%"></span>${pic ? '<span class="sk sk-pic"></span>' : ""}<span class="sk-foot"><span class="sk sk-dot"></span><span class="sk sk-line" style="width:38%"></span></span></div>`;
+  return one(true) + one(false) + one(true);
+}
 function clearBody() {
   for (const ch of [...panelBody.childNodes]) if (ch !== tools) ch.remove();
   if (tools.parentNode !== panel) panel.appendChild(tools);
@@ -2737,8 +2878,9 @@ async function backfillThumbs() {
   if (thumbing) return;
   thumbing = true;
   try {
+    const built = new Set([...panelBody.querySelectorAll(".card")].map((x) => x.dataset.id)); // only cards on screen, not all
     for (const c of [...state.comments, ...state.done]) {
-      if (c.thumb || !c.shot) continue;
+      if (c.thumb || !c.shot || !built.has(c.id)) continue;
       const jpg = await makeThumb(shotUrl(c));
       const r = await api("thumb", { id: c.id, jpg });
       if (r.ok) c.thumb = `${c.id}.t.jpg`;
@@ -2758,6 +2900,7 @@ function applyEntry(entry) {
   state.comments = state.comments.filter((c) => c.id !== entry.id);
   state.done = state.done.filter((c) => c.id !== entry.id);
   (isDone ? state.done : state.comments).push(entry);
+  if (wasDone !== isDone) state.doneCount = Math.max(0, (state.doneCount || 0) + (isDone ? 1 : -1));
   state.comments.sort((a, b) => a.n - b.n);
   state.done.sort((a, b) => a.n - b.n);
   state.count = state.comments.length;
@@ -3212,7 +3355,7 @@ function statusActions(c) {
 /* a name with its picture before it, when the hub knows one: a 16 px circle, the name after */
 function personHtml(c, name) {
   if (!name) return "";
-  const url = c.avatars && c.avatars[name];
+  const url = (c.avatars && c.avatars[name]) || state.faces?.[name]; // the light list brings the pictures once, as a map
   const initial = esc(String(name).trim()[0].toUpperCase());
   return url ? `<img class="av" src="${esc(url)}" alt="" data-i="${initial}">${esc(name)}` : `<span class="av av-i">${initial}</span>${esc(name)}`;
 }
@@ -3248,11 +3391,19 @@ function byPicHtml(c) {
   const when = agoText(c.ts);
   const mine = !!c.by && !!state.me && (c.by === state.me || c.by.split(/\s+/)[0] === state.me);
   const name = c.by ? (mine ? "You" : c.by) : "";
-  const url = c.by && c.avatars && c.avatars[c.by];
+  const url = c.by && ((c.avatars && c.avatars[c.by]) || state.faces?.[c.by]);
   const face = c.by ? (url ? `<img class="av" src="${esc(url)}" alt="" data-i="${esc(c.by.trim()[0].toUpperCase())}">` : `<span class="av av-i">${esc(c.by.trim()[0].toUpperCase())}</span>`) : `<svg class="by-clock" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
   const words = [name, when].filter(Boolean).join(" · ");
   return `<span class="card-by-pic" title="${esc(c.ts ? new Date(c.ts).toLocaleString() : "")}">${face}<span class="lbl">${esc(words)}</span></span>`;
 }
+/* a card's picture: its slot shimmers until it arrives, then it fades in; one that fails leaves a calm box (Nirav,
+   2026-10-25) */
+root.addEventListener("load", (e) => {
+  if (e.target?.classList?.contains("card-shot")) e.target.closest(".card-pic")?.classList.add("ready");
+}, true);
+root.addEventListener("error", (e) => {
+  if (e.target?.classList?.contains("card-shot")) e.target.closest(".card-pic")?.classList.add("broken");
+}, true);
 /* a picture that fails to load becomes the initial (no inline handlers: a page's CSP may forbid them) */
 root.addEventListener("error", (e) => {
   const img = e.target;
@@ -3569,7 +3720,7 @@ function renderPanel() {
   const view = PAGE_MODE ? window.__reviewView || "open" : "open";
   for (const b of $(".panel-view").querySelectorAll("button")) {
     b.setAttribute("aria-pressed", b.dataset.v === view ? "true" : "false");
-    b.querySelector("b").textContent = b.dataset.v === "open" ? state.comments.length : state.done.length;
+    b.querySelector("b").textContent = b.dataset.v === "open" ? state.comments.length : state.doneCount ?? state.done.length;
   }
   const pool = view === "resolved" ? state.done : state.comments;
   /* the status filter (Nirav, 2026-10-23), in the place and the look of the old tag pill: All, New, In progress, For
@@ -3843,12 +3994,32 @@ function renderPanel() {
     panelBody.insertAdjacentHTML("beforeend", waitScreenHtml());
     return;
   }
+  /* LOADING (Nirav, 2026-10-25): until the first answer, three placeholder cards shimmer; if the hub does not answer,
+     a friendly face says so */
+  if (!state.loaded) {
+    panelBody.insertAdjacentHTML("beforeend", state.loadError ? emptyHtml("error") : skeletonHtml());
+    return;
+  }
+  /* the Approved view asks for its list the first time it opens, placeholders meanwhile */
+  if (view === "resolved" && !state.doneLoaded) {
+    if (!state.doneAsked) {
+      state.doneAsked = true;
+      loadDone().finally(() => {
+        state.doneLoaded = true;
+        renderPanel();
+      });
+    }
+    panelBody.insertAdjacentHTML("beforeend", skeletonHtml());
+    return;
+  }
   if (isApprover() && state.joiners.length && view === "open") panelBody.insertAdjacentHTML("beforeend", joinHtml());
   const shown = inTab.filter((c) => (state.type === "all" || c.severity === state.type) && matchesQ(c, state.q));
   if (!shown.length) {
-    const EMPTY = { open: "Nothing new.", progress: "Nothing in progress.", approval: "Nothing waiting for approval." };
-    panelBody.insertAdjacentHTML("beforeend", `<div class="panel-empty">${state.q || state.type !== "all" ? (state.q ? "No comments match the search." : "None of this type here.") : pool.length ? (scoped.length && sel.size === 1 && EMPTY[[...sel][0]] ? EMPTY[[...sel][0]] : scoped.length && sel.size ? "Nothing in these statuses." : "Nothing here yet.") : view === "resolved" ? "Nothing approved yet." : `No comments yet.<br>Hold ${MOD} and click anything.`}</div>`);
-    if (view === "open" && !sel.size && state.done.length) panelBody.appendChild(endLine());
+    /* FRIENDLY EMPTY STATES (Nirav, 2026-10-25): a face, a title and a kind line for every empty view */
+    const one = sel.size === 1 ? [...sel][0] : null;
+    const kind = state.q ? "search" : state.type !== "all" ? "type" : !pool.length ? (view === "resolved" ? "resolved" : state.doneCount ? "allDone" : "none") : scoped.length && one ? `st-${one}` : scoped.length && sel.size ? "statuses" : "page";
+    panelBody.insertAdjacentHTML("beforeend", emptyHtml(kind));
+    if (view === "open" && !sel.size && state.doneCount) panelBody.appendChild(endLine());
     return;
   }
   /* GROUPS (Nirav, 2026-10-23): the list grouped by status, person, page or type, or not at all (the Group capsule in
@@ -3900,7 +4071,19 @@ function renderPanel() {
   const folded = state.folded || new Set();
   let foldedNow = false;
   let into = panelBody; // each group in its own section, so its heading stays pinned while its cards scroll by
-  for (const c of list) {
+  /* IN BATCHES (Nirav, 2026-10-25): the first 40 cards are built, more as the list nears its end; the cards of the page
+     you are on are always in the first batch (up to 150), and so is a card a pin just opened. Counts, filters, copying
+     and select-all use the whole list. */
+  state.shownList = list;
+  const lastHere = list.reduce((m, c, i) => ((c.route || "").split("?")[0] === here ? i : m), -1);
+  const spotAt = state.spot ? list.findIndex((c) => c.id === state.spot.id) : -1;
+  const limit = Math.min(list.length, Math.max(state.renderLimit || 40, Math.min(lastHere + 1, 150), spotAt + 1));
+  let cut = false;
+  for (const [i, c] of list.entries()) {
+    if (i >= limit) {
+      cut = true;
+      break;
+    }
     if (heads.has(c.id)) {
       const g = heads.get(c.id);
       foldedNow = folded.has(g.key);
@@ -3927,7 +4110,7 @@ function renderPanel() {
       <div class="card-line"><span class="card-n out${onPage ? "" : " away"}" title="Show it on the page">${c.n}</span><div class="card-text${canEdit(c) ? "" : " ro"}"${canEdit(c) ? ' title="Click to edit"' : ""}></div></div>
       ${"" /* TRY 2026-10-23 (hover strip): was c.shot ? "" : the card-by line */}
       <button class="card-pick" aria-label="Select for copying" aria-pressed="${state.selected.has(c.id)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></button>
-      ${c.shot ? `<div class="card-pic"><img class="card-shot" data-id="${c.id}" src="${thumbUrl(c)}" alt=""></div>` /* TRY 2026-10-23: byPicHtml(c) was here */ : ""}
+      ${c.shot ? `<div class="card-pic"${c.viewport?.w && c.viewport?.h ? ` style="--ar:${c.viewport.w} / ${c.viewport.h}"` : ""}><img class="card-shot" data-id="${c.id}" ${onPage ? "src" : "data-src"}="${thumbUrl(c)}" alt=""></div>` /* TRY 2026-10-23: byPicHtml(c) was here */ : ""}
       <div class="card-foot">${footHtml(c)}</div>${hasNote(c) ? `<div class="card-note"></div>` : ""}
       <div class="card-meta"><div class="card-meta-in"><span class="cm-by">${byHtml(c)}</span><span class="cm-where"></span></div></div>`;
     card.querySelector(".card-text").textContent = c.text;
@@ -3941,8 +4124,14 @@ function renderPanel() {
     into.appendChild(card);
     if (state.asking?.id === c.id) mountAsk(card, c); // the note box back, once the card is on the page
   }
-  if (view === "open" && (!sel.size || state.persona === "approver") && state.done.length) panelBody.appendChild(endLine());
-  if (PAGE_MODE && state.hub?.on) panelBody.appendChild(hubLine());
+  if (cut) {
+    /* the next batch's placeholder: when it comes near, the next 40 are built */
+    into.insertAdjacentHTML("beforeend", `<div class="list-more">${skeletonHtml().split("</div>")[0]}</div></div>`);
+    moreSeen.observe(into.lastElementChild);
+  }
+  if (!cut && view === "open" && (!sel.size || state.persona === "approver") && state.doneCount) panelBody.appendChild(endLine());
+  if (!cut && PAGE_MODE && state.hub?.on) panelBody.appendChild(hubLine());
+  for (const img of panelBody.querySelectorAll("img.card-shot[data-src]")) picSeen.observe(img);
   if (scrollWas) panelBody.scrollTop = scrollWas; // a redraw is not a reason to move
   /* a spacer at the very end that gives back exactly what a card's hover strip takes, so the list's height never
      changes on hover; at the bottom of the list the scroll then has nothing to jump for (the last card shook) */
@@ -4015,7 +4204,7 @@ function hubLine() {
 function endLine() {
   const d = document.createElement("div");
   d.className = "panel-end";
-  const n = state.done.length;
+  const n = state.doneCount ?? state.done.length;
   const href = EXT ? `${EXT.listUrl}&view=resolved` : `/__review/?view=resolved${window.__reviewSession ? `&session=${window.__reviewSession}` : ""}`;
   d.innerHTML = `<span class="end-ok" aria-hidden="true"><svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.3l2.2 2.2 4.6-4.8"/></svg></span><span><b>${n}</b> <span class="end-word">approved</span></span><a href="${PAGE_MODE ? "#" : href}" target="_blank">View</a>`;
   d.querySelector("a").addEventListener("click", (e) => {
@@ -4496,7 +4685,8 @@ panelBody.addEventListener("keydown", (e) => {
   const cards = shownCards();
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a" && (card || e.target === panelBody)) {
     e.preventDefault();
-    for (const x of cards) if (!state.selected.has(x.dataset.id)) setPicked(x, true);
+    for (const c of state.shownList || []) state.selected.add(c.id); // every shown comment, built or not yet
+    for (const x of cards) if (!x.classList.contains("picked")) setPicked(x, true);
     return;
   }
   if (e.key === "Escape" && state.selected.size && card) {
@@ -4557,7 +4747,7 @@ loadComments = async function () {
 function shownComments() {
   /* what the panel shows right now: the scope and the tags applied, open or resolved as the view says; and when
      some of those are picked, those only */
-  const shown = Array.from(panelBody.querySelectorAll(".card")).map((el) => state.comments.find((c) => c.id === el.dataset.id) || state.done.find((c) => c.id === el.dataset.id)).filter(Boolean);
+  const shown = state.shownList || []; // the whole shown list, not only the cards built so far
   const picked = shown.filter((c) => state.selected.has(c.id));
   return picked.length ? picked : shown;
 }

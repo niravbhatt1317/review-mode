@@ -26,6 +26,12 @@ file map; read it next.
   its redirect.
 - **Hub**: `hub.json` (URL and publishable key, public by design). Schema in `hub/schema.sql`, `hub/people.sql`; the
   owner runs SQL in the Supabase SQL editor. Never use or ask for the service_role key.
+- **Data, lean (2026-10-25)**: the drawer asks `/__review/list?light=1&since=<fingerprint>`; an unchanged list answers
+  `{ same: true }`. The light list has the open comments only (approved counted; `&approved=1` when that view opens),
+  no people's pictures in each comment (one `faces` map) and only the short values of the `app` snapshot. Hub side,
+  `hub.lightList()` asks one tiny question first (newest change + row count), then only changed rows, from the
+  `review_comments_light` view (`hub/light.sql`) when it exists. Writes always `get()` the full row. The drawer builds
+  40 cards at a time (this page's first) and loads pictures as they near the screen. Keep these when changing the list.
 - **Site**: GitHub Pages from `docs/` (install page, privacy, auth page, `firefox/` with signed xpi + `updates.json`).
   `site.mjs` holds the address.
 

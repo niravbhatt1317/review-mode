@@ -4,7 +4,7 @@
 //      per site, so the overlay works on any page without the dev server;
 //   3. hosting: on a site switched on with the toolbar button it injects the overlay into the page.
 // On the console (localhost:4178) the dev server injects and answers itself; the extension only takes the picture.
-import { makeHub, prepare, withNames, applyChange, bytesOf, newId, sentence, normalise, mergePeople, avatarsOf, teamOf, waitingOf, roleIn } from "./hub-core.js";
+import { makeHub, prepare, withNames, applyChange, bytesOf, newId, sentence, normalise, mergePeople, avatarsOf, teamOf, waitingOf, roleIn, sigOf, lightList, facesOf } from "./hub-core.js";
 import { makeAuth } from "./auth.js";
 
 /* ---------- configuration: hub.json beside this file, with what the options page saved over it ---------- */
@@ -163,8 +163,22 @@ async function answer(origin, { path, query, method, body }) {
     }
     case "/__review/list": {
       hub.sweep().catch(() => {});
-      const list = prepare(await hub.list());
-      return ok((await withUrls(hub, list)).map(shown));
+      const q0 = new URLSearchParams(query || "");
+      if (q0.get("light") && q0.get("since") !== null) {
+        /* the lean path (step 3): only the rows wanted, only when something moved; pictures signed for those only */
+        const { list: rows, doneCount } = await hub.lightList({ approved: !!q0.get("approved") });
+        const body = { ...lightList((await withUrls(hub, rows)).map(shown), { approved: !!q0.get("approved") }), doneCount, faces: facesOf(people) };
+        const sig = sigOf(JSON.stringify(body));
+        return ok(q0.get("since") === sig ? { same: true, sig } : { sig, ...body });
+      }
+      const list = (await withUrls(hub, prepare(await hub.list()))).map(shown);
+      /* ?since=<fingerprint>: the drawer's refresh; an unchanged list answers { same: true }. ?light=1: the light list */
+      const q = new URLSearchParams(query || "");
+      const since = q.get("since");
+      if (since === null) return ok(list);
+      const body = q.get("light") ? { ...lightList(list, { approved: !!q.get("approved") }), faces: facesOf(people) } : { list };
+      const sig = sigOf(JSON.stringify(body));
+      return ok(since === sig ? { same: true, sig } : { sig, ...body });
     }
     case "/__review/next":
       return ok({ n: (await hub.list()).length + 1 });

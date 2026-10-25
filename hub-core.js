@@ -34,6 +34,35 @@ export function prepare(list) {
   }
   return numbered(list);
 }
+/* a short fingerprint of a list's text: the drawer sends back the last one it saw, and an unchanged list answers
+   { same: true } instead of every comment again (Nirav, 2026-10-25: the data sent on every refresh) */
+export function sigOf(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36) + text.length.toString(36);
+}
+/* THE LIGHT LIST (Nirav, 2026-10-25): what the drawer needs up front. The people's pictures leave each comment (they
+   come once, as a map); of the app snapshot only the short entries stay (go-to reads two flags); approved comments are
+   counted, not sent, unless asked for. Measured on the test session: the pictures and the snapshot were 90 % of it. */
+export function lightList(list, { approved = false } = {}) {
+  const small = (app) => {
+    if (!app || typeof app !== "object") return undefined;
+    const out = {};
+    for (const [k, v] of Object.entries(app)) if (JSON.stringify(v ?? "").length <= 80) out[k] = v;
+    return out;
+  };
+  const pick = list.filter((c) => (approved ? c.status === "approved" : c.status !== "approved"));
+  return { list: pick.map(({ avatars, app, ...c }) => ({ ...c, ...(app ? { app: small(app) } : {}) })), doneCount: list.filter((c) => c.status === "approved").length };
+}
+/* the people's pictures by the name shown, once per answer */
+export function facesOf(people = {}) {
+  const out = {};
+  for (const p of Object.values(people)) if (p?.name && p.avatar) out[p.name] = p.avatar;
+  return out;
+}
 export const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 /* an edit or a move: text, severity, status (with who did it and when), and the note that rides with a move back.
@@ -237,6 +266,7 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
     cached.at = Date.now();
   };
   let lastSweep = 0;
+  const lean = { stamps: null, total: -1, latest: "", open: new Map(), done: new Map(), table: "review_comments_light" }; // lightList's own
   return {
     kind: "hub",
     project,
@@ -271,9 +301,55 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
       cached.at = Date.now();
       return cached.rows.map(unpack);
     },
+    /* THE LIGHT LIST FROM THE HUB (Nirav, 2026-10-25, step 3): what the drawer shows, fetched lean.
+       1. One tiny question first: the newest change and the number of rows (about 100 bytes). Only when either moved
+          are the ids, times and statuses asked for (numbering and counts come from those).
+       2. Only the rows asked for: the open ones, or the approved ones when their view opens; of those only the rows
+          that are new or changed; from the light view (hub/light.sql: no app snapshot) when it is there.
+       Writes never use these rows: get() reads the full row. */
+    async lightList({ approved = false } = {}) {
+      const r = await fetchFn(`${url}/rest/v1/${where}&select=updated_at&order=updated_at.desc&limit=1`, { headers: { ...(await auth()), Prefer: "count=exact" } });
+      if (!r.ok) throw new Error(`hub GET review_comments: ${r.status}`);
+      const total = Number((r.headers.get("content-range") || "").split("/")[1]) || 0;
+      const latest = (await r.json())[0]?.updated_at || "";
+      if (!lean.stamps || lean.total !== total) {
+        /* a comment came or went: the whole id list again */
+        lean.stamps = await rest("GET", `${where}&select=id,updated_at,ts,status&order=ts.asc`);
+      } else if (lean.latest !== latest) {
+        /* only edits: just the rows changed since the last look */
+        const moved = await rest("GET", `${where}&select=id,updated_at,ts,status&updated_at=gt.${encodeURIComponent(lean.latest)}`);
+        const known = new Set(lean.stamps.map((st) => st.id));
+        if (moved.some((m) => !known.has(m.id))) lean.stamps = await rest("GET", `${where}&select=id,updated_at,ts,status&order=ts.asc`); // one went, one came: the whole list
+        else {
+          const at = new Map(moved.map((m) => [m.id, m]));
+          lean.stamps = lean.stamps.map((st) => at.get(st.id) || st);
+        }
+      }
+      lean.total = total;
+      lean.latest = latest;
+      const nOf = new Map(lean.stamps.map((s, i) => [s.id, i + 1]));
+      const want = lean.stamps.filter((s) => (approved ? s.status === "approved" : s.status !== "approved"));
+      const held = approved ? lean.done : lean.open;
+      const listed = new Set(want.map((s) => s.id));
+      for (const id of [...held.keys()]) if (!listed.has(id)) held.delete(id);
+      const need = want.filter((s) => held.get(s.id)?.updated_at !== s.updated_at).map((s) => s.id);
+      for (let i = 0; i < need.length; i += 80) {
+        const ids = need.slice(i, i + 80).map(encodeURIComponent).join(",");
+        let rows;
+        try {
+          rows = await rest("GET", `${lean.table}?project=eq.${encodeURIComponent(project)}&id=in.(${ids})`);
+        } catch (e) {
+          if (lean.table === "review_comments") throw e;
+          lean.table = "review_comments"; // the light view is not there yet: the table, trimmed here instead
+          rows = await rest("GET", `${where}&id=in.(${ids})`);
+        }
+        for (const row of rows) held.set(row.id, row);
+      }
+      const list = want.filter((s) => held.has(s.id)).map((s) => ({ ...unpack(held.get(s.id)), n: nOf.get(s.id) }));
+      return { list, doneCount: lean.stamps.filter((s) => s.status === "approved").length, total };
+    },
     async get(id) {
-      const held = cached?.rows.find((r) => r.id === id);
-      if (held && Date.now() - cached.at < 1500) return unpack(held);
+      /* always the full row: a write must never start from a light one */
       const rows = await rest("GET", `${where}&id=eq.${encodeURIComponent(id)}`);
       if (!rows.length) return null;
       hold(rows[0]);
