@@ -17,7 +17,9 @@ import { loadConfig } from "../collector/config.js";
 import { storeFor, prepare } from "../collector/stores.js";
 import { withNames, applyChange, mergePeople } from "../hub-core.js";
 
-const cfg = loadConfig(process.cwd());
+/* REVIEW_ROOT: the app's folder when Claude starts higher up (a monorepo root); else where Claude started */
+const ROOT = process.env.REVIEW_ROOT ? path.resolve(process.env.REVIEW_ROOT) : process.cwd();
+const cfg = loadConfig(ROOT);
 const store = storeFor(cfg, new Map(), process.env.REVIEW_SESSION);
 const PORTS = [47831, 47840];
 const startedAt = Date.now();
@@ -144,7 +146,7 @@ async function handle(raw) {
 }
 
 /* ---------- the local endpoint for "Send to Claude" ---------- */
-const label = `${path.basename(process.cwd())} · ${new Date(startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`; // seconds: two sessions started in one minute stay apart
+const label = `${path.basename(ROOT)} · ${new Date(startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`; // seconds: two sessions started in one minute stay apart
 function allowed(req, port) {
   const origin = req.headers.origin;
   if (origin && !/^(chrome|moz)-extension:\/\//.test(origin)) return false; // a web page: never
@@ -161,7 +163,7 @@ function listen(port) {
     };
     if (!allowed(req, port)) return out(403, { error: "forbidden" });
     const url = new URL(req.url, "http://x");
-    if (req.method === "GET" && url.pathname === "/hello") return out(200, { app: "review-mode", project: store.project, cwd: process.cwd(), label, startedAt, pid: process.pid, as: defaultAs });
+    if (req.method === "GET" && url.pathname === "/hello") return out(200, { app: "review-mode", project: store.project, cwd: ROOT, label, startedAt, pid: process.pid, as: defaultAs });
     if (req.method === "GET" && url.pathname === "/status") return out(200, { acked: !!deliveries.get(url.searchParams.get("id"))?.acked });
     if (req.method === "POST" && url.pathname === "/send") {
       let body = "";
