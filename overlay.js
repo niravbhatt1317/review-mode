@@ -674,18 +674,18 @@ root.innerHTML = `
   .card-c { position: relative; margin-left: 32px; }
   .card-c .card-pic { position: relative; container-type: inline-size; }
   /* the picture's slot while it loads (Nirav, 2026-10-25) */
-  .card-c .card-pic:not(.ready) { aspect-ratio: var(--ar, 16 / 10); border-radius: 6px; overflow: hidden; background: linear-gradient(100deg, hsl(var(--rv-n10)) 30%, hsl(var(--rv-n20)) 50%, hsl(var(--rv-n10)) 70%) 0 0 / 300% 100%; animation: rv-shimmer 1.3s ease-in-out infinite; }
+  .card-c .card-pic:not(.ready) { aspect-ratio: var(--ar, 16 / 10); border-radius: 6px; overflow: hidden; background: linear-gradient(100deg, hsl(var(--rv-n10)) 30%, hsl(var(--rv-n20)) 50%, hsl(var(--rv-n10)) 70%) 0 0 / 300% 100%; animation: rv-sk-shimmer 1.3s ease-in-out infinite; }
   .card-c .card-pic:not(.ready) .card-shot { opacity: 0; }
   .card-c .card-pic.ready .card-shot { animation: rv-fx-fade .3s ease-out; }
   .card-c .card-pic.broken { animation: none; background: hsl(var(--rv-n10)); display: grid; place-items: center; }
   .card-c .card-pic.broken::after { content: ""; width: 22px; height: 22px; opacity: .45; background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a96a8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='9' cy='10' r='1.6'/%3E%3Cpath d='M21 16l-5-5-8 9'/%3E%3C/svg%3E"); }
   .card-c .card-pic.broken .card-shot { display: none; }
-  @keyframes rv-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+  @keyframes rv-sk-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } } /* not rv-shimmer: that is the sending card's */
   @keyframes rv-fx-fade { from { opacity: 0; } to { opacity: 1; } }
   /* loading placeholders and empty states */
   .list-more .skel-card { margin-top: 0; }
   .skel-card { display: flex; flex-direction: column; gap: 9px; margin: 0 0 16px 32px; padding: 14px; border-radius: 10px; background: var(--rv-surface); box-shadow: 0 1px 2px rgba(29,43,62,.06); }
-  .sk { display: block; border-radius: 6px; background: linear-gradient(100deg, hsl(var(--rv-n10)) 30%, hsl(var(--rv-n20)) 50%, hsl(var(--rv-n10)) 70%) 0 0 / 300% 100%; animation: rv-shimmer 1.3s ease-in-out infinite; }
+  .sk { display: block; border-radius: 6px; background: linear-gradient(100deg, hsl(var(--rv-n10)) 30%, hsl(var(--rv-n20)) 50%, hsl(var(--rv-n10)) 70%) 0 0 / 300% 100%; animation: rv-sk-shimmer 1.3s ease-in-out infinite; }
   .sk-line { height: 11px; }
   .sk-pic { height: 120px; margin-top: 2px; }
   .sk-foot { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
@@ -1039,8 +1039,8 @@ root.innerHTML = `
   @keyframes rv-blink { 50% { transform: scaleY(.1); } }
   :is(.fx-done, .empty-state) .f-wink { animation: rv-wink .5s ease-in-out .55s both; }
   @keyframes rv-wink { 30%, 70% { transform: scaleY(.12); } }
-  :is(.fx-done, .empty-state) .f-pulse { animation: rv-pulse .5s ease-in-out .3s 2; }
-  @keyframes rv-pulse { 50% { transform: scale(1.3); } }
+  :is(.fx-done, .empty-state) .f-pulse { animation: rv-face-pulse .5s ease-in-out .3s 2; }
+  @keyframes rv-face-pulse { 50% { transform: scale(1.3); } } /* not rv-pulse: that is the pins' red flash */
   :is(.fx-done, .empty-state) .f-twinkle { animation: rv-twinkle2 .7s ease-in-out .3s 2; }
   @keyframes rv-twinkle2 { 50% { transform: scale(1.25) rotate(20deg); } }
   :is(.fx-done, .empty-state) .f-shades { animation: rv-shades .45s cubic-bezier(.3,1.4,.5,1) .2s both; }
@@ -1092,7 +1092,7 @@ root.innerHTML = `
   :is(.fx-done, .empty-state) .f-star3 { opacity: 0; animation: rv-sparkle .7s ease-in-out calc(.25s + var(--d)) 2 both; }
   :is(.fx-done, .empty-state) .f-mag { transform-origin: 100% 100%; animation: rv-mag .7s cubic-bezier(.3,1.3,.5,1) .2s both; }
   @keyframes rv-mag { 0% { transform: rotate(-50deg) scale(.4); opacity: 0; } 60% { transform: rotate(12deg) scale(1.05); opacity: 1; } 100% { transform: none; opacity: 1; } }
-  :is(.fx-done, .empty-state) .f-target { animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .25s both, rv-pulse .4s ease-in-out .8s; }
+  :is(.fx-done, .empty-state) .f-target { animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .25s both, rv-face-pulse .4s ease-in-out .8s; }
   :is(.fx-done, .empty-state) .f-bubble { transform-origin: 20% 100%; animation: rv-bulb .45s cubic-bezier(.3,1.5,.5,1) .3s both; }
   :is(.fx-done, .empty-state) .f-beat { animation: rv-beat .5s ease-in-out .75s 2; }
   @keyframes rv-beat { 30% { transform: scale(1.25); } 60% { transform: scale(.95); } }
@@ -1122,8 +1122,8 @@ root.innerHTML = `
   .fx-lock .stp::before { content: ""; position: absolute; left: calc(var(--w) / -2); top: calc(var(--h) / -2); width: var(--w); height: var(--h); border-radius: 7px; background: var(--rv-st-done-dot); animation: rv-stp-close .26s cubic-bezier(.22,1,.36,1) forwards; }
   @keyframes rv-stp-close { to { left: -13px; top: -13px; width: 26px; height: 26px; border-radius: 50%; } }
   .fx-lock .stp svg { position: absolute; left: -8px; top: -8px; }
-  .fx-lock .stp .ring { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px; border-radius: 50%; border: 2px solid var(--rv-st-done-dot); opacity: 0; animation: rv-ring .5s cubic-bezier(.22,1,.36,1) .2s forwards; }
-  @keyframes rv-ring { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(2.6); } }
+  .fx-lock .stp .ring { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px; border-radius: 50%; border: 2px solid var(--rv-st-done-dot); opacity: 0; animation: rv-ring-out .5s cubic-bezier(.22,1,.36,1) .2s forwards; }
+  @keyframes rv-ring-out { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(2.6); } } /* its own name: rv-ring is the copy buttons' moving line */
   .fx-lock .stp-tick { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rv-tick-draw .22s cubic-bezier(.4,0,.2,1) .2s forwards; }
   @keyframes rv-tick-draw { to { stroke-dashoffset: 0; } } /* not rv-draw: that one is the bar's, from 20 */
   .page-back { position: fixed; left: 16px; top: 12px; z-index: 10; font: 12px/1.4 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); text-decoration: none; }
