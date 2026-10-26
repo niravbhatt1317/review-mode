@@ -446,8 +446,19 @@ root.innerHTML = `
   .panel-copy.busy { pointer-events: none; border-color: hsl(var(--rv-n20)); }
   .panel-copy.busy .ring { display: block; }
   .panel-copy[data-kind="prompt"], .panel-copy[data-kind="send"] { --ring: #D97757; }
-  .panel-copy .logo-send { color: hsl(var(--rv-n70)); transition: color .12s; }
+  /* the plane: flies off and back in while sending, a tick once Claude has it (Nirav, 2026-10-26) */
+  .panel-copy[data-kind="send"] .ring { display: none !important; }
+  .send-clip { position: relative; display: grid; place-items: center; width: 18px; height: 18px; overflow: hidden; }
+  .send-clip svg { grid-area: 1 / 1; }
+  .panel-copy .logo-send { color: hsl(var(--rv-n70)); transition: color .12s, opacity .2s; }
   .panel-copy:hover .logo-send, .panel-copy.busy .logo-send { color: #D97757; }
+  .panel-copy.busy .logo-send { animation: rv-fly 1.1s cubic-bezier(.5,0,.5,1) infinite; }
+  @keyframes rv-fly { 0% { transform: none; opacity: 1; } 45% { transform: translate(14px, -14px) scale(.7); opacity: 0; } 50% { transform: translate(-14px, 14px) scale(.7); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  .sent-tick { color: var(--rv-st-done-dot); opacity: 0; }
+  .sent-tick path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .panel-copy.sent .logo-send { opacity: 0; }
+  .panel-copy.sent .sent-tick { opacity: 1; }
+  .panel-copy.sent .sent-tick path { animation: rv-tick-draw .35s cubic-bezier(.4,0,.2,1) forwards; }
   /* the send sheet, under the head */
   .claude-sheet { flex: 0 0 auto; display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s cubic-bezier(.22,1,.36,1); }
   .claude-sheet.on { grid-template-rows: 1fr; }
@@ -463,7 +474,9 @@ root.innerHTML = `
   .cs-ok { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: var(--rv-st-done-dot); animation: rv-bulb .35s cubic-bezier(.3,1.5,.5,1) both; }
   .cs-warn { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: hsl(36 100% 92%); color: hsl(28 90% 40%); font: 700 12px/1 -apple-system, system-ui, sans-serif; }
   :host([data-theme="dark"]) .cs-warn { background: hsl(36 60% 20%); color: hsl(36 100% 70%); }
-  .cs-cmd { display: flex; align-items: center; gap: 6px; margin: 10px 0 0 28px; padding: 4px 4px 4px 10px; border-radius: 8px; background: hsl(var(--rv-n10)); box-shadow: inset 0 0 0 1px hsl(var(--rv-n20)); }
+  .cs-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 28px; }
+  .cs-row .cs-again { flex: 0 0 auto; height: 32px; }
+  .cs-cmd { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 8px; background: hsl(var(--rv-n10)); box-shadow: inset 0 0 0 1px hsl(var(--rv-n20)); }
   .cs-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font: 500 11px/1.6 ui-monospace, Menlo, monospace; color: var(--rv-ink); scrollbar-width: none; }
   .cs-copy { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n20)); color: var(--rv-ink-2); font: 500 11px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
   .cs-copy:hover { color: var(--rv-ink); }
@@ -5067,7 +5080,7 @@ async function copyOut(kind, btn) {
 /* SEND TO CLAUDE (2026-10-26): the brief goes straight into an open Claude Code session (the review MCP server,
    mcp/server.mjs, started with channels on); one session is sent to at once, several bring a small picker; no session,
    or one not listening, falls back to the copy */
-$('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Send to Claude</span></button>`);
+$('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><span class="send-clip"><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="sent-tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/></svg></span><span class="scope-tip">Send to Claude</span></button>`);
 const CHANNEL_HINT = "claude --dangerously-load-development-channels server:review";
 /* THE SEND SHEET (Nirav, 2026-10-26: "better, a copy icon, inside the drawer"): a small panel under the head that says
    where a send stands, with the start command to copy when Claude is not listening */
@@ -5075,7 +5088,7 @@ const sheet = document.createElement("div");
 sheet.className = "claude-sheet";
 panelBody.before(sheet);
 const COPY_ICO = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`;
-const cmdBox = (cmd) => `<div class="cs-cmd"><code>${esc(cmd)}</code><button type="button" class="cs-copy" data-copy="${esc(cmd)}" aria-label="Copy the command">${COPY_ICO}<span>Copy</span></button></div>`;
+const cmdBox = (cmd, again) => `<div class="cs-row"><div class="cs-cmd"><code>${esc(cmd)}</code><button type="button" class="cs-copy" data-copy="${esc(cmd)}" aria-label="Copy the command">${COPY_ICO}<span>Copy</span></button></div>${again ? '<button type="button" class="cs-again">Check again</button>' : ""}</div>`;
 let sheetTimer = 0;
 function showSheet(kind, o = {}) {
   clearTimeout(sheetTimer);
@@ -5086,7 +5099,7 @@ function showSheet(kind, o = {}) {
   };
   const n = o.count ? `${o.count} comment${o.count === 1 ? "" : "s"}` : "";
   const body = {
-    none: [ICON.warn, "No Claude session is listening", `<p>Start Claude in your project with push on, then send again. The brief is on your clipboard meanwhile, to paste by hand.</p>${cmdBox(CHANNEL_HINT)}<div class="cs-acts"><button type="button" class="cs-again">Check again</button></div>`],
+    none: [ICON.warn, "Start Claude to send directly", `<p>Run this once in a terminal, in your project folder. From then on, the plane sends comments straight to that Claude, and it works through them for you. Until then the brief is on your clipboard: paste it into any Claude chat.</p>${cmdBox(CHANNEL_HINT, true)}`],
     sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
     ok: [ICON.ok, `Claude has the ${o.count === 1 ? "comment" : "comments"}`, `<p class="cs-sub">${esc(o.label || "")} · it is starting on them</p>`],
     late: [ICON.warn, "Sent, but Claude has not confirmed", `<p>Look at that Claude session: it may be asking to allow the review tools, or still busy. If it shows nothing at all, it was not started with push on. The brief is on your clipboard too.</p>${cmdBox(CHANNEL_HINT)}`],
@@ -5144,15 +5157,22 @@ async function sendToClaude(btn) {
     await navigator.clipboard.writeText(md).catch(() => {});
     return showSheet("fail", { error: r?.error });
   }
+  btn.classList.add("busy"); // the plane keeps flying until Claude says it has it
   showSheet("sent", { count: list.length, label: pick.label });
   /* Claude says it has it (review_ack); the first time, Claude Code may ask to allow the review tools, so a minute */
   for (let i = 0; i < 60; i++) {
     await new Promise((res) => setTimeout(res, 1000));
-    if (!sheet.classList.contains("on")) return; // closed: stop watching
+    if (!sheet.classList.contains("on")) return btn.classList.remove("busy"); // closed: stop watching
     if (i === 15) showSheet("sent", { count: list.length, label: pick.label, hint: true });
     const st = await rv(`/__review/claude/status${q}${q ? "&" : "?"}port=${pick.port}&id=${r.id}`).then((x) => x.json()).catch(() => null);
-    if (st?.acked) return showSheet("ok", { count: list.length, label: pick.label });
+    if (st?.acked) {
+      btn.classList.remove("busy");
+      btn.classList.add("sent");
+      setTimeout(() => btn.classList.remove("sent"), 2200);
+      return showSheet("ok", { count: list.length, label: pick.label });
+    }
   }
+  btn.classList.remove("busy");
   await navigator.clipboard.writeText(md).catch(() => {});
   showSheet("late");
 }
