@@ -48,6 +48,16 @@ file map; read it next.
   (drawer, menu, tooltip) are never judged closed. Live data (two or more figures in its words, or a chart: svg,
   canvas, "chart" in its place) is never judged by words or by being gone, only by code: a redrawn chart ghosts
   without being fixed (the Supabase charts). A hint only: nothing moves status by itself.
+- **Claude drafts first (2026-10-26)**: the review MCP server (a Claude Code session started with
+  `npx --no review-mode claude`) checks every 30 s for open comments of the last three days with no `draft`, claims
+  up to three (`draft.state = "drafting"`, lapses after 10 min), only when its Claude can hear the channel (started
+  with the channels flag, seen in the process tree, or it already acked a send or left a suggestion), and hands them to its Claude over the channel; Claude
+  answers with `review_suggest` (`draft.state = "new"`). The card shows "Claude is looking at it…", then "Claude
+  suggests" (or "Claude isn't sure" with its question back, Ignore only; Claude looks at the picture and asks rather
+  than guesses) with Accept (a fix: picked up with Claude and sent to Claude to do; a question: posted as Claude's
+  answer) and Ignore. Picked up the usual way, it stays only for the person on it: "Let Claude do it" (sends it,
+  marks the card with Claude, no second pick-up) or Ignore. Gone once For approval. Data only for the hub's rules. Off: `"drafts": false` in
+  review.config.json or `REVIEW_DRAFTS=0`.
 - **Site**: GitHub Pages from `docs/` (install page, privacy, auth page, `firefox/` with signed xpi + `updates.json`).
   `site.mjs` holds the address.
 

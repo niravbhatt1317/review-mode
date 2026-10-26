@@ -39,6 +39,7 @@ export function loadConfig(from = process.cwd()) {
     root,
     project: String(project).replace(/^@[^/]+\//, "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-"),
     port: Number(own.port) || 4178,
+    drafts: own.drafts !== false && process.env.REVIEW_DRAFTS !== "0", // Claude drafts first (mcp/server.mjs); "drafts": false turns it off
     hub: hub.url && hub.anonKey ? { url: String(hub.url).replace(/\/+$/, ""), key: hub.anonKey } : null,
     people,
     approvers: [...new Set([...(packaged.approvers || []), ...(own.hub?.approvers || []), ...(local.approvers || [])])], // who approves (until the hub's members list)

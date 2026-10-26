@@ -24,9 +24,13 @@ gives; it adds review.config.json, .review/vite.config.js, a dev:review script, 
 
 `npx --no review-mode init` also adds a `review` MCP server to `.mcp.json`. When it is loaded, prefer its tools to the shell:
 `review_list`, `review_show`, `review_pick_up`, `review_done` (only after the person said yes), `review_reply`,
-`review_picture`, each with `as` set to the person's handle; moves are marked as made with Claude. A brief sent from the
+`review_suggest`, `review_picture`, each with `as` set to the person's handle; moves are marked as made with Claude. A brief sent from the
 drawer ("Send to Claude") arrives as `<channel source="review" delivery_id="...">`: call `review_ack` with that id
-first, then follow it. Sending needs Claude started with `npx --no review-mode claude` once (it registers the tools, offers a shell helper so
+first, then follow it. A request to draft (`kind="draft"`, "Claude drafts first") asks only for `review_suggest` on each
+comment listed: look at its picture (`review_picture`) and read its code, leave one or two plain sentences (a fix:
+what to change and where; a question: the answer; not sure what is meant: `unsure` and one question back), change
+nothing else, then carry on with what you were doing. A brief line "Do this (your suggestion,
+accepted…)" is the plan the person agreed to: do that. Sending needs Claude started with `npx --no review-mode claude` once (it registers the tools, offers a shell helper so
 plain `claude` turns push on in this folder from then on, and starts Claude;
 channels are a research preview). Never run a bare `npx review`: on npm that name is an unrelated package.
 

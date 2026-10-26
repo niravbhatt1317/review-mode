@@ -15,7 +15,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { loadConfig } from "../collector/config.js";
 import { storeFor, prepare } from "../collector/stores.js";
-import { withNames, applyChange, mergePeople } from "../hub-core.js";
+import { withNames, applyChange, mergePeople, DRAFT_CLAIM_MS } from "../hub-core.js";
 
 /* REVIEW_ROOT: the app's folder when Claude starts higher up (a monorepo root); else where Claude started */
 const ROOT = process.env.REVIEW_ROOT ? path.resolve(process.env.REVIEW_ROOT) : process.cwd();
@@ -47,6 +47,7 @@ const TOOLS = [
   { name: "review_done", description: "Set a comment for approval. ONLY after the person said yes in the chat to marking it done. Never approves.", inputSchema: { type: "object", properties: { id: { type: "string" }, ...asProp }, required: ["id"] } },
   { name: "review_reply", description: "Answer a question (one or two plain sentences, from the code it points at). If something should change, say so; the asker can make it a fix.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, ...asProp }, required: ["id", "text"] } },
   { name: "review_picture", description: "Save a comment's picture (the element boxed, its number on it) and return the file path to Read.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
+  { name: "review_suggest", description: "Claude drafts first: leave a short suggestion on a new comment, for a person to accept or ignore. For a fix, what you would change and where (file and line), in one or two plain sentences; for a question, the answer. When you cannot tell what is meant, or the code shows no clear change, set unsure and say in one sentence what you would need to know, instead of guessing. Draft only: change no code and no status.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, unsure: { type: "boolean", description: "True when the text is a question back to the person, not a suggestion" }, ...asProp }, required: ["id", "text"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
 const line = (c) => `#${c.n} ${c.id} ${c.status} ${kind(c.severity)}${holder(c) ? ` [${holder(c)}${c.withClaude ? " + Claude" : ""}]` : ""}: ${c.text}${c.note?.text ? ` [note: ${c.note.text}]` : ""}`;
@@ -85,24 +86,97 @@ async function call(name, a = {}) {
   if (name === "review_picture") {
     if (!c.shot) return "This comment has no picture.";
     const bytes = await store.shot(c.shot);
-    const dir = path.join(cfg.sessionsDir, cfg.project, "export");
+    const sess = process.env.REVIEW_SESSION;
+    const dir = path.join(cfg.sessionsDir, sess && /^_[a-z0-9-]+$/.test(sess) ? sess : cfg.project, "export"); // a test session's pictures stay in its own folder
     fs.mkdirSync(dir, { recursive: true });
     const n = (await numbered(c.id))?.n || 0;
     const file = path.join(dir, `${String(n).padStart(2, "0")}-${c.id}.png`);
     fs.writeFileSync(file, bytes);
     return file;
   }
+  if (name === "review_suggest") {
+    if (c.draft && c.draft.state !== "drafting") return `#${(await numbered(c.id))?.n} already has a suggestion: nothing to do`;
+    if (c.status !== "open") return `#${(await numbered(c.id))?.n} is already being worked: no suggestion needed`;
+    applyChange(c, { draft: { text: String(a.text || ""), unsure: a.unsure === true } }, who);
+    await store.put(c);
+    drafted.add(c.id);
+    heard = true;
+    return `Suggestion left on #${(await numbered(c.id))?.n}; the person accepts or ignores it in the drawer.`;
+  }
   if (name === "review_ack") {
     const d = deliveries.get(a.delivery_id);
     if (d) d.acked = Date.now();
+    heard = true; // a brief from the drawer reached Claude: drafting requests will too
     return "Thanks: the drawer shows you have it.";
   }
   throw new Error(`Unknown tool ${name}`);
 }
 
+/* ---------- Claude drafts first ---------- */
+/* Every 30 s: the open comments of the last three days with no suggestion (and no live claim by another session) are
+   claimed and handed to this Claude session through the channel, three at a time, so each new comment gets a short
+   "Claude suggests…" on its card. Without channels the hand-off is not heard; the claim lapses after ten minutes and
+   another session may try. Off with "drafts": false in review.config.json or REVIEW_DRAFTS=0. */
+const DRAFT_EVERY = 30_000, DRAFT_WINDOW = 3 * 86400_000, DRAFT_BATCH = 3;
+const drafted = new Set();
+let ready = false; // the session said hello (initialized): channel messages before that are lost
+/* CAN THIS SESSION HEAR US? (Nirav, 2026-10-26: no "Claude is looking at it…" when it is not.) A comment is claimed
+   only when the Claude above this server was started the connected way (its command line carries
+   --dangerously-load-development-channels with server:review, as `npx --no review-mode claude` and the shell helper
+   do), or this session has already shown it hears: Claude confirmed a "Send to Claude" or left a suggestion. */
+let heard = process.env.REVIEW_CHANNEL === "1";
+const startedConnected = (() => {
+  if (process.platform === "win32") return false;
+  try {
+    let pid = process.ppid;
+    for (let i = 0; i < 5 && pid > 1; i++) {
+      const [ppid, ...args] = execSync(`ps -o ppid=,args= -p ${pid}`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim().split(/\s+/);
+      const cmd = args.join(" ");
+      const isClaude = args.slice(0, 2).some((x) => /claude/i.test(x.split("/").pop() || "")); // claude itself, not a shell whose script mentions it
+      if (isClaude && /--dangerously-load-development-channels/.test(cmd) && /server:review\b/.test(cmd)) return true;
+      pid = Number(ppid);
+    }
+  } catch {}
+  return false;
+})();
+const canHear = () => heard || startedConnected;
+async function draftRound() {
+  if (!ready || !cfg.drafts || !canHear()) return;
+  try {
+    const all = prepare(await store.list());
+    const fresh = all.filter((c) => c.status === "open" && Date.now() - (c.ts || 0) < DRAFT_WINDOW && !drafted.has(c.id) && (!c.draft || (c.draft.state === "drafting" && Date.now() - (c.draft.at || 0) > DRAFT_CLAIM_MS)));
+    const pick = fresh.slice(-DRAFT_BATCH); // the newest first to be seen
+    if (!pick.length) return;
+    const lines = [];
+    for (const c of pick) {
+      const full = await store.get(c.id);
+      if (!full || (full.draft && !(full.draft.state === "drafting" && Date.now() - (full.draft.at || 0) > DRAFT_CLAIM_MS))) continue;
+      applyChange(full, { draft: "drafting" }, defaultAs);
+      await store.put(full);
+      drafted.add(c.id);
+      const src = full.source?.file ? ` · code: ${full.source.file}${full.source.line ? `:${full.source.line}` : ""}${full.source.component ? ` (${full.source.component})` : ""}` : "";
+      lines.push(`#${c.n} ${c.id} ${kind(full.severity)}: "${full.text}" · ${full.pageTitle || full.route}${src}`);
+    }
+    if (!lines.length) return;
+    const text = [
+      `Claude drafts first: ${lines.length === 1 ? "a new review comment needs" : `${lines.length} new review comments need`} a suggestion.`,
+      `For each: read it (review_show), look at its picture (review_picture, then Read the file: most comments are about`,
+      `what the screen looks like), and read the code it points at. Then call review_suggest with one or two plain`,
+      `sentences: for a fix, what you would change and where (file and line); for a question, the answer.`,
+      `Not sure what is meant, or no clear change in the code? Set unsure and ask, in one sentence, what you would need`,
+      `to know. A wrong suggestion said with confidence is worse than none.`,
+      `Draft only: change no code and no status. Then carry on with whatever you were doing.`,
+      ``,
+      ...lines,
+    ].join("\n");
+    send({ method: "notifications/claude/channel", params: { content: text, meta: { kind: "draft", comments: String(lines.length), project: String(store.project) } } });
+  } catch {}
+}
+setInterval(draftRound, DRAFT_EVERY).unref?.();
+
 /* ---------- MCP over stdio ---------- */
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
-const INSTRUCTIONS = `Review mode (design-review comments on this project's running app). Use the review_* tools to list, read, pick up, finish and answer comments, acting as the person you work for (pass "as" with their GitHub handle; default ${defaultAs}). A comment's source (review_show) is the file and line its element is written at: start there. Briefs sent from the drawer arrive as <channel source="review" delivery_id="...">: call review_ack with the delivery_id first, then follow the brief. Ask the person before review_done. Never approve.`;
+const INSTRUCTIONS = `Review mode (design-review comments on this project's running app). Use the review_* tools to list, read, pick up, finish and answer comments, acting as the person you work for (pass "as" with their GitHub handle; default ${defaultAs}). A comment's source (review_show) is the file and line its element is written at: start there. Briefs sent from the drawer arrive as <channel source="review" delivery_id="...">: call review_ack with the delivery_id first, then follow the brief. Requests to draft (kind="draft") ask only for review_suggest: read the code, leave the suggestion, change nothing, then carry on. Ask the person before review_done. Never approve.`;
 let buf = "";
 let queue = Promise.resolve(); // tool calls, one after another
 process.stdin.setEncoding("utf8");
@@ -133,6 +207,11 @@ async function handle(raw) {
         instructions: INSTRUCTIONS,
       },
     });
+  if (m.method === "notifications/initialized") {
+    ready = true;
+    setTimeout(draftRound, 5000); // a first round soon after the session opens: comments made while none was open
+    return;
+  }
   if (m.method === "ping") return send({ id: m.id, result: {} });
   if (m.method === "tools/list") return send({ id: m.id, result: { tools: TOOLS } });
   if (m.method === "tools/call") {

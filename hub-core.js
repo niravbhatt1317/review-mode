@@ -7,6 +7,7 @@
 export const STATUSES = ["open", "progress", "approval", "approved"];
 const BUCKET = "review-shots";
 export const RETENTION_DAYS = 14;
+export const DRAFT_CLAIM_MS = 10 * 60 * 1000; // a session's claim on drafting a comment, before another may try
 
 /* sentence case: the first letter capital, the rest as typed (Nirav, 2026-10-19) */
 export const sentence = (t) => {
@@ -118,6 +119,18 @@ export function applyChange(c, body, who) {
     Object.assign(c, { status: "open", assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null, note: null });
     normalise(c);
   }
+  /* CLAUDE DRAFTS FIRST (Nirav, 2026-10-26): a Claude Code session with the review tools reads each new comment's code
+     and leaves a short suggestion on it; a person accepts it (a fix: picked up with Claude; a question: posted as the
+     answer) or ignores it. "drafting" is the session's claim, so two sessions do not both work on one comment; it
+     lapses after DRAFT_CLAIM_MS when nothing came. Data only: the hub's rules see no move until someone accepts. */
+  if (body.draft === "drafting") {
+    if (!c.draft || (c.draft.state === "drafting" && Date.now() - (c.draft.at || 0) > DRAFT_CLAIM_MS)) c.draft = { state: "drafting", at: Date.now(), by: who };
+  } else if (body.draft && typeof body.draft.text === "string" && body.draft.text.trim()) {
+    const isQ = c.severity === "question" || c.severity === "idea";
+    c.draft = { state: "new", text: body.draft.text.trim().slice(0, 600), kind: isQ ? "answer" : "fix", at: Date.now(), by: who, via: "claude", ...(body.draft.unsure === true ? { unsure: true } : {}) };
+  }
+  if ((body.draftState === "accepted" || body.draftState === "ignored") && c.draft?.state === "new") Object.assign(c.draft, { state: body.draftState, decidedBy: who, decidedAt: Date.now() });
+  if (body.withClaude === true && c.status === "progress") c.withClaude = true; // the person on it handed the work to Claude too
   const reply = typeof body.reply === "string" ? body.reply.trim().slice(0, 1200) : "";
   if (reply) {
     const at = Date.now();

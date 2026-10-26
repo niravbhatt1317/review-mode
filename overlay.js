@@ -675,6 +675,9 @@ root.innerHTML = `
   .card-sev[data-k="must"] { background: var(--tag-must-fill); color: var(--tag-must-ink); } .card-sev[data-k="should"] { background: var(--tag-should-fill); color: var(--tag-should-ink); } .card-sev[data-k="idea"] { background: var(--tag-idea-fill); color: var(--tag-idea-ink); } .card-sev[data-k="question"] { background: var(--tag-question-fill); color: var(--tag-question-ink); }
   .card-sev[data-k="fix"] { background: var(--tag-fix-fill); color: var(--tag-fix-ink); }
   .card-text { font-size: 14px; line-height: 1.5; color: var(--rv-ink); margin: 0 0 10px; white-space: pre-wrap; border-radius: 6px; padding: 2px 4px; margin-left: -4px; box-shadow: 0 0 0 1px transparent; }
+  .rm-toggle { display: inline; margin: 0; padding: 0; border: 0; background: none; font: inherit; font-weight: 500; color: var(--rv-ink-2); cursor: pointer; white-space: nowrap; } /* a bit grey (Nirav, 2026-10-26) */
+  .rm-toggle:hover, .rm-toggle:focus-visible { color: var(--rv-ink); }
+  .rm-toggle:hover, .rm-toggle:focus-visible { text-decoration: underline dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; outline: none; } /* dotted on hover (Nirav, 2026-10-26) */
   .card-text.ro, .card-text.ro:hover { cursor: default; background: transparent; box-shadow: none; }
   .card-text:hover { background: hsl(var(--rv-n10)); box-shadow: 0 0 0 1px var(--rv-line); }
   .card-text[contenteditable="true"] { background: var(--rv-surface); outline: 2px solid #2563eb; outline-offset: 0; }
@@ -990,6 +993,22 @@ root.innerHTML = `
   .card.failed { box-shadow: 0 0 0 1px hsl(353 84% 47% / .5), 0 1px 2px rgba(29,43,62,.06); }
   .card-foot .acts.on { opacity: 1; }
   /* the reason a comment came back, under the foot, in the warning ink with a thin rule on its left */
+  .card-draft { margin-top: 10px; padding: 8px 10px 9px; border-radius: 8px; background: color-mix(in srgb, #D97757 7%, var(--rv-surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #D97757 18%, transparent); font-size: 12px; line-height: 1.45; color: var(--rv-ink); }
+  .card-draft[data-state="drafting"] { background: none; box-shadow: none; padding: 0; }
+  .card-draft .dr-head { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--rv-ink-2); }
+  .card-draft .dr-head b { font-weight: 600; color: var(--rv-ink); }
+  .card-draft .av-claude { width: 16px; height: 16px; border-radius: 50%; flex: none; }
+  .card-draft .dr-busy { background: linear-gradient(90deg, var(--rv-ink-3) 0%, var(--rv-ink-3) 40%, var(--rv-ink) 50%, var(--rv-ink-3) 60%, var(--rv-ink-3) 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; }
+  @keyframes rv-dr-shine { from { background-position: 100% 0; } to { background-position: 0 0; } }
+  @media (prefers-reduced-motion: reduce) { .card-draft .dr-busy { animation: none; color: var(--rv-ink-3); } }
+  .card-draft .dr-text { margin: 5px 0 0 22px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .card-draft .dr-acts { display: flex; gap: 6px; margin: 8px 0 0 22px; }
+  .card-draft .dr-acts button { height: 26px; padding: 0 11px; border-radius: 6px; font: 500 11.5px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .card-draft .dr-accept { border: 0; background: #D97757; color: #fff; }
+  .card-draft .dr-accept:hover { background: #C6613F; }
+  .card-draft .dr-ignore { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); }
+  .card-draft .dr-ignore:hover { color: var(--rv-ink); border-color: hsl(var(--rv-n70)); }
+  .card-draft button.loading { opacity: .6; pointer-events: none; }
   .card-note { margin-top: 8px; padding: 6px 10px;  font-size: 12px; line-height: 1.4; color: var(--rv-ink); background: hsl(var(--rv-warn-bg) / .55); border-radius: 8px; border-left: 2px solid hsl(var(--rv-warn-ink) / .5); /* a curved border: it follows the 8 px corners */ white-space: pre-wrap; overflow-wrap: anywhere; }
   .card-note .nt-head, .tip-note .nt-head { color: var(--rv-ink-2); }
   .card-note .nt-head b { font-weight: 500; font-size: 11px; color: var(--rv-ink); }
@@ -2887,6 +2906,7 @@ async function showInList(c) {
 }
 /* edit a comment's text where it stands: Enter or a click elsewhere keeps it, Escape puts the old text back */
 function editInPlace(el, c, after) {
+  el.textContent = c.text; // the whole words, not the folded three lines
   el.contentEditable = "true";
   el.focus();
   /* a caret at the end: inside a shadow root, focus() alone leaves the editable without one */
@@ -3270,7 +3290,9 @@ function refreshCard(c, animate = false) {
     }
     note.innerHTML = noteHtml(c);
   } else note?.remove();
+  draftSync(card, c);
   histSync(card, c);
+  clampCard(card);
   return true;
 }
 /* one write; the pressed button shows it is working and its neighbours go quiet; the hub's answer then crossfades
@@ -4032,7 +4054,107 @@ function settle(card, c) {
     }
     note.innerHTML = noteHtml(c);
   } else note?.remove();
+  draftSync(card, c);
   histSync(card, c);
+  clampCard(card);
+}
+/* CLAUDE DRAFTS FIRST (Nirav, 2026-10-26): a Claude Code session with the review tools reads a new comment's code and
+   leaves a suggestion (mcp/server.mjs); it shows on the card above the status line, for a person to accept or
+   ignore. While a session is on it: "Claude is looking at it…".
+   New: Accept on a fix picks it up (you, with Claude) and sends it to Claude to do; on a question it posts the answer.
+   Picked up the usual way (Nirav, 2026-10-26): it stays for the person working on it, and only for them, as "Let
+   Claude do it" (sent to Claude, no second pick-up) or Ignore. Once it is For approval it is gone. */
+const DRAFT_LIVE_MS = 10 * 60 * 1000;
+const myName = (x) => !!x && (isMe(x) || (!!state.hub?.handle && String(x).toLowerCase() === state.hub.handle.toLowerCase()));
+const draftShown = (c) => {
+  const d = c.draft;
+  if (!d) return false;
+  if (c.status === "open") return d.state === "new" || (d.state === "drafting" && Date.now() - (d.at || 0) < DRAFT_LIVE_MS);
+  return c.status === "progress" && d.state === "new" && d.kind === "fix" && myName(c.assignee);
+};
+function draftHtml(c) {
+  const d = c.draft;
+  if (d.state === "drafting") return `<div class="dr-head">${CLAUDE_AV()}<span class="dr-busy">Claude is looking at it…</span></div>`;
+  const working = c.status === "progress"; // shown only to the person on it (draftShown)
+  /* not sure what was meant: Claude's question back, nothing to accept */
+  if (d.unsure) return `<div class="dr-head">${CLAUDE_AV()}<b>Claude isn't sure</b></div><div class="dr-text"></div>${working || isMe(c.by) || isApprover() ? `<div class="dr-acts"><button type="button" class="dr-ignore">Ignore</button></div>` : ""}`;
+  const ok = working || (d.kind === "answer" ? can("answer", c) : can("pick_up", c));
+  const no = working || isMe(c.by) || isApprover();
+  const label = working ? "Let Claude do it" : d.kind === "answer" ? "Post answer" : "Accept";
+  return `<div class="dr-head">${CLAUDE_AV()}<b>Claude suggests</b></div><div class="dr-text"></div>${ok || no ? `<div class="dr-acts">${ok ? `<button type="button" class="dr-accept">${label}</button>` : ""}${no ? `<button type="button" class="dr-ignore">Ignore</button>` : ""}</div>` : ""}`;
+}
+function draftSync(card, c) {
+  let box = card.querySelector(".card-draft");
+  if (!draftShown(c)) return box?.remove();
+  const key = `${c.draft.state}:${c.draft.at}`;
+  if (box?.dataset.key === key) return;
+  if (!box) {
+    box = document.createElement("div");
+    box.className = "card-draft";
+    card.insertBefore(box, card.querySelector(".card-foot"));
+  }
+  box.dataset.key = key;
+  box.dataset.state = c.draft.state;
+  box.innerHTML = draftHtml(c);
+  const t = box.querySelector(".dr-text");
+  if (t) t.textContent = c.draft.text;
+}
+/* READ MORE (Nirav, 2026-10-26): a long comment (often pasted), Claude's suggestion or a long note shows three lines,
+   cut at a word's middle with "…" and "Read more" at the end of the third line; "Read less" sits after the last word
+   when open. Only when it really runs over; what was opened stays open across refreshes; editing shows it whole. */
+const CLAMPS = [[".card-text", null, "text"], [".card-draft .dr-text", null, "draft"], [".card-note", ".nt-text", "note"]];
+const CLAMP_LINES = 3;
+const unfolded = new Set(); // "<id>:<part>"
+const clampKept = new WeakMap(); // the cut element -> { full, shown }
+const ownText = (t) => Array.from(t.childNodes).filter((n) => !n.classList?.contains("rm-toggle") && !n.dataset?.rmGap).map((n) => n.textContent).join("");
+function unclamp(target) {
+  const kept = clampKept.get(target);
+  const now = ownText(target);
+  const full = kept && now === kept.shown ? kept.full : now;
+  target.textContent = full;
+  clampKept.delete(target);
+  return full;
+}
+function clampCard(card) {
+  const id = card.dataset.id;
+  for (const [sel, inner, part] of CLAMPS) {
+    const el = card.querySelector(sel);
+    if (!el || el.isContentEditable) continue;
+    const target = inner ? el.querySelector(inner) : el;
+    if (!target) continue;
+    el.querySelectorAll(":scope > .rm-toggle, :scope > [data-rm-gap]").forEach((n) => n.remove());
+    const full = unclamp(target);
+    const cs = getComputedStyle(el);
+    const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.4;
+    const inside = () => el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const max = CLAMP_LINES * lh + 1;
+    if (inside() <= max) continue; // fits: no link
+    const key = `${id}:${part}`;
+    const open = unfolded.has(key);
+    const btn = Object.assign(document.createElement("button"), { type: "button", className: "rm-toggle", textContent: open ? "Read less" : "Read more" });
+    btn.dataset.key = key;
+    const gap = Object.assign(document.createElement("span"), { textContent: " " });
+    gap.dataset.rmGap = "1";
+    const show = (words) => {
+      target.textContent = words;
+      el.append(gap, btn);
+    };
+    if (open) {
+      show(full);
+      continue;
+    }
+    /* the longest start of the words that, with "… Read more", still fits three lines */
+    let lo = 0, hi = full.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      show(`${full.slice(0, mid).trimEnd()}…`);
+      if (inside() <= max) lo = mid;
+      else hi = mid - 1;
+    }
+    const shown = `${full.slice(0, lo).trimEnd()}…`;
+    show(shown);
+    clampKept.set(target, { full, shown });
+  }
 }
 function renderPanel() {
   if (!panel.classList.contains("on")) return;
@@ -4442,9 +4564,11 @@ function renderPanel() {
     const where = card.querySelector(".cm-where");
     where.innerHTML = `<b class="cm-type" data-k="${c.severity}">${esc(sevLabel)}</b> · <span class="cm-place" data-tip="${esc(`${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}">${esc(c.pageTitle || c.route)}</span>`;
     if (hasNote(c)) card.querySelector(".card-note").innerHTML = noteHtml(c);
+    draftSync(card, c);
     histSync(card, c);
     if (c.shot && c.rect) card.querySelector(".card-pic").appendChild(liveBadge(c, card.querySelector(".card-shot")));
     into.appendChild(card);
+    clampCard(card);
     if (state.asking?.id === c.id) mountAsk(card, c); // the note box back, once the card is on the page
   }
   if (cut) {
@@ -4685,6 +4809,18 @@ panelBody.addEventListener("pointerover", (e) => {
   if (closing) holdStill(over, HIST_EASE.duration + 300);
 });
 panelBody.addEventListener("click", async (e) => {
+  const rm = e.target.closest(".rm-toggle");
+  if (rm) {
+    e.stopPropagation();
+    if (unfolded.has(rm.dataset.key)) unfolded.delete(rm.dataset.key);
+    else unfolded.add(rm.dataset.key);
+    const card = rm.closest(".card");
+    if (card) {
+      clampCard(card);
+      if (state.histOpen.has(card.dataset.id)) roomFor(card, true);
+    }
+    return;
+  }
   if (e.target.closest(".join-title")) {
     try {
       if (joinFolded()) localStorage.removeItem("review.join.folded");
@@ -4742,6 +4878,21 @@ panelBody.addEventListener("click", async (e) => {
   if (!card) return;
   const c = state.comments.find((x) => x.id === card.dataset.id) || state.done.find((x) => x.id === card.dataset.id);
   if (!c) return;
+  if (e.target.closest(".dr-ignore")) {
+    await applyUpdate({ id: c.id, draftState: "ignored" }, e.target.closest("button"));
+    return;
+  }
+  if (e.target.closest(".dr-accept")) {
+    const b = e.target.closest("button");
+    if (c.draft?.kind === "answer") {
+      if (await applyUpdate({ id: c.id, reply: c.draft.text, via: "claude", draftState: "accepted" }, b)) toast(`#${c.n}: Claude's answer posted`);
+      return;
+    }
+    /* New: picked up with Claude; already yours: only the mark that Claude is on it too */
+    const now = await applyUpdate(c.status === "progress" ? { id: c.id, withClaude: true, draftState: "accepted" } : { id: c.id, status: "progress", via: "claude", draftState: "accepted" }, b);
+    if (now) sendToClaude($('.panel-copy[data-kind="send"]'), [{ ...now, n: c.n }]); // Claude does what it suggested
+    return;
+  }
   if (e.target.closest(".hs-more")) {
     if (state.histAll.has(c.id)) state.histAll.delete(c.id);
     else state.histAll.add(c.id);
@@ -4920,7 +5071,7 @@ $(".bar .k").textContent = `${MOD} + click to comment`;
     toast(`Removed #${c.n}`);
     return;
   }
-  if (e.target.classList.contains("card-text") && e.target.contentEditable !== "true" && canEdit(c)) editInPlace(e.target, c, () => {});
+  if (e.target.classList.contains("card-text") && e.target.contentEditable !== "true" && canEdit(c)) editInPlace(e.target, c, () => clampCard(card));
 });
 /* SELECTING (Nirav, 2026-10-24): one click on the circle, Shift-click for a range, a drag across the circles to paint
    many (starting on a picked card unpicks), and the keyboard: ↑ ↓ walk the cards, Space picks, Shift with an arrow
@@ -5204,6 +5355,7 @@ async function buildPrompt(list) {
       }
       lines.push(`- Where: ${c.pageTitle || c.route} · ${c.context || "Page"} · route ${c.route}`);
       if (c.element) lines.push(`- Element: ${c.element}`);
+      if (c.draft?.state === "accepted" && c.draft.kind === "fix") lines.push(`- Do this (your suggestion, accepted by ${isMe(c.draft.decidedBy) || (state.hub?.handle && c.draft.decidedBy?.toLowerCase() === state.hub.handle.toLowerCase()) ? "you" : c.draft.decidedBy || "the team"}): ${c.draft.text}`);
       if (maybe.has(c.id)) lines.push(`- Maybe fixed already: ${maybeTip(c).replace(/ Compare with the picture\.$/, "")} Check before changing anything.`);
       if (c.source) lines.push(`- Code: ${srcLong(c.source)}${c.source.how === "stamp" ? "" : " (from the framework)"}`);
       else if (c.anchor?.test || c.anchor?.name) lines.push(`- Search the code for: ${[c.anchor.test ? `${c.anchor.test[0]}="${c.anchor.test[1]}"` : "", c.anchor.name ? `"${c.anchor.name}"` : ""].filter(Boolean).join(", ")}`);
@@ -5362,7 +5514,7 @@ function showSheet(kind, o = {}) {
     none: [ICON.warn, "Start Claude to send directly", `<p>Run this once, in a terminal in your project folder. It connects Claude to this project and starts it; after that, plain <code>claude</code> in that folder has the plane on, every time. Until then the brief is on your clipboard: paste it into any Claude chat.</p>${cmdBox(CHANNEL_HINT, true)}`],
     intro: [`<span class="cs-intro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${CLAUDE_PATH}"/></svg></span>`, "Connect Claude to this project", `<p>Run this once, in a terminal in your project folder. From then on, plain <code>claude</code> there is connected: the plane next to "Copy for Claude" sends comments straight to it, and Claude works through them for you.</p>${cmdBox(CHANNEL_HINT, '<button type="button" class="cs-gotit">Got it</button>')}`], // Got it beside the command, like Check again
     sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
-    ok: [ICON.ok, `Claude has the ${o.count === 1 ? "comment" : "comments"}`, `<p class="cs-sub">${esc(o.label || "")} · it is starting on them</p>`],
+    ok: [ICON.ok, `Claude has the ${o.count === 1 ? "comment" : "comments"}`, `<p class="cs-sub">${esc(o.label || "")} · it is starting on ${o.count === 1 ? "it" : "them"}</p>`],
     late: [ICON.warn, "Sent, but Claude has not confirmed", `<p>Look at that Claude session: it may be asking to allow the review tools, or still busy. If it shows nothing at all, it was not started with push on. The brief is on your clipboard too.</p>${cmdBox(CHANNEL_HINT)}`],
     fail: [ICON.warn, "Could not send", `<p>${esc(String(o.error || "The session did not answer").replace(/^./, (c) => c.toUpperCase()).replace(/[^.!?]$/, "$&."))} The brief is on your clipboard.</p>`],
   }[kind];
@@ -5413,8 +5565,8 @@ async function maybeIntro() {
   if (Array.isArray(sessions) && sessions.length) return introSeen(true); // already connected
   if (!sheet.classList.contains("on")) showSheet("intro");
 }
-async function sendToClaude(btn) {
-  const list = shownComments();
+async function sendToClaude(btn, only) {
+  const list = only || shownComments();
   if (!list.length) return toast("Nothing shown to send");
   btn.classList.add("busy");
   const done = () => {

@@ -149,8 +149,9 @@ Effort: S a day or less, M a few days, L a week or more.
 - [x] **"Maybe fixed?"** (S, done 2026-10-26): an open fix whose element changed (new words), is gone, or whose own
   tag in the code was edited after the comment (dev server, from the source stamp) gets a quiet "Maybe fixed?" pill;
   the tip says what changed. Only a hint, no status moves by itself; the brief tells Claude to check first.
-- [ ] **Claude drafts first** (M): with Claude connected, each new comment gets a short "Claude suggests…" on its card
-  (the likely file and the change, or an answer to a question) for a person to accept, edit or ignore.
+- [x] **Claude drafts first** (M, done 2026-10-26): an open Claude Code session with the review tools reads each new
+  comment's code and leaves "Claude suggests…" on its card; Accept picks a fix up with Claude and sends it to Claude to
+  do, or posts a question's answer; Ignore hides it. No session open: drafted when one opens.
 
 **Better comments**
 - [ ] **Design-token check** (S): on a colour, spacing or type comment, the card shows the element's computed value
