@@ -467,10 +467,10 @@ root.innerHTML = `
   @keyframes rv-boost { 0% { stroke-dashoffset: 1; opacity: 0; } 25% { opacity: 1; } 100% { stroke-dashoffset: -1; opacity: 0; } } /* each line streams out behind, in turn */
   .panel-copy.sent .logo-send { animation: rv-away .38s cubic-bezier(.5,0,.9,.5) forwards; }
   .panel-copy.sent .logo-send { color: #D97757; } /* stays orange as it leaves */
-  .panel-copy.sent .boost { opacity: 1; animation: rv-away-trail .38s ease-out forwards; }
+  .panel-copy.sent .boost { opacity: 1; animation: rv-away-trail .38s cubic-bezier(.5,0,.9,.5) .05s both; } /* the same move as the plane, a beat behind: always under its tail */
   .panel-copy.sent .boost path { stroke-dashoffset: 0; animation: none; } /* the lines streak out with it */
   @keyframes rv-away { 0% { transform: translate(2px, -2px); opacity: 1; } 100% { transform: translate(18px, -18px) scale(.6); opacity: 0; } } /* flies away from where it hovered */
-  @keyframes rv-away-trail { 0% { transform: translate(2px, -2px); opacity: 1; } 60% { transform: translate(10px, -10px); opacity: .8; } 100% { transform: translate(16px, -16px); opacity: 0; } } /* keeps its gap behind the plane */
+  @keyframes rv-away-trail { 0% { transform: translate(2px, -2px); opacity: 1; } 70% { opacity: .7; } 100% { transform: translate(18px, -18px) scale(.6); opacity: 0; } }
   .sent-tick { color: var(--rv-st-done-dot); opacity: 0; }
   .sent-tick path { stroke-dasharray: 1; stroke-dashoffset: 1; }
   .panel-copy.sent .sent-tick { opacity: 1; transition: opacity .1s .3s; }
