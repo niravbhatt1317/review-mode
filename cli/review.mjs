@@ -226,7 +226,7 @@ if (cmd === "list" || !cmd) {
     process.exit(2);
   }
   if ((c.severity === "question" || c.severity === "idea") && status !== "approved" && status !== "open") {
-    console.error(`#${id} is a question: answer it with  npx review reply ${id} --claude "<answer>"`);
+    console.error(`#${id} is a question: answer it with  npx --no review-mode reply ${id} --claude "<answer>"`);
     process.exit(2);
   }
   applyChange(c, { status, note: note.join(" "), ...(CLAUDE ? { via: "claude" } : {}) }, who || "cli");

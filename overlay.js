@@ -3532,7 +3532,7 @@ function statusHtml(c) {
     return full.slice(0, full.length - named.length);
   };
   const k = (t) => `<b class="st-k">${esc(t)}</b>`;
-  /* CLAUDE ON THE CARD (2026-10-26): work moved with Claude (npx review --claude) shows both, the person and Claude's mark */
+  /* CLAUDE ON THE CARD (2026-10-26): work moved with Claude (npx --no review-mode … --claude) shows both, the person and Claude's mark */
   const claude = c.withClaude && (c.status === "progress" || c.status === "approval");
   const person = who ? `${face(who)}${claude ? '<span class="av av-claude st-claude">✦</span>' : ""}<span class="st-who">${mine ? "You" : esc(who)}${claude ? " and Claude" : ""}</span>` : "";
   const line = (h) => `<span class="st-s">${h}</span>`; // one inline run, so the spaces between the words stay
@@ -4589,8 +4589,8 @@ panelBody.addEventListener("click", async (e) => {
       `Where: ${c.pageTitle || c.route} (${c.route})${c.context ? `, ${c.context}` : ""}${typeof c.element === "string" && c.element ? `, on ${c.element}` : ""}`,
       talk ? `So far:\n${talk}` : "",
       ``,
-      `Run \`npx review show ${c.id}\` for the element, the trail and the picture. Answer in one or two plain sentences, as you`,
-      `would to a designer, and post it: npx review reply ${c.id} --claude "<your answer>"`,
+      `Run \`npx --no review-mode show ${c.id}\` for the element, the trail and the picture. Answer in one or two plain sentences, as you`,
+      `would to a designer, and post it: npx --no review-mode reply ${c.id} --claude "<your answer>"`,
       `If the answer is that something should change, say so; the asker can make it a fix.`,
     ].filter((l, i, xs) => l || xs[i - 1]).join("\n");
     try {
