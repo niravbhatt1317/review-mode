@@ -127,7 +127,9 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   record that Claude made it (for example `via: "claude"` from `npx review` / the skill).
 - [x] **Send to Claude without copy and paste** (done 2026-10-26: the review MCP server, tools in any session and a
   channel for push; "Send to Claude" in the drawer, a picker for several sessions, Claude confirms it has it, the copy
-  as fallback; push needs Claude started with the channels flag while they are a research preview) (like the agentation plugin): link the current Claude session to the
+  as fallback; push needs Claude started with the channels flag while they are a research preview. Made automatic the
+  same day: `npx --no review-mode claude` once per folder connects it and adds a shell helper, after which plain
+  `claude` has the plane on; a first-time card in the drawer says so; 31 flow tests) (like the agentation plugin): link the current Claude session to the
   extension once, then a button sends the selected comments straight in; Claude adds them as its tasks, works through
   them, moves their statuses. Choose which session when several are open. Needs a small local bridge (the extension
   cannot talk to a Claude Code session directly); research the options first.
