@@ -42,9 +42,57 @@ const FORCE = flag("--force");
 const ONLY_OPEN = flag("--open");
 const MINE = flag("--mine");
 const SETUP_ONLY = flag("--setup");
+const SHELL_HOOK = flag("--shell"); // add the claude helper to the shell, without asking
+const NO_SHELL = flag("--no-shell");
 const [cmd, ...args] = argv;
 const cfg = loadConfig(process.cwd());
 
+const HOOK_START = "# >>> review-mode: claude with Send to Claude >>>";
+const HOOK_END = "# <<< review-mode <<<";
+const HOOK = `${HOOK_START}
+# In a folder connected to Review mode (npx --no review-mode claude), plain \`claude\` starts with "Send to Claude" on.
+# Anywhere else it is the usual claude. Remove these lines to undo.
+claude() {
+  if [ -f .mcp.json ] && grep -q '"review-mode"' .mcp.json 2>/dev/null || node -e 'try{const j=require(require("os").homedir()+"/.claude.json");process.exit(j.projects&&j.projects[process.cwd()]&&j.projects[process.cwd()].mcpServers&&j.projects[process.cwd()].mcpServers.review?0:1)}catch(e){process.exit(1)}' 2>/dev/null; then
+    command claude --dangerously-load-development-channels server:review "$@"
+  else
+    command claude "$@"
+  fi
+}
+${HOOK_END}`;
+const prefsFile = path.join(process.env.HOME || "", ".review-mode.json");
+const prefs = () => {
+  try {
+    return JSON.parse(fs.readFileSync(prefsFile, "utf8"));
+  } catch {
+    return {};
+  }
+};
+async function shellHook() {
+  const shell = path.basename(process.env.SHELL || "");
+  const rc = path.join(process.env.HOME || "", shell === "bash" ? ".bashrc" : ".zshrc");
+  if (!["zsh", "bash"].includes(shell)) return;
+  const text = fs.existsSync(rc) ? fs.readFileSync(rc, "utf8") : "";
+  const has = text.includes(HOOK_START);
+  if (has && text.includes(HOOK)) return; // in place and current
+  if (!has) {
+    if (NO_SHELL) return;
+    if (!SHELL_HOOK) {
+      if (prefs().shell === "no" || !process.stdin.isTTY) return;
+      const rl = (await import("node:readline/promises")).createInterface({ input: process.stdin, output: process.stdout });
+      const a = (await rl.question(`Make plain \`claude\` turn on "Send to Claude" by itself in this folder from now on? It adds a small claude function to ${rc.replace(process.env.HOME, "~")}. [Y/n] `)).trim().toLowerCase();
+      rl.close();
+      if (a === "n" || a === "no") {
+        fs.writeFileSync(prefsFile, JSON.stringify({ ...prefs(), shell: "no" }, null, 2));
+        console.log("Fine: start Claude with  npx --no review-mode claude  when you want the plane.");
+        return;
+      }
+    }
+  }
+  const out = has ? text.replace(new RegExp(`${HOOK_START.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?${HOOK_END.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), HOOK) : `${text.replace(/\n?$/, "\n")}\n${HOOK}\n`;
+  fs.writeFileSync(rc, out);
+  console.log(`${has ? "Updated" : "Added"} the claude helper in ${rc.replace(process.env.HOME, "~")}. Open a new terminal (or run: source ${rc.replace(process.env.HOME, "~")}), then plain \`claude\` in this folder has the plane on.`);
+}
 if (cmd === "claude") {
   /* ONE START COMMAND (Nirav, 2026-10-26: "they don't have to set up every time"): find the app (here, above, or in a
      folder below for a monorepo), register the review MCP server for this folder once (Claude Code's local scope: in
@@ -90,6 +138,10 @@ if (cmd === "claude") {
     }
     console.log(`Review tools registered for ${here} (your own Claude settings, nothing in the repo).`);
   } else if (SETUP_ONLY) console.log(`Review tools already registered for ${here}.`);
+  /* FULLY AUTOMATIC (Nirav, 2026-10-26): a small claude function in the shell; in a folder connected to Review mode it
+     starts Claude with push on, anywhere else exactly as before. Asked once (or --shell / --no-shell); kept between
+     markers so it is replaced, never doubled. */
+  await shellHook();
   if (SETUP_ONLY) process.exit(0);
   console.log(`Starting Claude with "Send to Claude" on (project ${loadConfig(app).project}). Claude Code shows a one-time warning for this preview feature: choose "I am using this for local development".`);
   const child = spawn("claude", ["--dangerously-load-development-channels", "server:review", ...args], { cwd: here, stdio: "inherit" });

@@ -85,6 +85,8 @@ folder without our package. The package also installs a `review-mode` command; e
 README) uses `npx --no review-mode …`, which fails safely instead of fetching. `npx --no review-mode claude` is the one
 start command: it finds the app (here, above, or below for a monorepo), registers the review MCP server once in the
 person's own Claude settings (local scope, REVIEW_ROOT), and starts Claude with push on; `--setup` only registers.
+The first run also offers (once, `--shell` / `--no-shell`) a small `claude` function in ~/.zshrc or ~/.bashrc, between
+markers: in a folder connected to Review mode plain `claude` gets the channel flag, elsewhere it is untouched.
 
 **Send to Claude** (2026-10-26): `npx --no review-mode mcp` (mcp/server.mjs, no dependencies, MCP over stdio) gives Claude Code the
 review_* tools and, as a channel, takes briefs on 127.0.0.1:47831-47840 (`/hello`, `/send`, `/status`). It answers only

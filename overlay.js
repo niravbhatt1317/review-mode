@@ -4919,7 +4919,7 @@ async function buildPrompt(list) {
   lines.push(`- Check: \`${cmd("list --open")}\`. If it lists comments, run \`npx --no review-mode init\` (refreshes the review skill) and \`npx --no review-mode claude --setup\` (registers the review tools for this folder, in my own Claude settings), then go on.`);
   lines.push(`- If it says review-mode is not found: tell me and ask "Set up Review mode here? It adds a dev dependency, review.config.json, .review/vite.config.js, a dev:review script, .gitignore lines and the review skill." On my yes: \`npm install --save-dev github:niravbhatt1317/review-mode\`, \`npx --no review-mode init${project.startsWith("_") ? "" : ` ${project}`}\`, \`npx --no review-mode claude --setup\`, check again, and go on. On my no, work from this brief alone and tell me the statuses to set by hand.`);
   lines.push("- Never run a bare `npx review`: on npm that name is an unrelated package. Always `npx --no review-mode`.");
-  lines.push("- Tell me once, at the end: next time, start Claude with `npx --no review-mode claude` instead of `claude`, and the drawer's plane sends comments straight to you.");
+  lines.push("- Tell me once, at the end: run `npx --no review-mode claude` once in a terminal here; after that, plain `claude` in this folder takes comments straight from the drawer's plane.");
   lines.push("- Then use the `review` skill (.claude/skills/review) for the rest.");
   lines.push("");
   lines.push("How to work through them:");
@@ -5123,8 +5123,8 @@ function showSheet(kind, o = {}) {
   };
   const n = o.count ? `${o.count} comment${o.count === 1 ? "" : "s"}` : "";
   const body = {
-    none: [ICON.warn, "Start Claude to send directly", `<p>In a terminal, in your project folder, start Claude with this instead of <code>claude</code>. The first time it connects Claude to this project; from then on the plane sends comments straight to it, and it works through them. Until then the brief is on your clipboard: paste it into any Claude chat.</p>${cmdBox(CHANNEL_HINT, true)}`],
-    intro: [`<span class="cs-intro">✦</span>`, "Connect Claude to this project", `<p>Start Claude with this, in a terminal in your project folder, instead of <code>claude</code>. Then the plane next to "Copy for Claude" sends comments straight to it, and Claude works through them for you. One command, nothing else to set up.</p>${cmdBox(CHANNEL_HINT)}<div class="cs-acts"><button type="button" class="cs-gotit">Got it</button></div>`],
+    none: [ICON.warn, "Start Claude to send directly", `<p>Run this once, in a terminal in your project folder. It connects Claude to this project and starts it; after that, plain <code>claude</code> in that folder has the plane on, every time. Until then the brief is on your clipboard: paste it into any Claude chat.</p>${cmdBox(CHANNEL_HINT, true)}`],
+    intro: [`<span class="cs-intro">✦</span>`, "Connect Claude to this project", `<p>Run this once, in a terminal in your project folder. From then on, plain <code>claude</code> there is connected: the plane next to "Copy for Claude" sends comments straight to it, and Claude works through them for you.</p>${cmdBox(CHANNEL_HINT)}<div class="cs-acts"><button type="button" class="cs-gotit">Got it</button></div>`],
     sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
     ok: [ICON.ok, `Claude has the ${o.count === 1 ? "comment" : "comments"}`, `<p class="cs-sub">${esc(o.label || "")} · it is starting on them</p>`],
     late: [ICON.warn, "Sent, but Claude has not confirmed", `<p>Look at that Claude session: it may be asking to allow the review tools, or still busy. If it shows nothing at all, it was not started with push on. The brief is on your clipboard too.</p>${cmdBox(CHANNEL_HINT)}`],
