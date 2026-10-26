@@ -456,7 +456,7 @@ root.innerHTML = `
   /* the lines are drawn in the plane's own space: from its two wing tips and the notch, along the line of flight */
   .send-clip .boost { overflow: visible; fill: none; stroke: #D97757; stroke-width: 2; stroke-linecap: round; opacity: 0; }
   .send-clip .boost path { stroke-dasharray: 1; stroke-dashoffset: 1; }
-  .send-clip .logo-send, .send-clip .boost { position: relative; left: -1px; top: 0.5px; } /* its weight leans up-right: this sits it in the middle */
+  .send-clip .logo-send, .send-clip .boost { position: relative; left: -0.5px; top: 0.5px; } /* its weight leans up-right: this sits it in the middle */
   .panel-copy.busy .logo-send { animation: rv-lift .35s cubic-bezier(.3,1.4,.5,1) forwards, rv-bob .5s ease-in-out .35s infinite alternate; }
   .panel-copy.busy .boost { opacity: 1; animation: rv-lift .35s cubic-bezier(.3,1.4,.5,1) forwards, rv-bob .5s ease-in-out .35s infinite alternate; } /* the lines go up with it */
   .panel-copy.busy .boost path { animation: rv-boost .42s linear infinite; }
