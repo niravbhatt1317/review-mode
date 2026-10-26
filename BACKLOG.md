@@ -133,7 +133,43 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   extension once, then a button sends the selected comments straight in; Claude adds them as its tasks, works through
   them, moves their statuses. Choose which session when several are open. Needs a small local bridge (the extension
   cannot talk to a Claude Code session directly); research the options first.
-- [ ] **Claude's own ideas for the extension**: a written list of directions to make it better, for Nirav to pick from.
+- [x] **Claude's own ideas for the extension** (written 2026-10-26: the list below, for Nirav to pick from).
+
+## Ideas from Claude (2026-10-26, to pick from)
+
+Effort: S a day or less, M a few days, L a week or more.
+
+**Faster, surer fixes**
+- [ ] **Source on every comment** (M): when a comment is made, also keep the React component's name and its source
+  file and line (React's dev build knows them). Claude opens the exact file at once instead of searching by text; the
+  card can show "AgentTable.jsx:212".
+- [ ] **Before and after** (M): when Claude marks a comment done, the dev server takes the same picture again (same
+  page, same element, same window size). The approver sees a before/after slider on the card and approves from it.
+- [ ] **"Maybe fixed?"** (S): a comment whose element no longer exists or no longer matches its words is marked
+  "maybe fixed" for the approver, instead of a ghost pin.
+- [ ] **Claude drafts first** (M): with Claude connected, each new comment gets a short "Claude suggests…" on its card
+  (the likely file and the change, or an answer to a question) for a person to accept, edit or ignore.
+
+**Better comments**
+- [ ] **Design-token check** (S): on a colour, spacing or type comment, the card shows the element's computed value
+  next to the nearest design-system token ("#6b7280, looks like neutral-60"), so the fix starts from the rulebook.
+- [ ] **Accessibility on the spot** (S): contrast ratio, missing label or focus problems of the picked element,
+  attached to the comment automatically.
+- [ ] **Short recordings** (L): a 10-second screen clip on a comment, for animations and flows a still picture misses.
+- [ ] **Same thing twice** (S): while typing, "#12 on this element already says something like this", to link
+  instead of duplicating.
+
+**Running a review**
+- [ ] **Review rounds** (M): name a round ("Sprint 14, IAM"), see its progress, and close it with a one-page summary
+  (what was raised, fixed, answered, left), ready for Teams or Loop.
+- [ ] **A daily digest** (S, after notices): what waits for you, what came back, who is on what, in the drawer each
+  morning.
+- [ ] **Turn fixes into rules** (M): when the same kind of fix repeats (three "use the token" fixes), Claude proposes a
+  rulebook line or a lint check so it stops coming back.
+- [ ] **Numbers** (S): time from raised to approved, sent-back rate, per page and per person, on the full page.
+
+Claude's pick: source on every comment, before and after, and "maybe fixed?". Together they make Claude faster and
+the approver surer, which is where most of the time goes.
 
 ## Parked
 
