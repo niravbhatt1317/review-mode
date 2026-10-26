@@ -182,7 +182,8 @@ export function applyChange(c, body, who) {
 }
 /* who is who: ids in the data (git handles) shown as people; `people` maps handle -> name. Unknown ones show as is. */
 export function withNames(c, people = {}) {
-  const name = (id) => (id && (typeof people[id] === "string" ? people[id] : people[id]?.name)) || id;
+  const find = (id) => people[id] ?? people[Object.keys(people).find((k) => k.toLowerCase() === String(id).toLowerCase())]; // any case
+  const name = (id) => (id && (typeof find(id) === "string" ? find(id) : find(id)?.name)) || id;
   const out = { ...c, by: name(c.by), assignee: name(c.assignee), doneBy: name(c.doneBy), approvedBy: name(c.approvedBy) };
   if (c.note) out.note = { ...c.note, by: name(c.note.by), ...(c.note.toWho ? { toWho: name(c.note.toWho) } : {}) };
   if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by), ...(h.toWho ? { toWho: name(h.toWho) } : {}) }));
@@ -192,7 +193,13 @@ export function withNames(c, people = {}) {
 export function mergePeople(teamMap = {}, hubPeople = {}) {
   const out = {};
   for (const [h, p] of Object.entries(hubPeople)) out[h] = { name: String(p.name || h).split(/\s+/)[0], avatar: p.avatar || null };
-  for (const [h, n] of Object.entries(teamMap)) out[h] = { name: n, avatar: out[h]?.avatar || null };
+  /* the team's chosen names win, matched in any case (Nikhil482008 is nikhil482008 in the team's list, 2026-10-26) */
+  for (const [h, n] of Object.entries(teamMap)) {
+    const twins = Object.keys(out).filter((k) => k.toLowerCase() === h.toLowerCase());
+    const avatar = twins.map((k) => out[k].avatar).find(Boolean) || out[h]?.avatar || null;
+    out[h] = { name: n, avatar };
+    for (const k of twins) out[k] = { name: n, avatar };
+  }
   return out;
 }
 /* the pictures of the people on a comment, keyed by the name shown, for the cards and the pin card */
@@ -228,6 +235,7 @@ export function teamOf(people = {}, members = null) {
   return Object.entries(people)
     .filter(([h]) => !members || (members[lc(h)] && members[lc(h)] !== "waiting" && members[lc(h)] !== "refused"))
     .map(([handle, p]) => ({ handle, name: p.name, avatar: p.avatar || null }))
+    .filter((p, i, all) => all.findIndex((q) => q.handle.toLowerCase() === p.handle.toLowerCase()) === i) // case twins once
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 /* a data URL or base64 string to bytes */
