@@ -54,7 +54,8 @@ file map; read it next.
   with the channels flag, seen in the process tree, or it already acked a send or left a suggestion), and hands them to its Claude over the channel; Claude
   answers with `review_suggest` (`draft.state = "new"`). The card shows "Claude is looking at it…", then "Claude
   suggests" (or "Claude isn't sure" with its question back, Ignore only; Claude looks at the picture and asks rather
-  than guesses) with Accept (a fix: picked up with Claude and sent to Claude to do; a question: posted as Claude's
+  than guesses; the author, an approver or the person on it answers with Reply, `draft.state = "reply"` with
+  `draft.thread` [{q, a}], and the next session drafts again with the talk, answered ones first) with Accept (a fix: picked up with Claude and sent to Claude to do; a question: posted as Claude's
   answer) and Ignore. Picked up the usual way, it stays only for the person on it: "Let Claude do it" (sends it,
   marks the card with Claude, no second pick-up) or Ignore. Gone once For approval. Data only for the hub's rules. Off: `"drafts": false` in
   review.config.json or `REVIEW_DRAFTS=0`.
@@ -135,6 +136,9 @@ Defaults: the team's list opens on New + In progress, the approver's on For appr
 
 - `node pack.mjs` bumps the patch version and writes `dist/review-mode-<v>.zip` (Chrome) and `-firefox.zip`.
   `--no-bump` keeps the version (the tag workflow uses it).
+- **Links** (the owner asks for them every release): Firefox, https://addons.mozilla.org/en-US/developers/addons
+  (My Add-ons, then Review mode, then "Upload New Version"); Chrome, https://chrome.google.com/webstore/devconsole
+  (the item, then Package, then "Upload new package").
 - **Firefox**: the owner uploads the Firefox zip on the Mozilla Developer Hub (add-on `review-mode@heynirav`,
   unlisted, no source code) and downloads the signed xpi to `~/Downloads`; then `node firefox-release.mjs <xpi>`,
   commit `manifest*.json`, `package.json`, `docs/firefox/`, push. Installed copies update themselves within a day.

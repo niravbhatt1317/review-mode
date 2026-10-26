@@ -15,7 +15,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { loadConfig } from "../collector/config.js";
 import { storeFor, prepare } from "../collector/stores.js";
-import { withNames, applyChange, mergePeople, DRAFT_CLAIM_MS } from "../hub-core.js";
+import { withNames, applyChange, mergePeople, draftOpen } from "../hub-core.js";
 
 /* REVIEW_ROOT: the app's folder when Claude starts higher up (a monorepo root); else where Claude started */
 const ROOT = process.env.REVIEW_ROOT ? path.resolve(process.env.REVIEW_ROOT) : process.cwd();
@@ -95,11 +95,11 @@ async function call(name, a = {}) {
     return file;
   }
   if (name === "review_suggest") {
-    if (c.draft && c.draft.state !== "drafting") return `#${(await numbered(c.id))?.n} already has a suggestion: nothing to do`;
-    if (c.status !== "open") return `#${(await numbered(c.id))?.n} is already being worked: no suggestion needed`;
+    if (c.draft && c.draft.state !== "drafting" && c.draft.state !== "reply") return `#${(await numbered(c.id))?.n} already has a suggestion: nothing to do`;
+    if (c.status !== "open" && !(c.status === "progress" && c.draft?.thread?.length)) return `#${(await numbered(c.id))?.n} is already being worked: no suggestion needed`;
     applyChange(c, { draft: { text: String(a.text || ""), unsure: a.unsure === true } }, who);
     await store.put(c);
-    drafted.add(c.id);
+    drafted.add(`${c.id}:${c.draft?.thread?.length || 0}`);
     heard = true;
     return `Suggestion left on #${(await numbered(c.id))?.n}; the person accepts or ignores it in the drawer.`;
   }
@@ -144,18 +144,21 @@ async function draftRound() {
   if (!ready || !cfg.drafts || !canHear()) return;
   try {
     const all = prepare(await store.list());
-    const fresh = all.filter((c) => c.status === "open" && Date.now() - (c.ts || 0) < DRAFT_WINDOW && !drafted.has(c.id) && (!c.draft || (c.draft.state === "drafting" && Date.now() - (c.draft.at || 0) > DRAFT_CLAIM_MS)));
-    const pick = fresh.slice(-DRAFT_BATCH); // the newest first to be seen
+    const turn = (c) => `${c.id}:${c.draft?.thread?.length || 0}`; // a new answer from the person is a new turn
+    const fresh = all.filter((c) => (c.status === "open" || (c.status === "progress" && c.draft?.state === "reply")) && Date.now() - (c.ts || 0) < DRAFT_WINDOW && !drafted.has(turn(c)) && draftOpen(c.draft));
+    /* answers to Claude's questions first (someone is waiting on the card), then the newest */
+    const pick = [...fresh.filter((c) => c.draft?.state === "reply"), ...fresh.filter((c) => c.draft?.state !== "reply").reverse()].slice(0, DRAFT_BATCH);
     if (!pick.length) return;
     const lines = [];
     for (const c of pick) {
       const full = await store.get(c.id);
-      if (!full || (full.draft && !(full.draft.state === "drafting" && Date.now() - (full.draft.at || 0) > DRAFT_CLAIM_MS))) continue;
+      if (!full || !draftOpen(full.draft)) continue;
       applyChange(full, { draft: "drafting" }, defaultAs);
       await store.put(full);
-      drafted.add(c.id);
+      drafted.add(turn(full));
       const src = full.source?.file ? ` · code: ${full.source.file}${full.source.line ? `:${full.source.line}` : ""}${full.source.component ? ` (${full.source.component})` : ""}` : "";
-      lines.push(`#${c.n} ${c.id} ${kind(full.severity)}: "${full.text}" · ${full.pageTitle || full.route}${src}`);
+      const talk = (full.draft?.thread || []).map((t) => `\n    you asked: "${t.q}"\n    ${t.by || "they"} answered: "${t.a}"`).join("");
+      lines.push(`#${c.n} ${c.id} ${kind(full.severity)}: "${full.text}" · ${full.pageTitle || full.route}${src}${talk}`);
     }
     if (!lines.length) return;
     const text = [
@@ -165,6 +168,7 @@ async function draftRound() {
       `sentences: for a fix, what you would change and where (file and line); for a question, the answer.`,
       `Not sure what is meant, or no clear change in the code? Set unsure and ask, in one sentence, what you would need`,
       `to know. A wrong suggestion said with confidence is worse than none.`,
+      `Where you asked before and the person answered, draft again with their answer.`,
       `Draft only: change no code and no status. Then carry on with whatever you were doing.`,
       ``,
       ...lines,

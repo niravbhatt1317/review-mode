@@ -8,6 +8,8 @@ export const STATUSES = ["open", "progress", "approval", "approved"];
 const BUCKET = "review-shots";
 export const RETENTION_DAYS = 14;
 export const DRAFT_CLAIM_MS = 10 * 60 * 1000; // a session's claim on drafting a comment, before another may try
+/* a comment a session may (re)draft: none yet, an answer to Claude's question waiting, or a claim that lapsed */
+export const draftOpen = (d) => !d || d.state === "reply" || (d.state === "drafting" && Date.now() - (d.at || 0) > DRAFT_CLAIM_MS);
 
 /* sentence case: the first letter capital, the rest as typed (Nirav, 2026-10-19) */
 export const sentence = (t) => {
@@ -123,12 +125,17 @@ export function applyChange(c, body, who) {
      and leaves a short suggestion on it; a person accepts it (a fix: picked up with Claude; a question: posted as the
      answer) or ignores it. "drafting" is the session's claim, so two sessions do not both work on one comment; it
      lapses after DRAFT_CLAIM_MS when nothing came. Data only: the hub's rules see no move until someone accepts. */
+  /* "Claude isn't sure" (Nirav, 2026-10-26): Claude's question back is answered on the card ("reply", waiting for a
+     session); the next session drafts again with the talk so far (thread: each question and its answer) */
+  const thread = c.draft?.thread?.length ? { thread: c.draft.thread } : {};
   if (body.draft === "drafting") {
-    if (!c.draft || (c.draft.state === "drafting" && Date.now() - (c.draft.at || 0) > DRAFT_CLAIM_MS)) c.draft = { state: "drafting", at: Date.now(), by: who };
+    if (draftOpen(c.draft)) c.draft = { state: "drafting", at: Date.now(), by: who, ...thread };
   } else if (body.draft && typeof body.draft.text === "string" && body.draft.text.trim()) {
     const isQ = c.severity === "question" || c.severity === "idea";
-    c.draft = { state: "new", text: body.draft.text.trim().slice(0, 600), kind: isQ ? "answer" : "fix", at: Date.now(), by: who, via: "claude", ...(body.draft.unsure === true ? { unsure: true } : {}) };
+    c.draft = { state: "new", text: body.draft.text.trim().slice(0, 600), kind: isQ ? "answer" : "fix", at: Date.now(), by: who, via: "claude", ...(body.draft.unsure === true ? { unsure: true } : {}), ...thread };
   }
+  const answer = typeof body.draftReply === "string" ? body.draftReply.trim().slice(0, 600) : "";
+  if (answer && c.draft?.state === "new" && c.draft.unsure) c.draft = { state: "reply", at: Date.now(), by: who, thread: [...(c.draft.thread || []), { q: c.draft.text, a: answer, by: who, at: Date.now() }] };
   if ((body.draftState === "accepted" || body.draftState === "ignored") && c.draft?.state === "new") Object.assign(c.draft, { state: body.draftState, decidedBy: who, decidedAt: Date.now() });
   if (body.withClaude === true && c.status === "progress") c.withClaude = true; // the person on it handed the work to Claude too
   const reply = typeof body.reply === "string" ? body.reply.trim().slice(0, 1200) : "";

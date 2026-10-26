@@ -28,7 +28,8 @@ gives; it adds review.config.json, .review/vite.config.js, a dev:review script, 
 drawer ("Send to Claude") arrives as `<channel source="review" delivery_id="...">`: call `review_ack` with that id
 first, then follow it. A request to draft (`kind="draft"`, "Claude drafts first") asks only for `review_suggest` on each
 comment listed: look at its picture (`review_picture`) and read its code, leave one or two plain sentences (a fix:
-what to change and where; a question: the answer; not sure what is meant: `unsure` and one question back), change
+what to change and where; a question: the answer; not sure what is meant: `unsure` and one question back; where the request shows "you asked … they
+answered …", draft again with that answer), change
 nothing else, then carry on with what you were doing. A brief line "Do this (your suggestion,
 accepted…)" is the plan the person agreed to: do that. Sending needs Claude started with `npx --no review-mode claude` once (it registers the tools, offers a shell helper so
 plain `claude` turns push on in this folder from then on, and starts Claude;

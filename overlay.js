@@ -1009,6 +1009,16 @@ root.innerHTML = `
   .card-draft .dr-ignore { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); }
   .card-draft .dr-ignore:hover { color: var(--rv-ink); border-color: hsl(var(--rv-n70)); }
   .card-draft button.loading { opacity: .6; pointer-events: none; }
+  .card-draft .dr-reply { border: 0; background: #D97757; color: #fff; }
+  .card-draft .dr-reply:hover { background: #C6613F; }
+  .card-draft .dr-ask { display: flex; align-items: center; gap: 6px; margin: 8px 0 0 22px; }
+  .card-draft .dr-in { flex: 1; min-width: 0; height: 28px; padding: 0 9px; border: 1px solid var(--rv-line-2); border-radius: 6px; background: var(--rv-surface); color: var(--rv-ink); font: 12px/1.3 -apple-system, system-ui, sans-serif; outline: none; }
+  .card-draft .dr-in:focus { border-color: #D97757; box-shadow: 0 0 0 3px color-mix(in srgb, #D97757 18%, transparent); }
+  .card-draft .dr-ask button { height: 28px; padding: 0 11px; border-radius: 6px; font: 500 11.5px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .card-draft .dr-send { border: 0; background: #D97757; color: #fff; }
+  .card-draft .dr-send:hover { background: #C6613F; }
+  .card-draft .dr-cancel { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); }
+  .card-draft .dr-wait { margin: 5px 0 0 22px; font-size: 11px; color: var(--rv-ink-3); }
   .card-note { margin-top: 8px; padding: 6px 10px;  font-size: 12px; line-height: 1.4; color: var(--rv-ink); background: hsl(var(--rv-warn-bg) / .55); border-radius: 8px; border-left: 2px solid hsl(var(--rv-warn-ink) / .5); /* a curved border: it follows the 8 px corners */ white-space: pre-wrap; overflow-wrap: anywhere; }
   .card-note .nt-head, .tip-note .nt-head { color: var(--rv-ink-2); }
   .card-note .nt-head b { font-weight: 500; font-size: 11px; color: var(--rv-ink); }
@@ -4069,15 +4079,23 @@ const myName = (x) => !!x && (isMe(x) || (!!state.hub?.handle && String(x).toLow
 const draftShown = (c) => {
   const d = c.draft;
   if (!d) return false;
-  if (c.status === "open") return d.state === "new" || (d.state === "drafting" && Date.now() - (d.at || 0) < DRAFT_LIVE_MS);
-  return c.status === "progress" && d.state === "new" && d.kind === "fix" && myName(c.assignee);
+  const fresh = d.state === "drafting" && Date.now() - (d.at || 0) < DRAFT_LIVE_MS;
+  if (c.status === "open") return d.state === "new" || d.state === "reply" || fresh;
+  return c.status === "progress" && myName(c.assignee) && ((d.state === "new" && d.kind === "fix") || d.state === "reply" || (fresh && !!d.thread?.length));
 };
 function draftHtml(c) {
   const d = c.draft;
-  if (d.state === "drafting") return `<div class="dr-head">${CLAUDE_AV()}<span class="dr-busy">Claude is looking at it…</span></div>`;
+  if (d.state === "drafting") return `<div class="dr-head">${CLAUDE_AV()}<span class="dr-busy">Claude is looking at it${d.thread?.length ? " again" : ""}…</span></div>`;
   const working = c.status === "progress"; // shown only to the person on it (draftShown)
-  /* not sure what was meant: Claude's question back, nothing to accept */
-  if (d.unsure) return `<div class="dr-head">${CLAUDE_AV()}<b>Claude isn't sure</b></div><div class="dr-text"></div>${working || isMe(c.by) || isApprover() ? `<div class="dr-acts"><button type="button" class="dr-ignore">Ignore</button></div>` : ""}`;
+  const talks = working || isMe(c.by) || isApprover(); // who answers Claude or sets its words aside
+  /* the person answered Claude's question: waiting for a session to draft again */
+  if (d.state === "reply") {
+    const last = d.thread[d.thread.length - 1];
+    const mine = myName(last.by);
+    return `<div class="dr-head">${CLAUDE_AV()}<b>${mine ? "You" : esc(last.by || "Someone")} answered Claude</b></div><div class="dr-text"></div><div class="dr-wait">Claude drafts again with ${mine ? "your" : "this"} answer</div>`;
+  }
+  /* not sure what was meant: Claude's question back, answered right here (Reply) or set aside; nothing to accept */
+  if (d.unsure) return `<div class="dr-head">${CLAUDE_AV()}<b>Claude isn't sure</b></div><div class="dr-text"></div>${talks ? `<div class="dr-acts"><button type="button" class="dr-reply">Reply</button><button type="button" class="dr-ignore">Ignore</button></div>` : ""}`;
   const ok = working || (d.kind === "answer" ? can("answer", c) : can("pick_up", c));
   const no = working || isMe(c.by) || isApprover();
   const label = working ? "Let Claude do it" : d.kind === "answer" ? "Post answer" : "Accept";
@@ -4097,7 +4115,7 @@ function draftSync(card, c) {
   box.dataset.state = c.draft.state;
   box.innerHTML = draftHtml(c);
   const t = box.querySelector(".dr-text");
-  if (t) t.textContent = c.draft.text;
+  if (t) t.textContent = c.draft.state === "reply" ? c.draft.thread[c.draft.thread.length - 1].a : c.draft.text;
 }
 /* READ MORE (Nirav, 2026-10-26): a long comment (often pasted), Claude's suggestion or a long note shows three lines,
    cut at a word's middle with "…" and "Read more" at the end of the third line; "Read less" sits after the last word
@@ -4878,6 +4896,38 @@ panelBody.addEventListener("click", async (e) => {
   if (!card) return;
   const c = state.comments.find((x) => x.id === card.dataset.id) || state.done.find((x) => x.id === card.dataset.id);
   if (!c) return;
+  if (e.target.closest(".dr-reply")) {
+    const acts = e.target.closest(".dr-acts");
+    acts.outerHTML = `<div class="dr-ask"><input class="dr-in" type="text" maxlength="600" placeholder="Answer Claude…" aria-label="Answer Claude"><button type="button" class="dr-send">Send</button><button type="button" class="dr-cancel" aria-label="Cancel">Cancel</button></div>`;
+    const box = card.querySelector(".card-draft");
+    const input = box.querySelector(".dr-in");
+    const send = async () => {
+      const words = input.value.trim();
+      if (!words) return input.focus();
+      if (await applyUpdate({ id: c.id, draftReply: words }, box.querySelector(".dr-send"))) toast(`#${c.n}: answered, Claude drafts again`);
+    };
+    input.addEventListener("keydown", (ev) => {
+      ev.stopPropagation();
+      if (ev.key === "Enter") send();
+      if (ev.key === "Escape") {
+        delete box.dataset.key;
+        draftSync(card, c);
+      }
+    });
+    box.querySelector(".dr-send").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      send();
+    });
+    box.querySelector(".dr-cancel").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      delete box.dataset.key;
+      draftSync(card, c);
+      clampCard(card);
+    });
+    input.focus();
+    return;
+  }
+  if (e.target.closest(".dr-ask")) return; // typing an answer: the card stays as it is
   if (e.target.closest(".dr-ignore")) {
     await applyUpdate({ id: c.id, draftState: "ignored" }, e.target.closest("button"));
     return;
@@ -5355,6 +5405,7 @@ async function buildPrompt(list) {
       }
       lines.push(`- Where: ${c.pageTitle || c.route} · ${c.context || "Page"} · route ${c.route}`);
       if (c.element) lines.push(`- Element: ${c.element}`);
+      if (c.draft?.state === "accepted" && c.draft.thread?.length) lines.push(`- Talked over first: ${c.draft.thread.map((t) => `you asked "${t.q}", ${myName(t.by) ? "they" : t.by || "they"} answered "${t.a}"`).join("; ")}`);
       if (c.draft?.state === "accepted" && c.draft.kind === "fix") lines.push(`- Do this (your suggestion, accepted by ${isMe(c.draft.decidedBy) || (state.hub?.handle && c.draft.decidedBy?.toLowerCase() === state.hub.handle.toLowerCase()) ? "you" : c.draft.decidedBy || "the team"}): ${c.draft.text}`);
       if (maybe.has(c.id)) lines.push(`- Maybe fixed already: ${maybeTip(c).replace(/ Compare with the picture\.$/, "")} Check before changing anything.`);
       if (c.source) lines.push(`- Code: ${srcLong(c.source)}${c.source.how === "stamp" ? "" : " (from the framework)"}`);
