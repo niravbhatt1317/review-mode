@@ -4847,6 +4847,12 @@ async function buildPrompt(list) {
   lines.push("");
   lines.push(`The app runs at ${location.origin}${EXT ? "" : " (the dev server)"}. Each comment points at one thing on one page; its picture shows the page as it was seen, with a red box round the element and the comment's number beside it. Open the pictures with Read.${me ? ` You act as ${me}: every command below says so.` : ""}`);
   lines.push("");
+  /* STEP 0 (2026-10-26): the project may not have Review mode yet; Claude checks, asks, sets it up, then works */
+  lines.push("Step 0, before anything else: make sure this project has Review mode.");
+  lines.push(`- Check: \`${cmd("list --open")}\`. If it lists comments, run \`npx review init\` once (it refreshes the review skill to the latest, nothing else changes), then go on.`);
+  lines.push(`- If \`npx review\` is not found: tell me it is missing and ask "Set up Review mode here? It adds a dev dependency, review.config.json, .review/vite.config.js, a dev:review script, .gitignore lines and the review skill." On my yes, run \`npm install --save-dev github:niravbhatt1317/review-mode\`, then \`npx review init${project.startsWith("_") ? "" : ` ${project}`}\`, check again, and go on. On my no, work from this brief alone and tell me the statuses to set by hand.`);
+  lines.push("- Then use the `review` skill (.claude/skills/review) for the rest.");
+  lines.push("");
   lines.push("How to work through them:");
   lines.push(`1. Read every comment and its picture first${EXT ? " (each Picture line is a curl command: run it, then open the saved file)" : ""}. Group the ones that share a cause (the same component, rule or copy pattern) and tell me the groups before changing anything. Leave a comment someone else is working on (its "Who has it" line names them).`);
   lines.push(`2. A comment with a "Sent back" note came back from approval: do what the note says first.`);

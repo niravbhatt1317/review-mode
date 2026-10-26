@@ -13,6 +13,13 @@ Review mode is an overlay on the project's UI. A reviewer ⌥-clicks anything, w
 - Pictures named in a brief (`- Picture: .review/sessions/<project>/export/NN-<id>.png`) are files: read them with the Read tool to see what the comment is about. A brief made elsewhere gives a `curl` line per picture instead: run it, then read the file.
 - With the dev server running in review mode (`npm run dev:review`, the port from `review.config.json`, default 4178), the collector answers on `http://localhost:<port>/__review/…`.
 
+## Setting up (once per project)
+
+If `npx review` is not found, the project has no Review mode yet. Ask first (it changes the project), then:
+`npm install --save-dev github:niravbhatt1317/review-mode` and `npx review init <project>` (the project name the brief
+gives; it adds review.config.json, .review/vite.config.js, a dev:review script, .gitignore lines and this skill).
+`npx review init` again later only refreshes this skill to the latest.
+
 ## Commands
 
 From any folder of the project (no dev server needed). Always add `--as <their GitHub handle>` (the brief gives it;
