@@ -138,6 +138,10 @@ export function applyChange(c, body, who) {
   if (answer && c.draft?.state === "new" && c.draft.unsure) c.draft = { state: "reply", at: Date.now(), by: who, thread: [...(c.draft.thread || []), { q: c.draft.text, a: answer, by: who, at: Date.now() }] };
   if ((body.draftState === "accepted" || body.draftState === "ignored") && c.draft?.state === "new") Object.assign(c.draft, { state: body.draftState, decidedBy: who, decidedAt: Date.now() });
   if (body.withClaude === true && c.status === "progress") c.withClaude = true; // the person on it handed the work to Claude too
+  /* Claude taking a fix (a pick-up made with Claude, or handed to Claude) uses its suggestion: it leaves the card, so
+     "Let Claude do it" is never offered for work Claude already has (Nirav, 2026-10-26) */
+  const claudeTakes = (body.via === "claude" && body.status === "progress") || body.withClaude === true;
+  if (claudeTakes && c.draft?.state === "new" && c.draft.kind === "fix") Object.assign(c.draft, { state: "accepted", decidedBy: who, decidedAt: Date.now() });
   const reply = typeof body.reply === "string" ? body.reply.trim().slice(0, 1200) : "";
   if (reply) {
     const at = Date.now();

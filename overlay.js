@@ -4081,6 +4081,7 @@ const draftShown = (c) => {
   if (!d) return false;
   const fresh = d.state === "drafting" && Date.now() - (d.at || 0) < DRAFT_LIVE_MS;
   if (c.status === "open") return d.state === "new" || d.state === "reply" || fresh;
+  if (c.status === "progress" && c.withClaude) return false; // Claude already has the work
   return c.status === "progress" && myName(c.assignee) && ((d.state === "new" && d.kind === "fix") || d.state === "reply" || (fresh && !!d.thread?.length));
 };
 function draftHtml(c) {
