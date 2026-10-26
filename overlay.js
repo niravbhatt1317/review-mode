@@ -448,17 +448,31 @@ root.innerHTML = `
   .panel-copy[data-kind="prompt"], .panel-copy[data-kind="send"] { --ring: #D97757; }
   /* the plane: flies off and back in while sending, a tick once Claude has it (Nirav, 2026-10-26) */
   .panel-copy[data-kind="send"] .ring { display: none !important; }
-  .send-clip { position: relative; display: grid; place-items: center; width: 18px; height: 18px; overflow: hidden; }
+  .send-clip { position: relative; display: grid; place-items: center; width: 24px; height: 24px; margin: -3px; overflow: hidden; border-radius: 6px; } /* room to lift without clipping its nose */
   .send-clip svg { grid-area: 1 / 1; }
   .panel-copy .logo-send { color: hsl(var(--rv-n70)); transition: color .12s, opacity .2s; }
   .panel-copy:hover .logo-send, .panel-copy.busy .logo-send { color: #D97757; }
-  .panel-copy.busy .logo-send { animation: rv-fly 1.1s cubic-bezier(.5,0,.5,1) infinite; }
-  @keyframes rv-fly { 0% { transform: none; opacity: 1; } 45% { transform: translate(14px, -14px) scale(.7); opacity: 0; } 50% { transform: translate(-14px, 14px) scale(.7); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  /* flying: the plane bobs with three booster lines streaming behind it; sent: it shoots off, the lines stretch, a tick */
+  .send-clip .boost { position: absolute; left: 3px; top: 3px; fill: none; stroke: #D97757; stroke-width: 1.6; stroke-linecap: round; opacity: 0; }
+  .send-clip .boost path { stroke-dasharray: 5; stroke-dashoffset: 5; }
+  .panel-copy.busy .logo-send { animation: rv-lift .35s cubic-bezier(.3,1.4,.5,1) forwards, rv-bob .5s ease-in-out .35s infinite alternate; }
+  .panel-copy.busy .boost { opacity: 1; animation: rv-lift .35s cubic-bezier(.3,1.4,.5,1) forwards, rv-bob .5s ease-in-out .35s infinite alternate; } /* the lines go up with it */
+  .panel-copy.busy .boost path { animation: rv-boost .42s linear infinite; }
+  .panel-copy.busy .boost path:nth-child(2) { animation-delay: .14s; }
+  .panel-copy.busy .boost path:nth-child(3) { animation-delay: .28s; }
+  @keyframes rv-lift { from { transform: none; } to { transform: translate(1.5px, -1.5px); } } /* takes off: up and to the right */
+  @keyframes rv-bob { from { transform: translate(1px, -1px); } to { transform: translate(2px, -2px); } }
+  @keyframes rv-boost { 0% { stroke-dashoffset: 5; opacity: 0; } 25% { opacity: 1; } 100% { stroke-dashoffset: -5; opacity: 0; } } /* each line streams out behind, in turn */
+  .panel-copy.sent .logo-send { animation: rv-away .38s cubic-bezier(.5,0,.9,.5) forwards; }
+  .panel-copy.sent .logo-send { color: #D97757; } /* stays orange as it leaves */
+  .panel-copy.sent .boost { opacity: 1; animation: rv-away-trail .38s ease-out forwards; }
+  .panel-copy.sent .boost path { stroke-dashoffset: 0; animation: none; } /* the lines streak out with it */
+  @keyframes rv-away { 0% { transform: translate(2px, -2px); opacity: 1; } 100% { transform: translate(18px, -18px) scale(.6); opacity: 0; } } /* flies away from where it hovered */
+  @keyframes rv-away-trail { 0% { transform: translate(2px, -2px); opacity: 1; } 60% { transform: translate(9px, -9px) scale(1.35); opacity: .8; } 100% { transform: translate(15px, -15px); opacity: 0; } }
   .sent-tick { color: var(--rv-st-done-dot); opacity: 0; }
   .sent-tick path { stroke-dasharray: 1; stroke-dashoffset: 1; }
-  .panel-copy.sent .logo-send { opacity: 0; }
-  .panel-copy.sent .sent-tick { opacity: 1; }
-  .panel-copy.sent .sent-tick path { animation: rv-tick-draw .35s cubic-bezier(.4,0,.2,1) forwards; }
+  .panel-copy.sent .sent-tick { opacity: 1; transition: opacity .1s .3s; }
+  .panel-copy.sent .sent-tick path { animation: rv-tick-draw .35s cubic-bezier(.4,0,.2,1) .34s forwards; }
   /* the send sheet, under the head */
   .claude-sheet { flex: 0 0 auto; display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s cubic-bezier(.22,1,.36,1); }
   .claude-sheet.on { grid-template-rows: 1fr; }
@@ -5080,7 +5094,7 @@ async function copyOut(kind, btn) {
 /* SEND TO CLAUDE (2026-10-26): the brief goes straight into an open Claude Code session (the review MCP server,
    mcp/server.mjs, started with channels on); one session is sent to at once, several bring a small picker; no session,
    or one not listening, falls back to the copy */
-$('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><span class="send-clip"><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="sent-tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/></svg></span><span class="scope-tip">Send to Claude</span></button>`);
+$('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><span class="send-clip"><svg class="boost" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3.5 11.5 L1 14" /><path d="M6 13.2 L3.2 16" /><path d="M2 9.2 L0 11.2" /></svg><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="sent-tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/></svg></span><span class="scope-tip">Send to Claude</span></button>`);
 const CHANNEL_HINT = "claude --dangerously-load-development-channels server:review";
 /* THE SEND SHEET (Nirav, 2026-10-26: "better, a copy icon, inside the drawer"): a small panel under the head that says
    where a send stands, with the start command to copy when Claude is not listening */
