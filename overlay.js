@@ -453,8 +453,10 @@ root.innerHTML = `
   .panel-copy .logo-send { color: hsl(var(--rv-n70)); transition: color .12s, opacity .2s; }
   .panel-copy:hover .logo-send, .panel-copy.busy .logo-send { color: #D97757; }
   /* flying: the plane bobs with three booster lines streaming behind it; sent: it shoots off, the lines stretch, a tick */
-  .send-clip .boost { position: absolute; left: 3px; top: 3px; fill: none; stroke: #D97757; stroke-width: 1.6; stroke-linecap: round; opacity: 0; }
-  .send-clip .boost path { stroke-dasharray: 5; stroke-dashoffset: 5; }
+  /* the lines are drawn in the plane's own space: from its two wing tips and the notch, along the line of flight */
+  .send-clip .boost { overflow: visible; fill: none; stroke: #D97757; stroke-width: 2; stroke-linecap: round; opacity: 0; }
+  .send-clip .boost path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .send-clip .logo-send, .send-clip .boost { position: relative; left: -1px; top: 1px; } /* its weight leans up-right: this sits it in the middle */
   .panel-copy.busy .logo-send { animation: rv-lift .35s cubic-bezier(.3,1.4,.5,1) forwards, rv-bob .5s ease-in-out .35s infinite alternate; }
   .panel-copy.busy .boost { opacity: 1; animation: rv-lift .35s cubic-bezier(.3,1.4,.5,1) forwards, rv-bob .5s ease-in-out .35s infinite alternate; } /* the lines go up with it */
   .panel-copy.busy .boost path { animation: rv-boost .42s linear infinite; }
@@ -462,7 +464,7 @@ root.innerHTML = `
   .panel-copy.busy .boost path:nth-child(3) { animation-delay: .28s; }
   @keyframes rv-lift { from { transform: none; } to { transform: translate(1.5px, -1.5px); } } /* takes off: up and to the right */
   @keyframes rv-bob { from { transform: translate(1px, -1px); } to { transform: translate(2px, -2px); } }
-  @keyframes rv-boost { 0% { stroke-dashoffset: 5; opacity: 0; } 25% { opacity: 1; } 100% { stroke-dashoffset: -5; opacity: 0; } } /* each line streams out behind, in turn */
+  @keyframes rv-boost { 0% { stroke-dashoffset: 1; opacity: 0; } 25% { opacity: 1; } 100% { stroke-dashoffset: -1; opacity: 0; } } /* each line streams out behind, in turn */
   .panel-copy.sent .logo-send { animation: rv-away .38s cubic-bezier(.5,0,.9,.5) forwards; }
   .panel-copy.sent .logo-send { color: #D97757; } /* stays orange as it leaves */
   .panel-copy.sent .boost { opacity: 1; animation: rv-away-trail .38s ease-out forwards; }
@@ -5094,7 +5096,7 @@ async function copyOut(kind, btn) {
 /* SEND TO CLAUDE (2026-10-26): the brief goes straight into an open Claude Code session (the review MCP server,
    mcp/server.mjs, started with channels on); one session is sent to at once, several bring a small picker; no session,
    or one not listening, falls back to the copy */
-$('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><span class="send-clip"><svg class="boost" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3.5 11.5 L1 14" /><path d="M6 13.2 L3.2 16" /><path d="M2 9.2 L0 11.2" /></svg><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="sent-tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/></svg></span><span class="scope-tip">Send to Claude</span></button>`);
+$('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><span class="send-clip"><svg class="boost" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M1.6 11.4 L-1.8 14.8" pathLength="1"/><path d="M8.6 15.4 L5.2 18.8" pathLength="1"/><path d="M12.6 22.4 L9.2 25.8" pathLength="1"/></svg><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="sent-tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/></svg></span><span class="scope-tip">Send to Claude</span></button>`);
 const CHANNEL_HINT = "claude --dangerously-load-development-channels server:review";
 /* THE SEND SHEET (Nirav, 2026-10-26: "better, a copy icon, inside the drawer"): a small panel under the head that says
    where a send stands, with the start command to copy when Claude is not listening */
