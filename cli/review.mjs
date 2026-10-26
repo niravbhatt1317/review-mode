@@ -123,7 +123,7 @@ if (cmd === "claude") {
   };
   const app = findApp();
   if (!app) {
-    console.error("No Review mode project here or below (no review.config.json). Set one up first: npx review init");
+    console.error("No Review mode project here or below (no review.config.json). Set one up first: npm install --save-dev github:niravbhatt1317/review-mode, then npx --no review-mode init");
     process.exit(1);
   }
   /* the server's command: the app's own copy of the package, so it stays put */

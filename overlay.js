@@ -5128,7 +5128,7 @@ function showSheet(kind, o = {}) {
     sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
     ok: [ICON.ok, `Claude has the ${o.count === 1 ? "comment" : "comments"}`, `<p class="cs-sub">${esc(o.label || "")} · it is starting on them</p>`],
     late: [ICON.warn, "Sent, but Claude has not confirmed", `<p>Look at that Claude session: it may be asking to allow the review tools, or still busy. If it shows nothing at all, it was not started with push on. The brief is on your clipboard too.</p>${cmdBox(CHANNEL_HINT)}`],
-    fail: [ICON.warn, "Could not send", `<p>${esc(o.error || "The session did not answer.")} The brief is on your clipboard.</p>`],
+    fail: [ICON.warn, "Could not send", `<p>${esc(String(o.error || "The session did not answer").replace(/^./, (c) => c.toUpperCase()).replace(/[^.!?]$/, "$&."))} The brief is on your clipboard.</p>`],
   }[kind];
   sheet.innerHTML = `<div class="cs-card cs-is-${kind}"><div class="cs-head">${body[0]}<b>${body[1]}</b><button type="button" class="cs-close" aria-label="Close">×</button></div>${body[2]}</div>`;
   sheet.classList.add("on");
