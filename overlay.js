@@ -470,7 +470,7 @@ root.innerHTML = `
   .panel-copy.sent .boost { opacity: 1; animation: rv-away-trail .38s ease-out forwards; }
   .panel-copy.sent .boost path { stroke-dashoffset: 0; animation: none; } /* the lines streak out with it */
   @keyframes rv-away { 0% { transform: translate(2px, -2px); opacity: 1; } 100% { transform: translate(18px, -18px) scale(.6); opacity: 0; } } /* flies away from where it hovered */
-  @keyframes rv-away-trail { 0% { transform: translate(2px, -2px); opacity: 1; } 60% { transform: translate(9px, -9px) scale(1.35); opacity: .8; } 100% { transform: translate(15px, -15px); opacity: 0; } }
+  @keyframes rv-away-trail { 0% { transform: translate(2px, -2px); opacity: 1; } 60% { transform: translate(10px, -10px); opacity: .8; } 100% { transform: translate(16px, -16px); opacity: 0; } } /* keeps its gap behind the plane */
   .sent-tick { color: var(--rv-st-done-dot); opacity: 0; }
   .sent-tick path { stroke-dasharray: 1; stroke-dashoffset: 1; }
   .panel-copy.sent .sent-tick { opacity: 1; transition: opacity .1s .3s; }
@@ -5096,7 +5096,7 @@ async function copyOut(kind, btn) {
 /* SEND TO CLAUDE (2026-10-26): the brief goes straight into an open Claude Code session (the review MCP server,
    mcp/server.mjs, started with channels on); one session is sent to at once, several bring a small picker; no session,
    or one not listening, falls back to the copy */
-$('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><span class="send-clip"><svg class="boost" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M1.6 11.4 L-1.8 14.8" pathLength="1"/><path d="M8.6 15.4 L5.2 18.8" pathLength="1"/><path d="M12.6 22.4 L9.2 25.8" pathLength="1"/></svg><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="sent-tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/></svg></span><span class="scope-tip">Send to Claude</span></button>`);
+$('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><span class="send-clip"><svg class="boost" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M-0.6 13.6 L-3.6 16.6" pathLength="1"/><path d="M6.4 17.6 L3.4 20.6" pathLength="1"/><path d="M10.4 24.6 L7.4 27.6" pathLength="1"/></svg><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="sent-tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/></svg></span><span class="scope-tip">Send to Claude</span></button>`);
 const CHANNEL_HINT = "claude --dangerously-load-development-channels server:review";
 /* THE SEND SHEET (Nirav, 2026-10-26: "better, a copy icon, inside the drawer"): a small panel under the head that says
    where a send stands, with the start command to copy when Claude is not listening */
