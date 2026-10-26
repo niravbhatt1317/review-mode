@@ -15,19 +15,19 @@ Review mode is an overlay on the project's UI. A reviewer ⌥-clicks anything, w
 
 ## Setting up (once per project)
 
-If `npx review` is not found, the project has no Review mode yet. Ask first (it changes the project), then:
-`npm install --save-dev github:niravbhatt1317/review-mode` and `npx review init <project>` (the project name the brief
+If `npx --no review-mode` is not found, the project has no Review mode yet. Ask first (it changes the project), then:
+`npm install --save-dev github:niravbhatt1317/review-mode` and `npx --no review-mode init <project>` (the project name the brief
 gives; it adds review.config.json, .review/vite.config.js, a dev:review script, .gitignore lines and this skill).
-`npx review init` again later only refreshes this skill to the latest.
+`npx --no review-mode init` again later only refreshes this skill to the latest.
 
 ## The review tools (MCP)
 
-`npx review init` also adds a `review` MCP server to `.mcp.json`. When it is loaded, prefer its tools to the shell:
+`npx --no review-mode init` also adds a `review` MCP server to `.mcp.json`. When it is loaded, prefer its tools to the shell:
 `review_list`, `review_show`, `review_pick_up`, `review_done` (only after the person said yes), `review_reply`,
 `review_picture`, each with `as` set to the person's handle; moves are marked as made with Claude. A brief sent from the
 drawer ("Send to Claude") arrives as `<channel source="review" delivery_id="...">`: call `review_ack` with that id
-first, then follow it. Sending needs Claude started with
-`claude --dangerously-load-development-channels server:review` (channels are a research preview).
+first, then follow it. Sending needs Claude started with `npx --no review-mode claude` (it registers the tools once and turns on push;
+channels are a research preview). Never run a bare `npx review`: on npm that name is an unrelated package.
 
 ## Commands
 
@@ -35,13 +35,13 @@ From any folder of the project (no dev server needed). Always add `--as <their G
 else ask) so the change is theirs, and `--claude` so the card shows "… and Claude":
 
 ```sh
-npx review list --open                            # every open comment: n, id, status, kind, [who has it], text, note
-npx review list --open --mine --as <handle>       # the ones that person has now
-npx review show <id>                              # one comment as JSON (route, element, trail, history, conversation)
-npx review status <id> progress --as <h> --claude # picked up; "Already picked up by X" (exit 2): leave it, tell them
-npx review status <id> approval --as <h> --claude # done, ONLY after the person said yes in the chat
-npx review reply <id> --as <h> --claude "<answer>"  # answer a question
-npx review pull <id> [<id>…]                      # the full pictures to .review/sessions/<project>/export/
+npx --no review-mode list --open                            # every open comment: n, id, status, kind, [who has it], text, note
+npx --no review-mode list --open --mine --as <handle>       # the ones that person has now
+npx --no review-mode show <id>                              # one comment as JSON (route, element, trail, history, conversation)
+npx --no review-mode status <id> progress --as <h> --claude # picked up; "Already picked up by X" (exit 2): leave it, tell them
+npx --no review-mode status <id> approval --as <h> --claude # done, ONLY after the person said yes in the chat
+npx --no review-mode reply <id> --as <h> --claude "<answer>"  # answer a question
+npx --no review-mode pull <id> [<id>…]                      # the full pictures to .review/sessions/<project>/export/
 ```
 
 With the extension instead of the dev server, put `REVIEW_PROJECT=<project>` before `npx`; for a test session,
@@ -49,7 +49,7 @@ With the extension instead of the dev server, put `REVIEW_PROJECT=<project>` bef
 
 Statuses: `open` → `progress` (picked up) → `approval` (done, waiting for the reviewer) → `approved` (the reviewer only, from the panel). `open` again reopens; `progress` from `approval` is "sent back", and carries a note with the reason. **A comment with a note is rework: do what the note says first, then the rest.** Never change a comment's text without being asked.
 
-**Questions are answered, not worked.** A question goes Asked (`open`) → Answered (`approval`) → Resolved (`approved`, the asker's "Got it"). Never set a question's status: answer it with `npx review reply <id> --claude "<answer>"` after reading the code it points at (one or two plain sentences, as to a designer). If the honest answer is that something should change, say so in the answer; the asker can make it a fix. Replies are in the comment's `history` (kind `reply`).
+**Questions are answered, not worked.** A question goes Asked (`open`) → Answered (`approval`) → Resolved (`approved`, the asker's "Got it"). Never set a question's status: answer it with `npx --no review-mode reply <id> --claude "<answer>"` after reading the code it points at (one or two plain sentences, as to a designer). If the honest answer is that something should change, say so in the answer; the asker can make it a fix. Replies are in the comment's `history` (kind `reply`).
 
 ## How to work a brief
 

@@ -32,7 +32,8 @@
     "firefox-release": "node firefox-release.mjs"
   },
   "bin": {
-    "review": "cli/review.mjs"
+    "review": "cli/review.mjs",
+    "review-mode": "cli/review.mjs"
   },
   "peerDependencies": {
     "vite": ">=4"

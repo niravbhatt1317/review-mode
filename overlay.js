@@ -490,6 +490,9 @@ root.innerHTML = `
   .cs-ok { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: var(--rv-st-done-dot); animation: rv-bulb .35s cubic-bezier(.3,1.5,.5,1) both; }
   .cs-warn { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: hsl(36 100% 92%); color: hsl(28 90% 40%); font: 700 12px/1 -apple-system, system-ui, sans-serif; }
   :host([data-theme="dark"]) .cs-warn { background: hsl(36 60% 20%); color: hsl(36 100% 70%); }
+  .cs-intro { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: #D97757; color: #fff; font: 700 10px/1 -apple-system, system-ui, sans-serif; }
+  .cs-card p code { font: 500 11px/1 ui-monospace, Menlo, monospace; padding: 1px 4px; border-radius: 4px; background: hsl(var(--rv-n10)); }
+  .cs-acts .cs-gotit { height: 26px; padding: 0 12px; border: 0; border-radius: 6px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
   .cs-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 28px; }
   .cs-row .cs-again { flex: 0 0 auto; height: 32px; }
   .cs-cmd { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 8px; background: hsl(var(--rv-n10)); box-shadow: inset 0 0 0 1px hsl(var(--rv-n20)); }
@@ -4342,6 +4345,7 @@ function openPanel(on) {
       renderPanel();
       if (state.unread.size) updateUnread();
       else syncNote("fresh", "Up to date");
+      setTimeout(() => maybeIntro().catch(() => {}), 800); // the first time on a project: how to connect Claude
     }).catch(() => syncNote(null));
   } else syncNote(null);
 }
@@ -4904,16 +4908,18 @@ async function buildPrompt(list) {
   const project = state.hub?.project || EXT?.project || location.host;
   const me = state.hub?.handle || ""; // the GitHub handle the hub knows
   const env = [EXT ? `REVIEW_PROJECT=${project}` : "", window.__reviewSession ? `REVIEW_SESSION=${window.__reviewSession}` : ""].filter(Boolean).join(" ");
-  const cmd = (rest) => `${env ? env + " " : ""}npx review ${rest}${me ? ` --as ${me}` : ""}`;
+  const cmd = (rest) => `${env ? env + " " : ""}npx --no review-mode ${rest}${me ? ` --as ${me}` : ""}`;
   const lines = [];
   lines.push(`# Design review: ${list.length} comment${list.length === 1 ? "" : "s"} on ${project}`);
   lines.push("");
   lines.push(`The app runs at ${location.origin}${EXT ? "" : " (the dev server)"}. Each comment points at one thing on one page; its picture shows the page as it was seen, with a red box round the element and the comment's number beside it. Open the pictures with Read.${me ? ` You act as ${me}: every command below says so.` : ""}`);
   lines.push("");
   /* STEP 0 (2026-10-26): the project may not have Review mode yet; Claude checks, asks, sets it up, then works */
-  lines.push("Step 0, before anything else: make sure this project has Review mode.");
-  lines.push(`- Check: \`${cmd("list --open")}\`. If it lists comments, run \`npx review init\` once (it refreshes the review skill to the latest, nothing else changes), then go on.`);
-  lines.push(`- If \`npx review\` is not found: tell me it is missing and ask "Set up Review mode here? It adds a dev dependency, review.config.json, .review/vite.config.js, a dev:review script, .gitignore lines and the review skill." On my yes, run \`npm install --save-dev github:niravbhatt1317/review-mode\`, then \`npx review init${project.startsWith("_") ? "" : ` ${project}`}\`, check again, and go on. On my no, work from this brief alone and tell me the statuses to set by hand.`);
+  lines.push("Step 0, before anything else: make sure this project has Review mode, and connect it to Claude once.");
+  lines.push(`- Check: \`${cmd("list --open")}\`. If it lists comments, run \`npx --no review-mode init\` (refreshes the review skill) and \`npx --no review-mode claude --setup\` (registers the review tools for this folder, in my own Claude settings), then go on.`);
+  lines.push(`- If it says review-mode is not found: tell me and ask "Set up Review mode here? It adds a dev dependency, review.config.json, .review/vite.config.js, a dev:review script, .gitignore lines and the review skill." On my yes: \`npm install --save-dev github:niravbhatt1317/review-mode\`, \`npx --no review-mode init${project.startsWith("_") ? "" : ` ${project}`}\`, \`npx --no review-mode claude --setup\`, check again, and go on. On my no, work from this brief alone and tell me the statuses to set by hand.`);
+  lines.push("- Never run a bare `npx review`: on npm that name is an unrelated package. Always `npx --no review-mode`.");
+  lines.push("- Tell me once, at the end: next time, start Claude with `npx --no review-mode claude` instead of `claude`, and the drawer's plane sends comments straight to you.");
   lines.push("- Then use the `review` skill (.claude/skills/review) for the rest.");
   lines.push("");
   lines.push("How to work through them:");
@@ -5097,7 +5103,9 @@ async function copyOut(kind, btn) {
    mcp/server.mjs, started with channels on); one session is sent to at once, several bring a small picker; no session,
    or one not listening, falls back to the copy */
 $('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><span class="send-clip"><svg class="boost" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.15 14.35 L2.35 16.15" pathLength="1"/><path d="M6.9 17.1 L3.6 20.4" pathLength="1"/><path d="M9.65 19.85 L7.85 21.65" pathLength="1"/></svg><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="sent-tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/></svg></span><span class="scope-tip">Send to Claude</span></button>`);
-const CHANNEL_HINT = "claude --dangerously-load-development-channels server:review";
+/* the one start command (2026-10-26): registers the review tools once and starts Claude with push on; "--no" so npx
+   never fetches a package of the same name from npm (an unrelated "review" exists there) */
+const CHANNEL_HINT = "npx --no review-mode claude";
 /* THE SEND SHEET (Nirav, 2026-10-26: "better, a copy icon, inside the drawer"): a small panel under the head that says
    where a send stands, with the start command to copy when Claude is not listening */
 const sheet = document.createElement("div");
@@ -5115,7 +5123,8 @@ function showSheet(kind, o = {}) {
   };
   const n = o.count ? `${o.count} comment${o.count === 1 ? "" : "s"}` : "";
   const body = {
-    none: [ICON.warn, "Start Claude to send directly", `<p>Run this once in a terminal, in your project folder. From then on, the plane sends comments straight to that Claude, and it works through them for you. Until then the brief is on your clipboard: paste it into any Claude chat.</p>${cmdBox(CHANNEL_HINT, true)}`],
+    none: [ICON.warn, "Start Claude to send directly", `<p>In a terminal, in your project folder, start Claude with this instead of <code>claude</code>. The first time it connects Claude to this project; from then on the plane sends comments straight to it, and it works through them. Until then the brief is on your clipboard: paste it into any Claude chat.</p>${cmdBox(CHANNEL_HINT, true)}`],
+    intro: [`<span class="cs-intro">✦</span>`, "Connect Claude to this project", `<p>Start Claude with this, in a terminal in your project folder, instead of <code>claude</code>. Then the plane next to "Copy for Claude" sends comments straight to it, and Claude works through them for you. One command, nothing else to set up.</p>${cmdBox(CHANNEL_HINT)}<div class="cs-acts"><button type="button" class="cs-gotit">Got it</button></div>`],
     sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
     ok: [ICON.ok, `Claude has the ${o.count === 1 ? "comment" : "comments"}`, `<p class="cs-sub">${esc(o.label || "")} · it is starting on them</p>`],
     late: [ICON.warn, "Sent, but Claude has not confirmed", `<p>Look at that Claude session: it may be asking to allow the review tools, or still busy. If it shows nothing at all, it was not started with push on. The brief is on your clipboard too.</p>${cmdBox(CHANNEL_HINT)}`],
@@ -5130,7 +5139,10 @@ function hideSheet() {
   sheet.classList.remove("on");
 }
 sheet.addEventListener("click", async (e) => {
-  if (e.target.closest(".cs-close")) return hideSheet();
+  if (e.target.closest(".cs-close, .cs-gotit")) {
+    if (sheet.querySelector(".cs-is-intro")) introSeen(true);
+    return hideSheet();
+  }
   const cp = e.target.closest(".cs-copy");
   if (cp) {
     await navigator.clipboard.writeText(cp.dataset.copy).catch(() => {});
@@ -5147,6 +5159,24 @@ sheet.addEventListener("click", async (e) => {
     sendToClaude($('.panel-copy[data-kind="send"]'));
   }
 });
+/* FIRST TIME ON A PROJECT (Nirav, 2026-10-26): the first time the drawer opens for a project, a card says how to connect
+   Claude to it; it does not come back once dismissed, or once a send reached Claude */
+const introKey = () => `review.claudeIntro.${state.hub?.project || EXT?.project || location.host}`;
+function introSeen(set) {
+  try {
+    if (set) localStorage.setItem(introKey(), "1");
+    return localStorage.getItem(introKey()) === "1";
+  } catch {
+    return true;
+  }
+}
+async function maybeIntro() {
+  if (introSeen() || window.__reviewSession || sheet.classList.contains("on")) return;
+  const q = window.__reviewSession ? `?session=${window.__reviewSession}` : "";
+  const sessions = await rv(`/__review/claude/sessions${q}`).then((r) => r.json()).catch(() => []);
+  if (Array.isArray(sessions) && sessions.length) return introSeen(true); // already connected
+  if (!sheet.classList.contains("on")) showSheet("intro");
+}
 async function sendToClaude(btn) {
   const list = shownComments();
   if (!list.length) return toast("Nothing shown to send");
@@ -5182,6 +5212,7 @@ async function sendToClaude(btn) {
     if (i === 15) showSheet("sent", { count: list.length, label: pick.label, hint: true });
     const st = await rv(`/__review/claude/status${q}${q ? "&" : "?"}port=${pick.port}&id=${r.id}`).then((x) => x.json()).catch(() => null);
     if (st?.acked) {
+      introSeen(true);
       btn.classList.remove("busy");
       btn.classList.add("sent");
       setTimeout(() => btn.classList.remove("sent"), 2200);

@@ -65,31 +65,37 @@ New ◀──────────────────────Reopen�
 **A question's life** (Nirav, 2026-10-24): answered, not worked. Asked (`open`) ──Answer──▶ Answered (`approval`)
 ──Got it──▶ Resolved (`approved`); the asker's Follow up sends it back to Asked; Make it a fix starts it over as a
 New fix with its talk kept. Anyone answers (`answer`), the asker follows up or closes it (`follow_up`, `resolve`), an
-approver closes any. Replies are history steps of kind `reply` (`via: "claude"` for Claude's, from `npx review reply
+approver closes any. Replies are history steps of kind `reply` (`via: "claude"` for Claude's, from `npx --no review-mode reply
 <id> --claude`); the card's note is the latest reply. "Ask Claude" copies a brief for a Claude session. Old questions
 someone picked up read as Asked.
 
 **The waiting list** (Nirav, 2026-10-24): whoever signs in with GitHub and is not in `review_members` joins it as
 `waiting` (a trigger on `review_people`); an approver sees "Waiting to join" at the top of the drawer and lets them in
 (`member`) or refuses them (`refused`). A signed-in person who is not a member reads and writes nothing and sees a
-waiting screen, which opens by itself once they are let in. The publishable key alone (dev server, `npx review`,
+waiting screen, which opens by itself once they are let in. The publishable key alone (dev server, `npx --no review-mode`,
 Claude) is not gated yet: that is the later "lock the hub to signed-in users" step.
 
-**Claude works the hub as a person** (2026-10-26): the brief and the skill run `npx review … --as <handle> --claude`,
+**Claude works the hub as a person** (2026-10-26): the brief and the skill run `npx --no review-mode … --as <handle> --claude`,
 so a move is the person's (the drawer's face and checks) and marked `via: "claude"` (`withClaude` on the comment:
 "Pranjal and Claude are working on it"). `status` refuses a late pick-up ("Already picked up by …", `--force` takes
 it over) and a question's status (answer with `reply`).
 
-**Send to Claude** (2026-10-26): `npx review mcp` (mcp/server.mjs, no dependencies, MCP over stdio) gives Claude Code the
+**Never a bare `npx review`** (2026-10-26): on npm, "review" is an unrelated package, and npx fetches it in any
+folder without our package. The package also installs a `review-mode` command; every instruction (brief, skill, panel,
+README) uses `npx --no review-mode …`, which fails safely instead of fetching. `npx --no review-mode claude` is the one
+start command: it finds the app (here, above, or below for a monorepo), registers the review MCP server once in the
+person's own Claude settings (local scope, REVIEW_ROOT), and starts Claude with push on; `--setup` only registers.
+
+**Send to Claude** (2026-10-26): `npx --no review-mode mcp` (mcp/server.mjs, no dependencies, MCP over stdio) gives Claude Code the
 review_* tools and, as a channel, takes briefs on 127.0.0.1:47831-47840 (`/hello`, `/send`, `/status`). It answers only
 requests with `x-review: 1` and no web-page Origin (extension origins pass), Host 127.0.0.1/localhost. The dev server
 and the extension find sessions (`/__review/claude/sessions`) and forward (`/__review/claude/send`); Claude calls
 `review_ack` so the drawer can say it has it. Push needs `claude --dangerously-load-development-channels server:review`
-(research preview); without it the drawer falls back to copying. `npx review init` adds the server to `.mcp.json`.
+(research preview); without it the drawer falls back to copying. `npx --no review-mode init` adds the server to `.mcp.json`.
 
 **The rules live in the hub's `review_rules` table** (`hub/roles.sql`), not in code: one row per action and who may
 do it (`anyone`, `member`, `author`, `assignee`, `approver`), in which states, and whether it is `signed` (needs a
-GitHub sign-in; the hub refuses others) or drawer-only (the dev server, `npx review` and Claude act without a
+GitHub sign-in; the hub refuses others) or drawer-only (the dev server, `npx --no review-mode` and Claude act without a
 sign-in). An approver may always do everything. Change a row in Supabase and every drawer follows within a minute; the
 hub checks the same rows on every change (`review_allowed`, the `review_guard` trigger, the delete policy). The drawer
 keeps the shipped rows as `RULES_DEFAULT` for when the table is missing. Who has it changes only by a hand-over or an

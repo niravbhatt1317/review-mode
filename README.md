@@ -25,7 +25,7 @@ Firefox that updates itself).
 | `docs/` | the site: install page, privacy page, Firefox files and update list |
 | `collector/` | the Vite plugin (`plugin.js`), the wrapper (`vite.js`), the config and the stores |
 | `cli/review.mjs` | the `review` command: init, list, show, status, pull |
-| `skill/SKILL.md` | the Claude skill a project gets from `npx review init` |
+| `skill/SKILL.md` | the Claude skill a project gets from `npx --no review-mode init` |
 | `hub/` | the SQL that sets up a team's hub |
 | `STORE.md` | how both stores are published |
 
@@ -45,9 +45,10 @@ command line:
 
 ```sh
 npm install -D github:niravbhatt1317/review-mode
-npx review init            # review.config.json, .review/vite.config.js, the dev:review script, .gitignore lines, the Claude skill
+npx --no review-mode init          # review.config.json, .review/vite.config.js, the dev:review script, .gitignore lines, the Claude skill
 npm run dev:review         # the project on the review port (4178 by default), with the overlay
-npx review list            # the project's comments; also show, status, pull
+npx --no review-mode claude # start Claude with the review tools and "Send to Claude" (registers them once)
+npx --no review-mode list          # the project's comments; also show, status, pull
 ```
 
 `review.config.json` holds the project's name on the hub and the port; add a `hub` block ({ url, anonKey, people })

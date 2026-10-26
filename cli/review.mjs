@@ -1,19 +1,22 @@
 #!/usr/bin/env node
-// The review from the command line, in any project that installed review-mode:
-//   npx review init                       set this project up (review.config.json, .review/vite.config.js, the dev:review
+// The review from the command line, in any project that installed review-mode. Always "npx --no review-mode":
+// a bare "npx review" can fetch an unrelated npm package of that name.
+//   npx --no review-mode init                       set this project up (review.config.json, .review/vite.config.js, the dev:review
 //                                         script, git-ignore lines, the Claude skill)
-//   npx review list                       every comment of the project, one line each
-//   npx review show <id>                  one comment as JSON
-//   npx review status <id> <status> [note…]   open | progress | approval | approved
+//   npx --no review-mode list                       every comment of the project, one line each
+//   npx --no review-mode show <id>                  one comment as JSON
+//   npx --no review-mode claude [claude args…]   start Claude with the review tools and "Send to Claude" on (registers them once)
+//   npx --no review-mode claude --setup          only register the review tools for this project (no start)
+//   npx --no review-mode status <id> <status> [note…]   open | progress | approval | approved
 //   flags anywhere: --as <github-handle> (who acts; else REVIEW_AS, else git's user.name), --claude (made with Claude),
 //   --force (pick up one someone else has); list also takes --open (no approved) and --mine
-//   npx review reply <id> <text…>         answer a question (or follow it up); --claude marks Claude's answer
-//   npx review resolve <id>               close a question (the asker's Got it)
-//   npx review pull <id> [<id>…]          the full pictures to .review/sessions/<project>/export/
+//   npx --no review-mode reply <id> <text…>         answer a question (or follow it up); --claude marks Claude's answer
+//   npx --no review-mode resolve <id>               close a question (the asker's Got it)
+//   npx --no review-mode pull <id> [<id>…]          the full pictures to .review/sessions/<project>/export/
 // The project and the hub come from review.config.json (REVIEW_PROJECT overrides the project).
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, spawnSync, spawn } from "node:child_process";
 import { loadConfig, pkgDir } from "../collector/config.js";
 import { storeFor, prepare } from "../collector/stores.js";
 import { withNames, applyChange, mergePeople } from "../hub-core.js";
@@ -38,10 +41,61 @@ const CLAUDE = flag("--claude");
 const FORCE = flag("--force");
 const ONLY_OPEN = flag("--open");
 const MINE = flag("--mine");
+const SETUP_ONLY = flag("--setup");
 const [cmd, ...args] = argv;
 const cfg = loadConfig(process.cwd());
 
-if (cmd === "mcp") {
+if (cmd === "claude") {
+  /* ONE START COMMAND (Nirav, 2026-10-26: "they don't have to set up every time"): find the app (here, above, or in a
+     folder below for a monorepo), register the review MCP server for this folder once (Claude Code's local scope: in
+     your own settings, nothing in the repo), then start Claude with push on. --setup only registers. */
+  const here = process.cwd();
+  const findApp = () => {
+    const up = loadConfig(here).root;
+    if (fs.existsSync(path.join(up, "review.config.json"))) return up;
+    const queue = [[here, 0]];
+    while (queue.length) {
+      const [dir, d] = queue.shift();
+      if (fs.existsSync(path.join(dir, "review.config.json"))) return dir;
+      if (d >= 4) continue;
+      let entries = [];
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {}
+      for (const e of entries) if (e.isDirectory() && !/^(node_modules|\.git|dist|build|\.review|\.next)$/.test(e.name) && !e.name.startsWith(".")) queue.push([path.join(dir, e.name), d + 1]);
+    }
+    return null;
+  };
+  const app = findApp();
+  if (!app) {
+    console.error("No Review mode project here or below (no review.config.json). Set one up first: npx review init");
+    process.exit(1);
+  }
+  /* the server's command: the app's own copy of the package, so it stays put */
+  const own = path.join(app, "node_modules", "review-mode", "cli", "review.mjs");
+  const cliPath = fs.existsSync(own) ? own : fs.realpathSync(new URL(import.meta.url).pathname);
+  const claudeOk = spawnSync("claude", ["--version"], { stdio: "ignore" }).status === 0;
+  if (!claudeOk) {
+    console.error("Claude Code is not installed here: https://claude.com/claude-code");
+    process.exit(1);
+  }
+  const got = spawnSync("claude", ["mcp", "get", "review"], { cwd: here, encoding: "utf8" });
+  const has = got.status === 0 && got.stdout.includes(cliPath) && got.stdout.includes(app);
+  if (!has) {
+    if (got.status === 0) spawnSync("claude", ["mcp", "remove", "review", "--scope", "local"], { cwd: here, stdio: "ignore" });
+    const add = spawnSync("claude", ["mcp", "add", "review", "--scope", "local", "-e", `REVIEW_ROOT=${app}`, "--", "node", cliPath, "mcp"], { cwd: here, encoding: "utf8" });
+    if (add.status !== 0) {
+      console.error(`Could not register the review tools: ${(add.stderr || add.stdout || "").trim()}`);
+      process.exit(1);
+    }
+    console.log(`Review tools registered for ${here} (your own Claude settings, nothing in the repo).`);
+  } else if (SETUP_ONLY) console.log(`Review tools already registered for ${here}.`);
+  if (SETUP_ONLY) process.exit(0);
+  console.log(`Starting Claude with "Send to Claude" on (project ${loadConfig(app).project}). Claude Code shows a one-time warning for this preview feature: choose "I am using this for local development".`);
+  const child = spawn("claude", ["--dangerously-load-development-channels", "server:review", ...args], { cwd: here, stdio: "inherit" });
+  child.on("exit", (code) => process.exit(code ?? 0));
+  await new Promise(() => {});
+} else if (cmd === "mcp") {
   /* the MCP server Claude Code starts from .mcp.json (tools, and "Send to Claude" when channels are on) */
   await import("../mcp/server.mjs");
   await new Promise(() => {}); // it runs until Claude Code closes it; nothing below is for it
@@ -72,9 +126,9 @@ if (cmd === "mcp") {
   /* the MCP server for Claude Code: the review tools, and "Send to Claude" (2026-10-26); an existing .mcp.json keeps its other servers */
   const mcpPath = path.join(root, ".mcp.json");
   const mcp = fs.existsSync(mcpPath) ? JSON.parse(fs.readFileSync(mcpPath, "utf8")) : {};
-  mcp.mcpServers = { ...(mcp.mcpServers || {}), review: { command: "npx", args: ["review", "mcp"] } };
+  mcp.mcpServers = { ...(mcp.mcpServers || {}), review: { command: "npx", args: ["--no", "review-mode", "mcp"] } }; // never the unrelated "review" on npm
   fs.writeFileSync(mcpPath, JSON.stringify(mcp, null, 2) + "\n");
-  console.log(`review mode set up for "${project}" in ${root}:\n  review.config.json, .review/vite.config.js, the dev:review script, .gitignore lines, .claude/skills/review/SKILL.md, .mcp.json (review)\n  start: npm run dev:review  (http://localhost:${Number(JSON.parse(fs.readFileSync(confPath, "utf8")).port) || 4178})`);
+  console.log(`review mode set up for "${project}" in ${root}:\n  review.config.json, .review/vite.config.js, the dev:review script, .gitignore lines, .claude/skills/review/SKILL.md, .mcp.json (review)\n  Claude: start it with  npx --no review-mode claude  (the review tools, and "Send to Claude" from the drawer)\n  start: npm run dev:review  (http://localhost:${Number(JSON.parse(fs.readFileSync(confPath, "utf8")).port) || 4178})`);
   process.exit(0);
 }
 
