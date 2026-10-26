@@ -448,6 +448,29 @@ root.innerHTML = `
   .panel-copy[data-kind="prompt"], .panel-copy[data-kind="send"] { --ring: #D97757; }
   .panel-copy .logo-send { color: hsl(var(--rv-n70)); transition: color .12s; }
   .panel-copy:hover .logo-send, .panel-copy.busy .logo-send { color: #D97757; }
+  /* the send sheet, under the head */
+  .claude-sheet { flex: 0 0 auto; display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s cubic-bezier(.22,1,.36,1); }
+  .claude-sheet.on { grid-template-rows: 1fr; }
+  .claude-sheet > .cs-card { min-height: 0; overflow: hidden; margin: 0 16px; }
+  .claude-sheet.on > .cs-card { margin: 12px 16px 2px; padding: 12px 14px; border-radius: 10px; background: var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n20)), 0 4px 14px -6px rgba(29,43,62,.18); }
+  .cs-head { display: flex; align-items: center; gap: 8px; }
+  .cs-head b { flex: 1; font: 600 13px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink); }
+  .cs-close { width: 22px; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--rv-ink-3); font-size: 16px; line-height: 1; cursor: pointer; }
+  .cs-close:hover { background: hsl(var(--rv-n10)); color: var(--rv-ink); }
+  .cs-card p { margin: 6px 0 0 28px; font-size: 12px; line-height: 1.5; color: var(--rv-ink-2); }
+  .cs-card .cs-sub { color: var(--rv-ink-3); }
+  .cs-spin { width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%; border: 2px solid hsl(var(--rv-n20)); border-top-color: #D97757; animation: rv-spin .8s linear infinite; }
+  .cs-ok { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: var(--rv-st-done-dot); animation: rv-bulb .35s cubic-bezier(.3,1.5,.5,1) both; }
+  .cs-warn { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: hsl(36 100% 92%); color: hsl(28 90% 40%); font: 700 12px/1 -apple-system, system-ui, sans-serif; }
+  :host([data-theme="dark"]) .cs-warn { background: hsl(36 60% 20%); color: hsl(36 100% 70%); }
+  .cs-cmd { display: flex; align-items: center; gap: 6px; margin: 10px 0 0 28px; padding: 4px 4px 4px 10px; border-radius: 8px; background: hsl(var(--rv-n10)); box-shadow: inset 0 0 0 1px hsl(var(--rv-n20)); }
+  .cs-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font: 500 11px/1.6 ui-monospace, Menlo, monospace; color: var(--rv-ink); scrollbar-width: none; }
+  .cs-copy { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n20)); color: var(--rv-ink-2); font: 500 11px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .cs-copy:hover { color: var(--rv-ink); }
+  .cs-copy.done { color: var(--rv-st-done); }
+  .cs-acts { display: flex; justify-content: flex-end; margin-top: 10px; }
+  .cs-again { height: 26px; padding: 0 12px; border: 0; border-radius: 6px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .cs-again:hover { background: hsl(var(--rv-n30)); }
   .claude-pick { position: absolute; z-index: 20; width: 280px; padding: 6px; border-radius: 10px; background: var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n20)), 0 12px 28px -8px rgba(29,43,62,.3); }
   .claude-pick .cp-title { padding: 6px 8px 4px; font: 600 11px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); }
   .claude-pick button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 7px 8px; border: 0; border-radius: 7px; background: none; text-align: left; cursor: pointer; }
@@ -5046,48 +5069,92 @@ async function copyOut(kind, btn) {
    or one not listening, falls back to the copy */
 $('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Send to Claude</span></button>`);
 const CHANNEL_HINT = "claude --dangerously-load-development-channels server:review";
+/* THE SEND SHEET (Nirav, 2026-10-26: "better, a copy icon, inside the drawer"): a small panel under the head that says
+   where a send stands, with the start command to copy when Claude is not listening */
+const sheet = document.createElement("div");
+sheet.className = "claude-sheet";
+panelBody.before(sheet);
+const COPY_ICO = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`;
+const cmdBox = (cmd) => `<div class="cs-cmd"><code>${esc(cmd)}</code><button type="button" class="cs-copy" data-copy="${esc(cmd)}" aria-label="Copy the command">${COPY_ICO}<span>Copy</span></button></div>`;
+let sheetTimer = 0;
+function showSheet(kind, o = {}) {
+  clearTimeout(sheetTimer);
+  const ICON = {
+    wait: `<span class="cs-spin"></span>`,
+    ok: `<span class="cs-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`,
+    warn: `<span class="cs-warn">!</span>`,
+  };
+  const n = o.count ? `${o.count} comment${o.count === 1 ? "" : "s"}` : "";
+  const body = {
+    none: [ICON.warn, "No Claude session is listening", `<p>Start Claude in your project with push on, then send again. The brief is on your clipboard meanwhile, to paste by hand.</p>${cmdBox(CHANNEL_HINT)}<div class="cs-acts"><button type="button" class="cs-again">Check again</button></div>`],
+    sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
+    ok: [ICON.ok, `Claude has the ${o.count === 1 ? "comment" : "comments"}`, `<p class="cs-sub">${esc(o.label || "")} · it is starting on them</p>`],
+    late: [ICON.warn, "Sent, but Claude has not confirmed", `<p>Look at that Claude session: it may be asking to allow the review tools, or still busy. If it shows nothing at all, it was not started with push on. The brief is on your clipboard too.</p>${cmdBox(CHANNEL_HINT)}`],
+    fail: [ICON.warn, "Could not send", `<p>${esc(o.error || "The session did not answer.")} The brief is on your clipboard.</p>`],
+  }[kind];
+  sheet.innerHTML = `<div class="cs-card cs-is-${kind}"><div class="cs-head">${body[0]}<b>${body[1]}</b><button type="button" class="cs-close" aria-label="Close">×</button></div>${body[2]}</div>`;
+  sheet.classList.add("on");
+  if (kind === "ok") sheetTimer = setTimeout(hideSheet, 3500);
+}
+function hideSheet() {
+  clearTimeout(sheetTimer);
+  sheet.classList.remove("on");
+}
+sheet.addEventListener("click", async (e) => {
+  if (e.target.closest(".cs-close")) return hideSheet();
+  const cp = e.target.closest(".cs-copy");
+  if (cp) {
+    await navigator.clipboard.writeText(cp.dataset.copy).catch(() => {});
+    cp.querySelector("span").textContent = "Copied";
+    cp.classList.add("done");
+    setTimeout(() => {
+      cp.querySelector("span").textContent = "Copy";
+      cp.classList.remove("done");
+    }, 1600);
+    return;
+  }
+  if (e.target.closest(".cs-again")) {
+    hideSheet();
+    sendToClaude($('.panel-copy[data-kind="send"]'));
+  }
+});
 async function sendToClaude(btn) {
   const list = shownComments();
   if (!list.length) return toast("Nothing shown to send");
   btn.classList.add("busy");
-  const tip = btn.querySelector(".scope-tip");
-  tip.textContent = "Looking for Claude…";
   const done = () => {
     btn.classList.remove("busy");
     refreshCopyLabels();
   };
   const q = window.__reviewSession ? `?session=${window.__reviewSession}` : "";
   const sessions = await rv(`/__review/claude/sessions${q}`).then((r) => r.json()).catch(() => []);
+  const md = await buildPrompt(list);
   if (!Array.isArray(sessions) || !sessions.length) {
     done();
-    const md = await buildPrompt(list);
     await navigator.clipboard.writeText(md).catch(() => {});
-    return toast(`No Claude session is listening, so the brief was copied instead. To send directly, start Claude in the project with: ${CHANNEL_HINT}`, true);
+    return showSheet("none");
   }
   const pick = sessions.length === 1 ? sessions[0] : await pickSession(btn, sessions);
   if (!pick) return done();
-  tip.textContent = "Sending…";
-  const md = await buildPrompt(list);
   const r = await rv(`/__review/claude/send${q}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ port: pick.port, text: md, count: list.length }) })
     .then((x) => x.json())
     .catch(() => null);
   done();
-  if (!r?.ok) return toast(`Could not send: ${r?.error || "the session did not answer"}`, true);
-  toast(`Sent ${list.length} comment${list.length === 1 ? "" : "s"} to Claude (${pick.label})`);
-  /* Claude says it has it (review_ack). The first time, Claude Code may ask the person to allow the review tools, so the
-     wait is a minute and the message says where to look (Nirav, 2026-10-26) */
-  let told = false;
+  if (!r?.ok) {
+    await navigator.clipboard.writeText(md).catch(() => {});
+    return showSheet("fail", { error: r?.error });
+  }
+  showSheet("sent", { count: list.length, label: pick.label });
+  /* Claude says it has it (review_ack); the first time, Claude Code may ask to allow the review tools, so a minute */
   for (let i = 0; i < 60; i++) {
-    if (i === 15 && !told) {
-      told = true;
-      toast("Sent. Waiting for Claude to confirm: if the session asks to use the review tools, allow them.");
-    }
     await new Promise((res) => setTimeout(res, 1000));
+    if (!sheet.classList.contains("on")) return; // closed: stop watching
+    if (i === 15) showSheet("sent", { count: list.length, label: pick.label, hint: true });
     const st = await rv(`/__review/claude/status${q}${q ? "&" : "?"}port=${pick.port}&id=${r.id}`).then((x) => x.json()).catch(() => null);
-    if (st?.acked) return toast(`Claude has the ${list.length === 1 ? "comment" : "comments"} and is starting`);
+    if (st?.acked) return showSheet("ok", { count: list.length, label: pick.label });
   }
   await navigator.clipboard.writeText(md).catch(() => {});
-  toast(`Sent, but Claude has not confirmed in a minute. Check that session: it may be asking to allow the review tools, or busy. If it shows nothing at all, it was not started with: ${CHANNEL_HINT}. The brief is also on your clipboard.`, true);
+  showSheet("late");
 }
 /* several sessions: a small menu under the button */
 function pickSession(btn, sessions) {
