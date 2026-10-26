@@ -38,7 +38,7 @@ else ask) so the change is theirs, and `--claude` so the card shows "… and Cla
 ```sh
 npx --no review-mode list --open                            # every open comment: n, id, status, kind, [who has it], text, note
 npx --no review-mode list --open --mine --as <handle>       # the ones that person has now
-npx --no review-mode show <id>                              # one comment as JSON (route, element, trail, history, conversation)
+npx --no review-mode show <id>                              # one comment as JSON (route, element, source file:line, trail, history, conversation)
 npx --no review-mode status <id> progress --as <h> --claude # picked up; "Already picked up by X" (exit 2): leave it, tell them
 npx --no review-mode status <id> approval --as <h> --claude # done, ONLY after the person said yes in the chat
 npx --no review-mode reply <id> --as <h> --claude "<answer>"  # answer a question
@@ -54,7 +54,12 @@ Statuses: `open` → `progress` (picked up) → `approval` (done, waiting for th
 
 ## How to work a brief
 
-1. Read every comment and its picture before changing anything. Group the ones that share a cause (same component,
+1. Read every comment and its picture before changing anything. A comment's `source` (in `show`, the "Code:" line in
+   a brief) is where its element is written: `file:line` and the component, plus the files it sits inside (`up`).
+   Open that file at that line first; search by the element's text only when there is no source. Its `anchor` (test
+   id, role, accessible name, heading) gives search words when the source is missing. A "Maybe fixed already" line
+   means the element or its code changed after the comment: check the page and the code before changing anything,
+   and tell the person if it looks done already. Group the ones that share a cause (same component,
    same rule, same copy pattern) and say the groups first. Leave comments someone else has (`[Name]` in the list,
    "Who has it" in the brief).
 2. Sent-back notes first: a comment with one came back from approval, the note says what was still wrong.

@@ -140,13 +140,15 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
 Effort: S a day or less, M a few days, L a week or more.
 
 **Faster, surer fixes**
-- [ ] **Source on every comment** (M): when a comment is made, also keep the React component's name and its source
-  file and line (React's dev build knows them). Claude opens the exact file at once instead of searching by text; the
-  card can show "AgentTable.jsx:212".
+- [x] **Source on every comment** (M, done 2026-10-26): any framework. The dev server stamps each element with its
+  file, line and component (JSX/TSX, Vue, Svelte); without the stamps, what the framework knows (React, Vue, Svelte,
+  Angular, web components). Data for Claude only, never shown in the drawer: briefs and `show` carry it. Pins also keep
+  anchors (test id, role, name, heading), so a row added above no longer moves them.
 - [ ] **Before and after** (M): when Claude marks a comment done, the dev server takes the same picture again (same
   page, same element, same window size). The approver sees a before/after slider on the card and approves from it.
-- [ ] **"Maybe fixed?"** (S): a comment whose element no longer exists or no longer matches its words is marked
-  "maybe fixed" for the approver, instead of a ghost pin.
+- [x] **"Maybe fixed?"** (S, done 2026-10-26): an open fix whose element changed (new words), is gone, or whose own
+  tag in the code was edited after the comment (dev server, from the source stamp) gets a quiet "Maybe fixed?" pill;
+  the tip says what changed. Only a hint, no status moves by itself; the brief tells Claude to check first.
 - [ ] **Claude drafts first** (M): with Claude connected, each new comment gets a short "Claude suggests…" on its card
   (the likely file and the change, or an answer to a question) for a person to accept, edit or ignore.
 

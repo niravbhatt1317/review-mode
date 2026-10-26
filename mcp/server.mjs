@@ -102,7 +102,7 @@ async function call(name, a = {}) {
 
 /* ---------- MCP over stdio ---------- */
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
-const INSTRUCTIONS = `Review mode (design-review comments on this project's running app). Use the review_* tools to list, read, pick up, finish and answer comments, acting as the person you work for (pass "as" with their GitHub handle; default ${defaultAs}). Briefs sent from the drawer arrive as <channel source="review" delivery_id="...">: call review_ack with the delivery_id first, then follow the brief. Ask the person before review_done. Never approve.`;
+const INSTRUCTIONS = `Review mode (design-review comments on this project's running app). Use the review_* tools to list, read, pick up, finish and answer comments, acting as the person you work for (pass "as" with their GitHub handle; default ${defaultAs}). A comment's source (review_show) is the file and line its element is written at: start there. Briefs sent from the drawer arrive as <channel source="review" delivery_id="...">: call review_ack with the delivery_id first, then follow the brief. Ask the person before review_done. Never approve.`;
 let buf = "";
 let queue = Promise.resolve(); // tool calls, one after another
 process.stdin.setEncoding("utf8");

@@ -32,6 +32,22 @@ file map; read it next.
   `hub.lightList()` asks one tiny question first (newest change + row count), then only changed rows, from the
   `review_comments_light` view (`hub/light.sql`) when it exists. Writes always `get()` the full row. The drawer builds
   40 cards at a time (this page's first) and loads pictures as they near the screen. Keep these when changing the list.
+- **Pins and source (2026-10-26)**: a pin is tied to its element, never to screen positions. Saved: a path
+  (`selectorFor`: stable id or tag + nth-of-type), the text (`textKey`), the size (`rect`), and `anchor` (the source
+  stamp, test id, role, accessible name, heading). `resolve` tries the path, then the anchors (they survive a row
+  added above), then the same words anywhere; nothing: a ghost pin at the saved place. `source` is where the element
+  is written: on the dev server `collector/source.js` stamps `data-rv-src="file:line:col@Component"` on every
+  lower-case element (JSX/TSX, Vue, Svelte; the project's own parser; serve only, review mode only); elsewhere the
+  framework's dev data (React owner + `_debugSource`, Vue `__file`, Svelte `__svelte_meta`, Angular `ng`, custom
+  element tags). It is data for Claude (briefs, `show`, the MCP tools), never shown in the drawer (Nirav: "treat it as
+  data"). Never React-only: anything new here must work for any framework or none.
+- **Maybe fixed? (2026-10-26)**: `checkMaybe` in the pin loop, open and in-progress fixes on this page only, 4 s
+  after the page opens. Gone (no element, none at its stamp), changed (other words; figures ignored), or code (the
+  fingerprint of the element's own tag, `codeNear` in `collector/source.js`, kept at save and asked again at
+  `/__review/near` with the live stamp's line and column; a neighbour's edit or lines moving do not count). Layers
+  (drawer, menu, tooltip) are never judged closed. Live data (two or more figures in its words, or a chart: svg,
+  canvas, "chart" in its place) is never judged by words or by being gone, only by code: a redrawn chart ghosts
+  without being fixed (the Supabase charts). A hint only: nothing moves status by itself.
 - **Site**: GitHub Pages from `docs/` (install page, privacy, auth page, `firefox/` with signed xpi + `updates.json`).
   `site.mjs` holds the address.
 

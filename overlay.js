@@ -490,11 +490,14 @@ root.innerHTML = `
   .cs-ok { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: var(--rv-st-done-dot); animation: rv-bulb .35s cubic-bezier(.3,1.5,.5,1) both; }
   .cs-warn { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: hsl(36 100% 92%); color: hsl(28 90% 40%); font: 700 12px/1 -apple-system, system-ui, sans-serif; }
   :host([data-theme="dark"]) .cs-warn { background: hsl(36 60% 20%); color: hsl(36 100% 70%); }
-  .cs-intro { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: #D97757; color: #fff; font: 700 10px/1 -apple-system, system-ui, sans-serif; }
+  .cs-intro { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: #D97757; }
+  .cs-intro svg { width: 12px; height: 12px; fill: #fff; }
   .cs-card p code { font: 500 11px/1 ui-monospace, Menlo, monospace; padding: 1px 4px; border-radius: 4px; background: hsl(var(--rv-n10)); }
   .cs-acts .cs-gotit { height: 26px; padding: 0 12px; border: 0; border-radius: 6px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
   .cs-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 28px; }
-  .cs-row .cs-again { flex: 0 0 auto; height: 32px; }
+  .cs-row .cs-again, .cs-row .cs-gotit { flex: 0 0 auto; height: 32px; }
+  .cs-row .cs-gotit { padding: 0 12px; border: 0; border-radius: 6px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .cs-row .cs-gotit:hover { background: hsl(var(--rv-n30)); }
   .cs-cmd { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 8px; background: hsl(var(--rv-n10)); box-shadow: inset 0 0 0 1px hsl(var(--rv-n20)); }
   .cs-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font: 500 11px/1.6 ui-monospace, Menlo, monospace; color: var(--rv-ink); scrollbar-width: none; }
   .cs-copy { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n20)); color: var(--rv-ink-2); font: 500 11px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
@@ -925,7 +928,9 @@ root.innerHTML = `
   .card-status[data-s="progress"]::before { transform: rotate(45deg) scale(1); } /* at 6 px on the card the diamond needs its full size to look as big as the square (Nirav, 2026-10-24); the pill keeps .91 */
   .card-status[data-s="open"]::before { background: var(--rv-st-new-dot); } .card-status[data-s="progress"]::before { background: var(--rv-st-prog-dot); } .card-status[data-s="approval"]::before { background: var(--rv-st-appr-dot); } /* the dots in the bright step, the words in the dark one */
   .card-status { flex: 0 1 auto; min-width: 0; }
-  .card-status .st-s { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  /* MAYBE FIXED? a quiet pill after the status; what changed is in its tip */
+  .card-maybe { flex: 0 0 auto; display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 9px; font-size: 10.5px; font-weight: 500; white-space: nowrap; color: var(--rv-ink-2); background: color-mix(in srgb, var(--rv-st-appr-dot) 14%, transparent); cursor: default; }
+  .card-status .st-s { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 3px 0; margin: -3px 0; } /* room above and below: the "…" needs overflow hidden, and without it the faces and Claude's ring were trimmed at the line's edge */
   .card-status .st-k { font-weight: 500; color: inherit; }
   .card-status .st-who { color: var(--rv-ink); font-weight: 500; }
   .card-status .st-rest { color: var(--rv-ink-2); font-weight: 400; }
@@ -991,7 +996,8 @@ root.innerHTML = `
   .card-note .av { width: 14px; height: 14px; vertical-align: -3px; margin: 0 4px 0 0; } /* smaller in the note than on the status line (Nirav, 2026-10-23) */
   .card-note .av-i { font-size: 8px; }
   .card-status .st-claude { margin-left: -7px; box-shadow: 0 0 0 1.5px var(--rv-surface); } /* Claude's mark tucked beside the person's face */
-  .av-claude { display: inline-flex; align-items: center; justify-content: center; font: 700 8px/1 -apple-system, system-ui, sans-serif; color: #fff; background: #D97757; } /* Claude's mark where a face would be */
+  .av-claude { display: inline-flex; align-items: center; justify-content: center; background: #D97757; } /* Claude's mark where a face would be */
+  .av-claude svg { width: 62%; height: 62%; fill: #fff; }
   .tip-note .nt-head { color: inherit; opacity: .75; }
   .tip-note .nt-head b { font-weight: 600; }
   /* the one-line ask in the foot when a comment goes back */
@@ -1361,6 +1367,151 @@ function queryDeep(selector, root = document) {
   for (const h of hits) if (h.shadowRoot) out.push(...queryDeep(rest.join(" >>> "), h.shadowRoot));
   return out;
 }
+/* ANCHORS (2026-10-26): what any site says about an element, whatever it is built with: a test id, its role and
+   accessible name, its label, the heading it sits under. They find the pin again when the tree moves (a row added
+   above shifts every nth-of-type), and give Claude words to search the code with. */
+const TEST_ATTRS = ["data-testid", "data-test-id", "data-test", "data-cy", "data-qa", "data-test-subj"];
+const IMPLICIT_ROLE = { BUTTON: "button", A: "link", SELECT: "combobox", TEXTAREA: "textbox", IMG: "img", NAV: "navigation", LI: "listitem", TR: "row", TD: "cell", TH: "columnheader", TABLE: "table", DIALOG: "dialog", H1: "heading", H2: "heading", H3: "heading", H4: "heading", H5: "heading", H6: "heading" };
+function roleOf(el) {
+  const r = el.getAttribute("role");
+  if (r) return r.split(/\s+/)[0];
+  if (el.tagName === "INPUT") return { checkbox: "checkbox", radio: "radio", button: "button", submit: "button", range: "slider", search: "searchbox" }[el.type] || "textbox";
+  if (el.tagName === "A" && !el.hasAttribute("href")) return "";
+  return IMPLICIT_ROLE[el.tagName] || "";
+}
+function nameOf(el) {
+  const clip = (t) => String(t || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const by = el.getAttribute("aria-labelledby");
+  if (by) {
+    const t = by.split(/\s+/).map((id) => el.getRootNode().getElementById?.(id)?.textContent || "").join(" ");
+    if (clip(t)) return clip(t);
+  }
+  for (const a of ["aria-label", "title", "alt", "placeholder"]) if (clip(el.getAttribute(a))) return clip(el.getAttribute(a));
+  if (el.id && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) {
+    const l = el.getRootNode().querySelector?.(`label[for="${CSS.escape(el.id)}"]`);
+    if (l) return clip(l.textContent);
+  }
+  const wrap = el.closest("label");
+  if (wrap && wrap !== el) return clip(wrap.textContent);
+  return /^(button|link|tab|menuitem|option|heading|cell|columnheader)$/.test(roleOf(el)) ? clip(el.textContent) : "";
+}
+function anchorsOf(el) {
+  const a = {};
+  for (const k of TEST_ATTRS) {
+    const v = el.getAttribute(k);
+    if (v) {
+      a.test = [k, v];
+      break;
+    }
+  }
+  const role = roleOf(el), name = nameOf(el);
+  if (role) a.role = role;
+  if (name) a.name = name;
+  if (el.getAttribute("aria-label")) a.aria = el.getAttribute("aria-label").slice(0, 80);
+  if (el.getAttribute(SRC_ATTR)) a.stamp = el.getAttribute(SRC_ATTR); // the place in the code: the same in every layout
+  const box = el.closest("section,article,[role=region],[role=tabpanel],[role=dialog],dialog,main,form");
+  const h = box?.querySelector("h1,h2,h3,h4,[role=heading]");
+  if (h && h !== el) a.heading = txt(h).slice(0, 60);
+  return Object.keys(a).length ? a : null;
+}
+/* elements the anchors point at, best first: the same test id, then the same aria-label (an icon button has no
+   text). The caller still checks text, size and place, so a test id shared by every row is fine. */
+function byAnchors(a) {
+  if (!a) return [];
+  const out = [];
+  try {
+    if (a.stamp) out.push(...document.querySelectorAll(`[${SRC_ATTR}="${CSS.escape(a.stamp)}"]`));
+    if (a.test) out.push(...document.querySelectorAll(`[${a.test[0]}="${CSS.escape(a.test[1])}"]`));
+    if (a.aria) out.push(...document.querySelectorAll(`[aria-label="${CSS.escape(a.aria)}"]`));
+  } catch {}
+  return out;
+}
+
+/* SOURCE (2026-10-26): where the element is written. 1. our dev-server stamp (collector/source.js: data-rv-src, any
+   framework), the element's own and the nearest from other files above it (a shared Button inside AgentTable says
+   both); 2. else what the framework itself keeps in a development build: React, Vue, Svelte, Angular, and the
+   web component an element lives in. Nothing found: null, and the anchors are what Claude searches with. */
+const SRC_ATTR = "data-rv-src";
+function parseStamp(s) {
+  const m = /^(.*):(\d+):(\d+)(?:@(.+))?$/.exec(s || "");
+  return m ? { file: m[1], line: +m[2], col: +m[3], component: m[4] || "" } : null;
+}
+const upTree = (e) => e.parentElement || (e.getRootNode() instanceof ShadowRoot ? e.getRootNode().host : null);
+function sourceOf(el) {
+  try {
+    const own = el.closest?.(`[${SRC_ATTR}]`) || null;
+    if (own) {
+      const at = parseStamp(own.getAttribute(SRC_ATTR));
+      if (at) {
+        const up = [];
+        const seen = new Set([at.file]);
+        for (let e = upTree(own); e && up.length < 3; e = upTree(e)) {
+          const s = e.getAttribute?.(SRC_ATTR);
+          if (!s) continue;
+          const p = parseStamp(s);
+          if (p && !seen.has(p.file)) {
+            seen.add(p.file);
+            up.push({ file: p.file, line: p.line, component: p.component });
+          }
+        }
+        return { ...at, ...(own !== el ? { inside: true } : {}), up, how: "stamp" };
+      }
+    }
+    return frameworkSource(el);
+  } catch {
+    return null;
+  }
+}
+/* the file part of a framework's path, from the project's folder on: "/Users/x/app/src/A.vue" -> "src/A.vue" */
+const shortFile = (f) => {
+  const s = String(f || "").replace(/^webpack:\/\/\/?|^file:\/\//, "").replace(/[?#].*$/, "");
+  const i = s.search(/\/(src|app|lib|components|pages|routes)\//);
+  return i >= 0 ? s.slice(i + 1) : s.replace(/^.*\/(?=[^/]+\/[^/]+$)/, "");
+};
+function frameworkSource(el) {
+  /* React: the fiber on the element; the nearest component above it, and its JSX source in React 18 and older */
+  for (let e = el; e; e = upTree(e)) {
+    const key = Object.keys(e).find((k) => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$"));
+    if (!key) continue;
+    const named = (t) => (typeof t === "function" ? t.displayName || t.name : t && typeof t === "object" ? t.displayName || t.render?.displayName || t.render?.name || t.type?.displayName || t.type?.name : "") || "";
+    /* the owner first: the component whose code wrote this element (a cell in Msp is Msp's, not TableCell's) */
+    let f = e[key], src = f._debugSource || null, comp = /^[A-Z]/.test(named(f._debugOwner?.type)) ? named(f._debugOwner.type) : "";
+    for (let g = f; g && !comp; g = g.return) {
+      const name = named(g.type);
+      if (name && /^[A-Z]/.test(name)) {
+        comp = name;
+        src ||= g._debugSource || null;
+      }
+    }
+    if (comp || src) return { file: src ? shortFile(src.fileName) : "", line: src?.lineNumber || 0, col: src?.columnNumber || 0, component: comp, up: [], how: "react" };
+    break;
+  }
+  /* Vue 3, then Vue 2 */
+  for (let e = el; e; e = upTree(e)) {
+    const v3 = e.__vueParentComponent;
+    if (v3) return { file: shortFile(v3.type?.__file), line: 0, col: 0, component: v3.type?.__name || v3.type?.name || (v3.type?.__file || "").split("/").pop()?.replace(/\.vue$/, "") || "", up: [], how: "vue" };
+    const v2 = e.__vue__;
+    if (v2) return { file: shortFile(v2.$options?.__file), line: 0, col: 0, component: v2.$options?.name || v2.$options?._componentTag || "", up: [], how: "vue" };
+  }
+  /* Svelte: the element's own place in the file (Svelte 4 counts lines from 0) */
+  for (let e = el; e; e = upTree(e)) {
+    const loc = e.__svelte_meta?.loc;
+    if (!loc) continue;
+    const five = [...(window.__svelte?.v || [])].some((v) => String(v).startsWith("5"));
+    const file = shortFile(loc.file);
+    return { file, line: (loc.line || 0) + (five ? 0 : 1), col: (loc.column || 0) + 1, component: file.split("/").pop().replace(/\.svelte$/, ""), up: [], how: "svelte" };
+  }
+  /* Angular, in development mode */
+  try {
+    const cmp = window.ng?.getComponent?.(el) || window.ng?.getOwningComponent?.(el);
+    if (cmp) return { file: "", line: 0, col: 0, component: cmp.constructor?.name?.replace(/^_/, "") || "", up: [], how: "angular" };
+  } catch {}
+  /* a web component (Lit, Stencil, plain custom elements): its tag is its name */
+  for (let e = el; e; e = upTree(e)) if (e.tagName?.includes("-") && customElements.get(e.tagName.toLowerCase())) return { file: "", line: 0, col: 0, component: `<${e.tagName.toLowerCase()}>`, up: [], how: "element" };
+  return null;
+}
+/* the source for a brief: data for Claude, never shown in the drawer (Nirav, 2026-10-26: "treat it as data") */
+const srcLong = (s) => (s ? `${s.file ? `${s.file}${s.line ? `:${s.line}` : ""}` : ""}${s.component ? `${s.file ? " " : ""}(${s.component})` : ""}${s.up?.length ? `, used in ${s.up.map((u) => `${u.file}:${u.line}${u.component ? ` (${u.component})` : ""}`).join(", in ")}` : ""}` : "");
 /* the module: the left nav's group label above the active row ("Operations"), and the row itself ("Agent Fleet");
    for routes the nav is not showing (or older comments) a map of the console's sections */
 const GROUPS = {
@@ -1936,6 +2087,8 @@ async function save() {
     path: cssPath(el),
     selector: selectorFor(el),
     textKey: txt(el).slice(0, 80),
+    anchor: anchorsOf(el),
+    source: sourceOf(el),
     rect,
     viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio },
     severity,
@@ -2055,11 +2208,13 @@ function watchUnread() {
   unreadWatch.disconnect();
   for (const card of panelBody.querySelectorAll(".card.unread")) unreadWatch.observe(card);
 }
-window.__reviewWhy = (id) => { /* read-only, for drives: why a pin is or is not drawn */
+window.__reviewWhy = (id, fresh) => { /* read-only, for drives: why a pin is or is not drawn (fresh: found anew, not remembered) */
   const c = state.comments.find((x) => x.id === id);
   if (!c) return "no such comment";
   const here = location.pathname;
+  if (fresh) state.pinEls.delete(c.id);
   const el = resolve(c, performance.now(), true);
+  if (fresh && el) window.__reviewWhyEl = el;
   const r = el?.getBoundingClientRect();
   const out = { onRoute: (c.route || "").split("?")[0] === here, resolved: !!el, tag: el?.tagName, rect: r && [r.left, r.top, r.width, r.height].map(Math.round), ghost: !el && !!(c.rect && ghostRect(c)), context: c.context };
   if (el) {
@@ -2290,7 +2445,13 @@ function resolve(c, now, force) {
     if (/^Popover or menu/.test(c.context || "") && !closestDeep(e, "[data-radix-popper-content-wrapper],[role=menu],[role=listbox],[role=tooltip],[role=combobox],:popover-open")) return false;
     return true;
   };
+  /* the path first (it tells two "Edit" buttons apart); when the tree moved and it lands on another element, the
+     anchors (a test id, an aria-label survive a reshuffle), the one under the same heading when several fit */
   let el = found.find(fits) || null;
+  if (!el && c.anchor) {
+    const fitting = byAnchors(c.anchor).filter((e) => e !== host && fits(e));
+    el = (c.anchor.heading && fitting.find((e) => anchorsOf(e)?.heading === c.anchor.heading)) || fitting[0] || null;
+  }
   if (!el && c.textKey) {
     /* the address failed (an id that changed, a layer rebuilt): the same kind of element with the same words and
        about the same size, anywhere on the page, open shadow roots included */
@@ -2440,6 +2601,73 @@ function ghostRect(c) {
   if (clip && (top + c.rect.h < clip.top || top > clip.bottom)) return null; // scrolled out of its pane
   return { left, top, width: c.rect.w, height: c.rect.h, right: left + c.rect.w, bottom: top + c.rect.h, clip };
 }
+/* MAYBE FIXED? (Nirav, 2026-10-26): an open comment whose element has changed or gone, or whose code was edited
+   after it was made, gets a "Maybe fixed?" pill, so a fix nobody marked does not sit as New behind a ghost pin.
+   1. Gone or changed: on its page, once the page has had time to load, the pin finds nothing. The same place in the
+      code (the source stamp) still drawing an element means it changed (its words now); nothing there, it is gone.
+      Comments in a drawer, a menu or a tooltip are left alone: a closed layer is not a gone element.
+   2. The code: on the dev server, the element's place now (its live stamp) and the fingerprint of its tag there,
+      against the one kept when the comment was made (collector/source.js codeNear). Catches the fixes that keep the
+      words: a padding, a colour. Only asked every 20 s per comment, only for the comments on this page.
+   Only a hint: nothing changes status by itself. */
+const maybe = new Map(); // id -> { why: "gone" | "changed" | "code", now?, at? }
+const maybeAsked = new Map(); // id -> when its code was last asked about
+let pageSince = { path: location.pathname, at: performance.now() };
+let maybeRedraw = 0;
+function setMaybe(id, v) {
+  if (JSON.stringify(maybe.get(id) || null) === JSON.stringify(v || null)) return;
+  if (v) maybe.set(id, v);
+  else maybe.delete(id);
+  if (!maybeRedraw) maybeRedraw = setTimeout(() => ((maybeRedraw = 0), renderPanel()), 400);
+}
+/* live data (Nirav, 2026-10-26, the Supabase charts): a chart or a block of figures redraws by itself, so it misses
+   and ghosts without anything being fixed. Two or more figures in its words, or a chart element: never judged by its
+   words or by being gone, only by its code. */
+const figures = (t) => (String(t || "").match(/\d[\d.,:/%]*/g) || []).length;
+const liveData = (c, words) => figures(c.textKey) >= 2 || (words !== undefined && figures(words) >= 2) || /(^|[\s>])(svg|canvas|path|g|rect|line|polyline|polygon|circle|text)(:nth-of-type\(\d+\))?$/.test(c.selector || "") || /chart|graph|plot|spark/i.test(`${c.element || ""} ${c.path || ""}`);
+function checkMaybe(c, el, now) {
+  if (c.pending || isQ(c) || !(c.status === "open" || c.status === "progress")) return;
+  if (pageSince.path !== location.pathname) pageSince = { path: location.pathname, at: now };
+  if (now - pageSince.at < 4000) return; // the page may still be loading its data
+  if (el) {
+    /* still found (the app updated it in place) but its words are not the ones commented on: that says the most.
+       Figures are left out of the comparison: a count or a time changes by itself. */
+    const norm = (t) => String(t || "").toLowerCase().replace(/[\d.,:/%]+/g, "#").replace(/\s+/g, " ").trim();
+    const words = txt(el).slice(0, 80);
+    if (c.textKey && !liveData(c, words) && norm(words) !== norm(c.textKey)) setMaybe(c.id, { why: "changed", now: words.slice(0, 60) });
+    else if (maybe.get(c.id)?.why !== "code") setMaybe(c.id, null);
+    codeCheck(c, el, now);
+    return;
+  }
+  if (c.overlay || /drawer|dialog|menu|popover|hover|tooltip|dropdown/i.test(c.context || "")) return;
+  if (liveData(c)) return; // a redrawn chart ghosts without being fixed
+  const there = c.anchor?.stamp ? byAnchors({ stamp: c.anchor.stamp }).filter((e) => e !== host && e.getBoundingClientRect().width) : [];
+  if (there.length === 1) setMaybe(c.id, { why: "changed", now: txt(there[0]).slice(0, 60) });
+  else setMaybe(c.id, { why: there.length ? "changed" : "gone" });
+}
+async function codeCheck(c, el, now) {
+  if (EXT || c.source?.how !== "stamp" || !c.source.near) return;
+  if (now - (maybeAsked.get(c.id) || 0) < 20000) return;
+  maybeAsked.set(c.id, now);
+  const at = parseStamp(el.closest?.(`[${SRC_ATTR}]`)?.getAttribute(SRC_ATTR));
+  if (!at || at.file !== c.source.file) return;
+  try {
+    const r = await (await fetch(`/__review/near?file=${encodeURIComponent(at.file)}&line=${at.line}&col=${at.col}`)).json();
+    if (!r.near) return;
+    if (maybe.get(c.id)?.why === "changed") return; // the new words say more than "the code was edited"
+    if (r.near !== c.source.near && r.at > (c.ts || 0)) setMaybe(c.id, { why: "code", file: at.file, line: at.line, at: r.at });
+    else if (maybe.get(c.id)?.why === "code") setMaybe(c.id, null);
+  } catch {}
+}
+function maybeTip(c) {
+  const m = maybe.get(c.id);
+  const was = c.textKey ? ` (was "${c.textKey.slice(0, 40)}")` : "";
+  const why =
+    m.why === "code" ? `The code here (${m.file.split("/").pop()}:${m.line}) was edited ${agoText(m.at)}`
+    : m.why === "changed" ? (m.now ? `This now says "${m.now.slice(0, 40)}"${was}` : "This element has changed")
+    : "This element is not on the page any more";
+  return `${why}. Compare with the picture.`;
+}
 function renderPins() {
   pinsEl.innerHTML = "";
   const now = performance.now();
@@ -2456,6 +2684,7 @@ function renderPins() {
     if (only && c.id !== only) continue;
     if ((c.route || "").split("?")[0] !== here) continue;
     const el = resolve(c, now);
+    checkMaybe(c, el, now);
     /* the element is gone or changed (a chart redrawn, a figure that moved on): the pin where it was taken,
        dimmed and dashed, so the place is still shown and the comment still reachable */
     const ghost = !el && c.rect && ghostRect(c);
@@ -3534,7 +3763,7 @@ function statusHtml(c) {
   const k = (t) => `<b class="st-k">${esc(t)}</b>`;
   /* CLAUDE ON THE CARD (2026-10-26): work moved with Claude (npx --no review-mode … --claude) shows both, the person and Claude's mark */
   const claude = c.withClaude && (c.status === "progress" || c.status === "approval");
-  const person = who ? `${face(who)}${claude ? '<span class="av av-claude st-claude">✦</span>' : ""}<span class="st-who">${mine ? "You" : esc(who)}${claude ? " and Claude" : ""}</span>` : "";
+  const person = who ? `${face(who)}${claude ? CLAUDE_AV("st-claude") : ""}<span class="st-who">${mine ? "You" : esc(who)}${claude ? " and Claude" : ""}</span>` : "";
   const line = (h) => `<span class="st-s">${h}</span>`; // one inline run, so the spaces between the words stay
   if (c.status === "open") return line(`${k("New")}<span class="st-rest">, waiting for someone to pick it up</span>`);
   if (c.status === "progress") return who ? line(`${person}<span class="st-rest">${mine || claude ? " are" : " is"}</span> ${k("working on it")}`) : k("In progress");
@@ -3549,7 +3778,7 @@ function qStatusHtml(c) {
   const line = (h) => `<span class="st-s">${h}</span>`;
   const person = (name) => {
     if (!name) return "";
-    if (name === "Claude") return `<span class="av av-claude">✦</span><span class="st-who">Claude</span>`;
+    if (name === "Claude") return `${CLAUDE_AV()}<span class="st-who">Claude</span>`;
     const full = personHtml(c, name), named = esc(name);
     return `${full.slice(0, full.length - named.length)}<span class="st-who">${isMe(name) ? "You" : named}</span>`;
   };
@@ -3582,7 +3811,7 @@ function noteHtml(c) {
     /* the latest word on a question: "Zeni answered: “…”", "You followed up: “…”", "Claude answered: “…”" */
     const claude = c.note.via === "claude";
     const ask = !claude && c.note.by === c.by;
-    const head = claude ? `<span class="av av-claude">✦</span><b>Claude</b> answered` : `${who}${ask ? "followed up" : "answered"}`;
+    const head = claude ? `${CLAUDE_AV()}<b>Claude</b> answered` : `${who}${ask ? "followed up" : "answered"}`;
     return `<span class="nt-head nt-reply" data-ask="${ask}">${head}:</span> <span class="nt-text">“${esc(c.note.text)}”</span>`;
   }
   if (c.note.kind === "hand") {
@@ -3606,7 +3835,7 @@ const hasHist = (c) => Array.isArray(c.history) && c.history.length >= 2;
 function histHtml(c) {
   const face = (name) => {
     if (!name) return "";
-    if (name === "Claude") return `<span class="av av-claude">✦</span>`;
+    if (name === "Claude") return `${CLAUDE_AV()}`;
     const full = personHtml(c, name), named = esc(name);
     return full.slice(0, full.length - named.length);
   };
@@ -3784,10 +4013,13 @@ window.addEventListener("pointerdown", (e) => {
   const card = panelBody.querySelector(`.card[data-id="${state.asking.id}"]`);
   if (card && !e.composedPath().includes(card)) cancelAsk();
 }, true);
+/* Claude's face where a person's would be: its real mark (the one on the brief button), white on its orange */
+const CLAUDE_PATH = "m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z";
+const CLAUDE_AV = (cls = "") => `<span class="av av-claude${cls ? ` ${cls}` : ""}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${CLAUDE_PATH}"/></svg></span>`;
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
 /* the foot's normal content: where, the status chip, the actions */
 function footHtml(c) {
-  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${shownStatus(c)}">${statusHtml(c)}</span>${c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${actsHtml(c)}</span>`}`;
+  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${shownStatus(c)}">${statusHtml(c)}</span>${maybe.has(c.id) ? `<span class="card-maybe" data-tip="${esc(maybeTip(c))}">Maybe fixed?</span>` : ""}${c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${actsHtml(c)}</span>`}`;
 }
 /* the note under the foot, added, changed or removed to match the comment */
 function settle(card, c) {
@@ -4362,7 +4594,7 @@ const placeTip = document.createElement("div");
 placeTip.className = "place-tip";
 root.appendChild(placeTip);
 panelBody.addEventListener("pointerover", (e) => {
-  const el = e.target.closest?.(".cm-place");
+  const el = e.target.closest?.(".cm-place, .card-maybe");
   if (!el) return;
   placeTip.textContent = el.dataset.tip;
   const r = el.getBoundingClientRect();
@@ -4372,7 +4604,7 @@ panelBody.addEventListener("pointerover", (e) => {
   placeTip.style.top = `${r.top - placeTip.offsetHeight - 6}px`;
 });
 panelBody.addEventListener("pointerout", (e) => {
-  if (e.target.closest?.(".cm-place")) placeTip.classList.remove("on");
+  if (e.target.closest?.(".cm-place, .card-maybe")) placeTip.classList.remove("on");
 });
 panelBody.addEventListener("scroll", () => placeTip.classList.remove("on"), { passive: true });
 /* an open history closes when the pointer moves on to another card, and that card goes back to normal (Nirav,
@@ -4587,6 +4819,7 @@ panelBody.addEventListener("click", async (e) => {
       ``,
       `#${c.n} (${c.id}), asked by ${c.by || "someone"}: "${c.text}"`,
       `Where: ${c.pageTitle || c.route} (${c.route})${c.context ? `, ${c.context}` : ""}${typeof c.element === "string" && c.element ? `, on ${c.element}` : ""}`,
+      c.source ? `Code: ${srcLong(c.source)}` : "",
       talk ? `So far:\n${talk}` : "",
       ``,
       `Run \`npx --no review-mode show ${c.id}\` for the element, the trail and the picture. Answer in one or two plain sentences, as you`,
@@ -4971,6 +5204,9 @@ async function buildPrompt(list) {
       }
       lines.push(`- Where: ${c.pageTitle || c.route} · ${c.context || "Page"} · route ${c.route}`);
       if (c.element) lines.push(`- Element: ${c.element}`);
+      if (maybe.has(c.id)) lines.push(`- Maybe fixed already: ${maybeTip(c).replace(/ Compare with the picture\.$/, "")} Check before changing anything.`);
+      if (c.source) lines.push(`- Code: ${srcLong(c.source)}${c.source.how === "stamp" ? "" : " (from the framework)"}`);
+      else if (c.anchor?.test || c.anchor?.name) lines.push(`- Search the code for: ${[c.anchor.test ? `${c.anchor.test[0]}="${c.anchor.test[1]}"` : "", c.anchor.name ? `"${c.anchor.name}"` : ""].filter(Boolean).join(", ")}`);
       const tw = trailWords(c);
       if (tw) lines.push(`- How to get there: ${tw}`);
       if (c.theme && c.theme !== "light") lines.push(`- Theme: ${c.theme}`);
@@ -5112,7 +5348,7 @@ const sheet = document.createElement("div");
 sheet.className = "claude-sheet";
 panelBody.before(sheet);
 const COPY_ICO = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`;
-const cmdBox = (cmd, again) => `<div class="cs-row"><div class="cs-cmd"><code>${esc(cmd)}</code><button type="button" class="cs-copy" data-copy="${esc(cmd)}" aria-label="Copy the command">${COPY_ICO}<span>Copy</span></button></div>${again ? '<button type="button" class="cs-again">Check again</button>' : ""}</div>`;
+const cmdBox = (cmd, again) => `<div class="cs-row"><div class="cs-cmd"><code>${esc(cmd)}</code><button type="button" class="cs-copy" data-copy="${esc(cmd)}" aria-label="Copy the command">${COPY_ICO}<span>Copy</span></button></div>${again === true ? '<button type="button" class="cs-again">Check again</button>' : again || ""}</div>`;
 let sheetTimer = 0;
 function showSheet(kind, o = {}) {
   clearTimeout(sheetTimer);
@@ -5124,7 +5360,7 @@ function showSheet(kind, o = {}) {
   const n = o.count ? `${o.count} comment${o.count === 1 ? "" : "s"}` : "";
   const body = {
     none: [ICON.warn, "Start Claude to send directly", `<p>Run this once, in a terminal in your project folder. It connects Claude to this project and starts it; after that, plain <code>claude</code> in that folder has the plane on, every time. Until then the brief is on your clipboard: paste it into any Claude chat.</p>${cmdBox(CHANNEL_HINT, true)}`],
-    intro: [`<span class="cs-intro">✦</span>`, "Connect Claude to this project", `<p>Run this once, in a terminal in your project folder. From then on, plain <code>claude</code> there is connected: the plane next to "Copy for Claude" sends comments straight to it, and Claude works through them for you.</p>${cmdBox(CHANNEL_HINT)}<div class="cs-acts"><button type="button" class="cs-gotit">Got it</button></div>`],
+    intro: [`<span class="cs-intro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${CLAUDE_PATH}"/></svg></span>`, "Connect Claude to this project", `<p>Run this once, in a terminal in your project folder. From then on, plain <code>claude</code> there is connected: the plane next to "Copy for Claude" sends comments straight to it, and Claude works through them for you.</p>${cmdBox(CHANNEL_HINT, '<button type="button" class="cs-gotit">Got it</button>')}`], // Got it beside the command, like Check again
     sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
     ok: [ICON.ok, `Claude has the ${o.count === 1 ? "comment" : "comments"}`, `<p class="cs-sub">${esc(o.label || "")} · it is starting on them</p>`],
     late: [ICON.warn, "Sent, but Claude has not confirmed", `<p>Look at that Claude session: it may be asking to allow the review tools, or still busy. If it shows nothing at all, it was not started with push on. The brief is on your clipboard too.</p>${cmdBox(CHANNEL_HINT)}`],

@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { loadConfig, pkgDir } from "./config.js";
+import { codeNear } from "./source.js";
 import { storeFor, prepare } from "./stores.js";
 import { withNames, applyChange, mergePeople, avatarsOf, normalise, sentence, newId, teamOf, waitingOf, isApproverIn, sigOf, lightList, facesOf, claudeSessions, claudeSend, claudeStatus } from "../hub-core.js";
 
@@ -58,6 +59,7 @@ const listPage = () => `<!doctype html><html lang="en"><head><meta charset="utf-
 
 export default function review(options = {}) {
   let cfg = null;
+  let viteRoot = process.cwd(); // the stamps' paths start here
   const hubs = new Map();
   let peopleCache = { at: 0, map: {} };
   const peopleFor = async (store) => {
@@ -86,6 +88,7 @@ export default function review(options = {}) {
     apply: "serve",
     configResolved(resolved) {
       cfg = { ...loadConfig(resolved.root), ...options };
+      viteRoot = resolved.root;
     },
     transformIndexHtml(html) {
       return html.replace("</body>", `<script type="module" src="/__review/overlay.js"></script></body>`);
@@ -121,6 +124,11 @@ export default function review(options = {}) {
             const body = q.get("light") ? { ...lightList(list, { approved: !!q.get("approved") }), faces: facesOf(ppl) } : { list };
             const sig = sigOf(JSON.stringify(body));
             return send(res, 200, since === sig ? { same: true, sig } : { sig, ...body });
+          }
+          /* GET /__review/near?file=&line=&col=  the fingerprint of the code there now ("Maybe fixed?") */
+          if (url === "/__review/near") {
+            const q = new URLSearchParams(qs || "");
+            return send(res, 200, codeNear(viteRoot, q.get("file"), q.get("line"), q.get("col")) || { near: null });
           }
           if (url === "/__review/next") return send(res, 200, { n: (await store.list()).length + 1 });
           if (url === "/__review/hub") {
@@ -170,6 +178,9 @@ export default function review(options = {}) {
             const st = body.session ? storeFor(cfg, hubs, body.session) : store;
             const { png, thumb, session, ...rest } = body;
             const entry = normalise({ id: newId(), ts: Date.now(), by: reviewer, ...rest, text: sentence(rest.text), shot: null, status: "open", clean: true });
+            /* the code where the element is written, as it is now: "Maybe fixed?" compares it later */
+            const near = entry.source?.how === "stamp" ? codeNear(viteRoot, entry.source.file, entry.source.line, entry.source.col) : null;
+            if (near) entry.source.near = near.near;
             await st.insert(entry, b64(png), b64(thumb));
             const count = (await st.list()).length;
             entry.n = count;
