@@ -59,6 +59,9 @@ file map; read it next.
   answer) and Ignore. Picked up the usual way, it stays only for the person on it: "Let Claude do it" (sends it,
   marks the card with Claude, no second pick-up) or Ignore. Gone once For approval. Data only for the hub's rules. Off: `"drafts": false` in
   review.config.json or `REVIEW_DRAFTS=0`.
+- **Sent already? (2026-10-26)**: the drawer keeps what reached Claude (localStorage `review.sent.<project><session>`, a
+  week, a stamp of text, status, assignee, note, edits, draft). Sending something unchanged asks first ("Already with
+  Claude": Send again, or Send the new only). Each send watches for Claude's yes only while it is the latest.
 - **Site**: GitHub Pages from `docs/` (install page, privacy, auth page, `firefox/` with signed xpi + `updates.json`).
   `site.mjs` holds the address.
 

@@ -496,6 +496,10 @@ root.innerHTML = `
   .cs-acts .cs-gotit { height: 26px; padding: 0 12px; border: 0; border-radius: 6px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
   .cs-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 28px; }
   .cs-row .cs-again, .cs-row .cs-gotit { flex: 0 0 auto; height: 32px; }
+  .cs-acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+  .cs-acts .cs-new, .cs-acts .cs-again-all:not(.cs-gotit) { height: 26px; padding: 0 12px; border: 0; border-radius: 6px; background: #D97757; color: #fff; font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .cs-acts .cs-new:hover { background: #C6613F; }
+  .cs-acts .cs-again-all:not(.cs-gotit):hover { background: #C6613F; }
   .cs-row .cs-gotit { padding: 0 12px; border: 0; border-radius: 6px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
   .cs-row .cs-gotit:hover { background: hsl(var(--rv-n30)); }
   .cs-cmd { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 8px; background: hsl(var(--rv-n10)); box-shadow: inset 0 0 0 1px hsl(var(--rv-n20)); }
@@ -844,6 +848,8 @@ root.innerHTML = `
   .hs-line b { font-weight: 500; color: var(--rv-ink); }
   .hs-face { flex: 0 0 auto; display: flex; margin: 1.5px 5px 0 0; } /* 14 px in a 17 px line: centred on the first line */
   .hs-face .av { display: block; width: 14px; height: 14px; margin: 0; }
+  .hs-face .av-claude { display: flex; } /* its mark centred: the line above sets every face to a plain block (Nirav, 2026-10-26: off-centre and clipped) */
+  .hs-face .hs-claude { margin-left: -5px; box-shadow: 0 0 0 1.5px var(--rv-surface); border-radius: 50%; } /* Claude's mark tucked beside the face, as on the status line */
   .hs-face .av-i { display: flex; align-items: center; justify-content: center; font-size: 8px; line-height: 1; }
   .hs-words { color: var(--rv-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
   .hs-more { display: inline-flex; align-items: flex-start; border: 0; padding: 0; background: none; font: inherit; color: var(--rv-ink-2); cursor: pointer; }
@@ -3871,8 +3877,8 @@ function histHtml(c) {
     const full = personHtml(c, name), named = esc(name);
     return full.slice(0, full.length - named.length);
   };
-  const row = (st, by, line, at, words) =>
-    `<li class="hs-step"><span class="gh-shape" data-s="${st}"></span>${by ? `<span class="hs-face">${face(by)}</span>` : ""}<span class="hs-body"><span class="hs-line">${by ? `<b>${isMe(by) ? "You" : esc(by)}</b> ` : ""}${line}</span>${words ? `<span class="hs-words">“${esc(words)}”</span>` : ""}</span><span class="hs-when"${at ? ` title="${esc(new Date(at).toLocaleString())}"` : ""}>${esc(agoText(at))}</span></li>`;
+  const row = (st, by, line, at, words, withClaude) =>
+    `<li class="hs-step"><span class="gh-shape" data-s="${st}"></span>${by ? `<span class="hs-face">${face(by)}${withClaude ? CLAUDE_AV("hs-claude") : ""}</span>` : ""}<span class="hs-body"><span class="hs-line">${by ? `<b>${isMe(by) ? "You" : esc(by)}</b> ` : ""}${line}</span>${words ? `<span class="hs-words">“${esc(words)}”</span>` : ""}</span><span class="hs-when"${at ? ` title="${esc(new Date(at).toLocaleString())}"` : ""}>${esc(agoText(at))}</span></li>`;
   const cap = (h, name) => (name ? h : h[0].toUpperCase() + h.slice(1)); // "Picked it up" when nobody is named
   const out = []; // who added it is the strip's own line, where the thread starts
   let was = "open";
@@ -3890,8 +3896,12 @@ function histHtml(c) {
     else if (s.status === "approval") verb = "sent it for approval";
     else if (s.status === "approved") verb = "approved it";
     else verb = from === "approved" ? "reopened it" : "put it back";
-    const by = s.via === "claude" ? "Claude" : s.by; // Claude's answers under its own mark
-    out.push(row(s.status, by, cap(verb, by) + (s.via === "claude" && s.kind !== "reply" ? ", with Claude" : ""), s.at, s.note));
+    /* Claude's answers under its own mark; a move made with Claude is the person's, Claude's mark tucked beside their
+       face ("You picked it up, with Claude"; Nirav, 2026-10-26: it read "Claude picked it up, with Claude") */
+    const claudeSays = s.via === "claude" && s.kind === "reply";
+    const by = claudeSays ? "Claude" : s.by;
+    const withClaude = s.via === "claude" && !claudeSays && !!s.by;
+    out.push(row(s.status, by, cap(verb, by) + (s.via === "claude" && !claudeSays ? ", with Claude" : ""), s.at, s.note, withClaude));
     was = s.status;
   }
   /* in order, down from the author's face (Nirav, 2026-10-24); a long story folds: "Show 90 earlier", then the latest five */
@@ -5568,6 +5578,12 @@ function showSheet(kind, o = {}) {
     sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
     ok: [ICON.ok, `Claude has the ${o.count === 1 ? "comment" : "comments"}`, `<p class="cs-sub">${esc(o.label || "")} · it is starting on ${o.count === 1 ? "it" : "them"}</p>`],
     late: [ICON.warn, "Sent, but Claude has not confirmed", `<p>Look at that Claude session: it may be asking to allow the review tools, or still busy. If it shows nothing at all, it was not started with push on. The brief is on your clipboard too.</p>${cmdBox(CHANNEL_HINT)}`],
+    again: [ICON.warn, "Already with Claude", (() => {
+      const ns = (o.again || []).map((c) => `#${c.n}`);
+      const which = ns.length <= 3 ? ns.join(ns.length === 2 ? " and " : ", ") : `${ns.length} of these`;
+      const one = ns.length === 1;
+      return `<p>${which} ${one ? "was" : "were"} sent to Claude ${agoText(o.at)} and ${one ? "has" : "have"} not changed since.</p><div class="cs-acts">${o.fresh ? `<button type="button" class="cs-gotit cs-again-all">Send all again</button><button type="button" class="cs-new">Send the ${o.fresh} new only</button>` : `<button type="button" class="cs-again-all">Send again</button>`}</div>`;
+    })()], // with new ones too, sending only those is the main button
     fail: [ICON.warn, "Could not send", `<p>${esc(String(o.error || "The session did not answer").replace(/^./, (c) => c.toUpperCase()).replace(/[^.!?]$/, "$&."))} The brief is on your clipboard.</p>`],
   }[kind];
   sheet.innerHTML = `<div class="cs-card cs-is-${kind}"><div class="cs-head">${body[0]}<b>${body[1]}</b><button type="button" class="cs-close" aria-label="Close">×</button></div>${body[2]}</div>`;
@@ -5579,6 +5595,13 @@ function hideSheet() {
   sheet.classList.remove("on");
 }
 sheet.addEventListener("click", async (e) => {
+  if (e.target.closest(".cs-new, .cs-again-all")) {
+    const ask = sendAsk;
+    sendAsk = null;
+    hideSheet();
+    if (ask) sendToClaude(ask.btn, e.target.closest(".cs-new") ? ask.fresh : ask.list, true);
+    return;
+  }
   if (e.target.closest(".cs-close, .cs-gotit")) {
     if (sheet.querySelector(".cs-is-intro")) introSeen(true);
     return hideSheet();
@@ -5617,9 +5640,41 @@ async function maybeIntro() {
   if (Array.isArray(sessions) && sessions.length) return introSeen(true); // already connected
   if (!sheet.classList.contains("on")) showSheet("intro");
 }
-async function sendToClaude(btn, only) {
+/* SENT ALREADY? (Nirav, 2026-10-26, sent #159 twice): the drawer remembers what reached Claude (per project, a week);
+   sending a comment that has not changed since asks first: send again, send only the new ones, or not at all */
+const SENT_DAYS = 7;
+const sentKey = () => `review.sent.${state.hub?.project || "project"}${window.__reviewSession || ""}`;
+const sentStamp = (c) => [c.text, c.status, c.assignee || "", c.note?.at || "", c.edited || "", c.draft?.state || ""].join("|");
+function sentLog() {
+  try {
+    const all = JSON.parse(localStorage.getItem(sentKey()) || "{}");
+    for (const [id, v] of Object.entries(all)) if (Date.now() - (v.at || 0) > SENT_DAYS * 86400000) delete all[id];
+    return all;
+  } catch {
+    return {};
+  }
+}
+function noteSent(list) {
+  const all = sentLog();
+  for (const c of list) all[c.id] = { at: Date.now(), stamp: sentStamp(c) };
+  try {
+    localStorage.setItem(sentKey(), JSON.stringify(all));
+  } catch {}
+}
+let sendAsk = null; // what waits on the "Already with Claude" card
+let sendSeq = 0; // each send watches for Claude's yes only while it is the latest: an older one never covers a newer card
+async function sendToClaude(btn, only, sure) {
   const list = only || shownComments();
   if (!list.length) return toast("Nothing shown to send");
+  if (!sure) {
+    const log = sentLog();
+    const again = list.filter((c) => log[c.id]?.stamp === sentStamp(c));
+    if (again.length) {
+      sendSeq++; // the "Already with Claude" card stays; an earlier send stops watching
+      sendAsk = { btn, list, fresh: list.filter((c) => !again.includes(c)) };
+      return showSheet("again", { again, fresh: sendAsk.fresh.length, at: Math.max(...again.map((c) => log[c.id].at)) });
+    }
+  }
   btn.classList.add("busy");
   const done = () => {
     btn.classList.remove("busy");
@@ -5643,12 +5698,14 @@ async function sendToClaude(btn, only) {
     await navigator.clipboard.writeText(md).catch(() => {});
     return showSheet("fail", { error: r?.error });
   }
+  noteSent(list);
+  const mine = ++sendSeq;
   btn.classList.add("busy"); // the plane keeps flying until Claude says it has it
   showSheet("sent", { count: list.length, label: pick.label });
   /* Claude says it has it (review_ack); the first time, Claude Code may ask to allow the review tools, so a minute */
   for (let i = 0; i < 60; i++) {
     await new Promise((res) => setTimeout(res, 1000));
-    if (!sheet.classList.contains("on")) return btn.classList.remove("busy"); // closed: stop watching
+    if (!sheet.classList.contains("on") || mine !== sendSeq) return btn.classList.remove("busy"); // closed, or a newer send: stop watching
     if (i === 15) showSheet("sent", { count: list.length, label: pick.label, hint: true });
     const st = await rv(`/__review/claude/status${q}${q ? "&" : "?"}port=${pick.port}&id=${r.id}`).then((x) => x.json()).catch(() => null);
     if (st?.acked) {
@@ -5660,6 +5717,7 @@ async function sendToClaude(btn, only) {
     }
   }
   btn.classList.remove("busy");
+  if (mine !== sendSeq) return;
   await navigator.clipboard.writeText(md).catch(() => {});
   showSheet("late");
 }
