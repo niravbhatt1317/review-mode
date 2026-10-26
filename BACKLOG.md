@@ -113,12 +113,16 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
 
 ## Claude
 
-- [ ] **A stronger Claude brief (the copy button).** Pasted into a Claude session, it should work the hub on its own:
+- [x] **A stronger Claude brief (the copy button).** (done 2026-10-26: works the hub on its own as you, marked as
+  Claude's; leaves others' work; sent-back notes first; asks before Done; answers questions; ends with a table; the
+  right `npx review` commands for any project) Pasted into a Claude session, it should work the hub on its own:
   mark the comments In progress as it starts, fix them one by one, then ask the person "mark as done?" and on yes set
   them to For approval on the hub.
-- [ ] **Review the skill and make it smarter with the hub.** First write down what it can do today, then extend it
+- [x] **Review the skill and make it smarter with the hub.** (done 2026-10-26: the same flow; `--as`, `--claude`,
+  `--force`, `list --open --mine`; refuses a question's status and a late pick-up) First write down what it can do today, then extend it
   (read and update the hub directly, pictures, notes, statuses, who is who).
-- [ ] **Claude on the card when it picks up** (Nirav, 2026-10-24): when Claude picks up a comment on someone's behalf,
+- [x] **Claude on the card when it picks up** (done 2026-10-26: "Pranjal and Claude are working on it", both faces;
+  "with Claude" in the history; the mark stays through For approval) (Nirav, 2026-10-24): when Claude picks up a comment on someone's behalf,
   the card shows both faces, the person and Claude's mark ("Pranjal and Claude are working on it"); needs the move to
   record that Claude made it (for example `via: "claude"` from `npx review` / the skill).
 - [ ] **Send to Claude without copy and paste** (like the agentation plugin): link the current Claude session to the

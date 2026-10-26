@@ -927,6 +927,7 @@ root.innerHTML = `
   .card-note .nt-head b { font-weight: 500; font-size: 11px; color: var(--rv-ink); }
   .card-note .av { width: 14px; height: 14px; vertical-align: -3px; margin: 0 4px 0 0; } /* smaller in the note than on the status line (Nirav, 2026-10-23) */
   .card-note .av-i { font-size: 8px; }
+  .card-status .st-claude { margin-left: -7px; box-shadow: 0 0 0 1.5px var(--rv-surface); } /* Claude's mark tucked beside the person's face */
   .av-claude { display: inline-flex; align-items: center; justify-content: center; font: 700 8px/1 -apple-system, system-ui, sans-serif; color: #fff; background: #D97757; } /* Claude's mark where a face would be */
   .tip-note .nt-head { color: inherit; opacity: .75; }
   .tip-note .nt-head b { font-weight: 600; }
@@ -3468,10 +3469,12 @@ function statusHtml(c) {
     return full.slice(0, full.length - named.length);
   };
   const k = (t) => `<b class="st-k">${esc(t)}</b>`;
-  const person = who ? `${face(who)}<span class="st-who">${mine ? "You" : esc(who)}</span>` : "";
+  /* CLAUDE ON THE CARD (2026-10-26): work moved with Claude (npx review --claude) shows both, the person and Claude's mark */
+  const claude = c.withClaude && (c.status === "progress" || c.status === "approval");
+  const person = who ? `${face(who)}${claude ? '<span class="av av-claude st-claude">✦</span>' : ""}<span class="st-who">${mine ? "You" : esc(who)}${claude ? " and Claude" : ""}</span>` : "";
   const line = (h) => `<span class="st-s">${h}</span>`; // one inline run, so the spaces between the words stay
   if (c.status === "open") return line(`${k("New")}<span class="st-rest">, waiting for someone to pick it up</span>`);
-  if (c.status === "progress") return who ? line(`${person}<span class="st-rest">${mine ? " are" : " is"}</span> ${k("working on it")}`) : k("In progress");
+  if (c.status === "progress") return who ? line(`${person}<span class="st-rest">${mine || claude ? " are" : " is"}</span> ${k("working on it")}`) : k("In progress");
   if (c.status === "approval") return who ? line(`${person}<span class="st-rest"> sent it</span> ${k("for approval")}`) : k("Waiting for approval");
   if (c.status === "approved") return who ? line(`${k("Approved")}<span class="st-rest"> by</span> ${person}`) : k("Approved");
   return "";
@@ -3564,7 +3567,7 @@ function histHtml(c) {
     else if (s.status === "approved") verb = "approved it";
     else verb = from === "approved" ? "reopened it" : "put it back";
     const by = s.via === "claude" ? "Claude" : s.by; // Claude's answers under its own mark
-    out.push(row(s.status, by, cap(verb, by), s.at, s.note));
+    out.push(row(s.status, by, cap(verb, by) + (s.via === "claude" && s.kind !== "reply" ? ", with Claude" : ""), s.at, s.note));
     was = s.status;
   }
   /* in order, down from the author's face (Nirav, 2026-10-24); a long story folds: "Show 90 earlier", then the latest five */
@@ -4832,27 +4835,31 @@ const groupBy = (list) => {
   return m;
 };
 async function buildPrompt(list) {
+  /* THE BRIEF (2026-10-26): pasted into a Claude session in the project, it works the hub on its own: picks the
+     comments up as you (marked as made with Claude), fixes them group by group, asks you before marking them done,
+     answers the questions, and ends with a summary. Nothing in it is particular to one project. */
+  const project = state.hub?.project || EXT?.project || location.host;
+  const me = state.hub?.handle || ""; // the GitHub handle the hub knows
+  const env = [EXT ? `REVIEW_PROJECT=${project}` : "", window.__reviewSession ? `REVIEW_SESSION=${window.__reviewSession}` : ""].filter(Boolean).join(" ");
+  const cmd = (rest) => `${env ? env + " " : ""}npx review ${rest}${me ? ` --as ${me}` : ""}`;
   const lines = [];
-  lines.push(`# Design review: ${list.length} comment${list.length === 1 ? "" : "s"} on the console`);
+  lines.push(`# Design review: ${list.length} comment${list.length === 1 ? "" : "s"} on ${project}`);
   lines.push("");
-  lines.push("Running at http://localhost:4178 (Functional/next-gen-ui, the staging build). Each comment below points at one thing on one page; its picture shows the page as I saw it, with a red box around the element and the comment's number beside the box. Open the pictures with Read to see them.");
+  lines.push(`The app runs at ${location.origin}${EXT ? "" : " (the dev server)"}. Each comment points at one thing on one page; its picture shows the page as it was seen, with a red box round the element and the comment's number beside it. Open the pictures with Read.${me ? ` You act as ${me}: every command below says so.` : ""}`);
   lines.push("");
   lines.push("How to work through them:");
-  lines.push(`1. Read every comment and its picture first${EXT ? " (each Picture line is a curl command: run it, then open the saved file)" : ""}. Group the ones that share a cause (the same component, the same rule, the same copy pattern) and tell me the groups before changing anything.`);
-  lines.push("2. Make the changes one group at a time. After each group, say which comment numbers it closes and what moved.");
-  lines.push("3. Stay on the design system's tokens and components (node_modules/@mtdt/nextgen-design-system/AGENTS.md, and the rules in Functional/next-gen-ui/CLAUDE.md). Never remove functionality.");
-  lines.push("4. If a comment is ambiguous, ask with its number rather than guessing.");
-  lines.push("5. Keep the review's statuses moving, with the `review` skill (.claude/skills/review) or the commands below: the moment you start on a comment set it to In progress; once its change is in and I have confirmed it in this chat, set it to For approval. I approve from the review panel. A comment with a \"Sent back\" line came back from approval: that line says what was still wrong, fix that first.");
+  lines.push(`1. Read every comment and its picture first${EXT ? " (each Picture line is a curl command: run it, then open the saved file)" : ""}. Group the ones that share a cause (the same component, rule or copy pattern) and tell me the groups before changing anything. Leave a comment someone else is working on (its "Who has it" line names them).`);
+  lines.push(`2. A comment with a "Sent back" note came back from approval: do what the note says first.`);
+  lines.push(`3. For each group: pick its comments up (\`${cmd("status <id> progress --claude")}\`; if it answers "Already picked up by …", leave that one and tell me), make the change, then say which numbers it closes and what moved.`);
+  lines.push(`4. Show me the change and ask: "Mark #… as done?" Only on my yes, set them for approval (\`${cmd("status <id> approval --claude")}\`). Never approve: that is the reviewer's.`);
+  lines.push(`5. A Question is answered, not worked: read the code it points at and answer in one or two plain sentences (\`${cmd('reply <id> --claude "<answer>"')}\`). If the honest answer is that something should change, say so; the asker can make it a fix. Never set a question's status.`);
+  lines.push("6. Follow the project's own rules (its CLAUDE.md, its design system). Never remove functionality. If a comment is unclear, ask with its number rather than guessing.");
+  lines.push("7. When you finish, end with a short table: number, what changed, where it stands now (in progress, waiting for approval, answered, left for someone else).");
   lines.push("");
   lines.push("```sh");
-  if (EXT) {
-    lines.push(`node Functional/next-gen-ui/.review/hub/cli.mjs status <id> progress   # started (project ${EXT.project})`);
-    lines.push(`node Functional/next-gen-ui/.review/hub/cli.mjs status <id> approval   # done, confirmed`);
-  } else {
-    const base = `${location.origin}/__review/update${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`;
-    lines.push(`curl -s -X POST '${base}' -H 'Content-Type: application/json' -d '{"id":"<id>","status":"progress"}'   # started`);
-    lines.push(`curl -s -X POST '${base}' -H 'Content-Type: application/json' -d '{"id":"<id>","status":"approval"}'   # done, confirmed`);
-  }
+  lines.push(`${cmd("list --open")}            # every open comment, with who has it`);
+  lines.push(`${cmd("list --open --mine")}     # the ones you have`);
+  lines.push(`${cmd("show <id>")}              # one comment in full (element, trail, conversation)`);
   lines.push("```");
   lines.push("");
   /* links to the full pictures, good for seven days: from any machine, no repo needed */
@@ -4880,9 +4887,15 @@ async function buildPrompt(list) {
       lines.push(c.text);
       lines.push("");
       lines.push(`- Id: ${c.id}`);
-      if (c.note?.text) lines.push(`- ${noteLine(c)}`);
+      const has = c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : null;
+      if (has) lines.push(`- Who has it: ${isMe(has) ? "you" : has}${c.withClaude ? " (with Claude)" : ""}`);
+      if (c.note?.text && !isQ(c)) lines.push(`- ${noteLine(c)}`);
+      if (isQ(c)) {
+        const talk = (c.history || []).filter((h) => h.kind === "reply");
+        if (talk.length) lines.push(`- So far: ${talk.map((h) => `${h.via === "claude" ? "Claude" : h.by}: "${h.note}"`).join(" / ")}`);
+      }
       lines.push(`- Where: ${c.pageTitle || c.route} · ${c.context || "Page"} · route ${c.route}`);
-      lines.push(`- Element: ${c.element || "?"}`);
+      if (c.element) lines.push(`- Element: ${c.element}`);
       const tw = trailWords(c);
       if (tw) lines.push(`- How to get there: ${tw}`);
       if (c.theme && c.theme !== "light") lines.push(`- Theme: ${c.theme}`);

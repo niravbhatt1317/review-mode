@@ -75,6 +75,11 @@ someone picked up read as Asked.
 waiting screen, which opens by itself once they are let in. The publishable key alone (dev server, `npx review`,
 Claude) is not gated yet: that is the later "lock the hub to signed-in users" step.
 
+**Claude works the hub as a person** (2026-10-26): the brief and the skill run `npx review … --as <handle> --claude`,
+so a move is the person's (the drawer's face and checks) and marked `via: "claude"` (`withClaude` on the comment:
+"Pranjal and Claude are working on it"). `status` refuses a late pick-up ("Already picked up by …", `--force` takes
+it over) and a question's status (answer with `reply`).
+
 **The rules live in the hub's `review_rules` table** (`hub/roles.sql`), not in code: one row per action and who may
 do it (`anyone`, `member`, `author`, `assignee`, `approver`), in which states, and whether it is `signed` (needs a
 GitHub sign-in; the hub refuses others) or drawer-only (the dev server, `npx review` and Claude act without a

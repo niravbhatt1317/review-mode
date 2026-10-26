@@ -126,7 +126,7 @@ export default function review(options = {}) {
           if (url === "/__review/hub") {
             const on = store.kind === "hub";
             const ppl = await peopleFor(store);
-            return send(res, 200, { on, project: store.project, who: ppl[reviewer]?.name || reviewer, avatar: ppl[reviewer]?.avatar || null, approver: await approverIs(store, reviewer), usage: on ? await store.usage().catch(() => null) : null });
+            return send(res, 200, { on, project: store.project, who: ppl[reviewer]?.name || reviewer, handle: reviewer || null, avatar: ppl[reviewer]?.avatar || null, approver: await approverIs(store, reviewer), usage: on ? await store.usage().catch(() => null) : null });
           }
           if (url === "/__review/rules") {
             const hub = store.kind === "hub" ? store : cfg.hub ? storeFor(cfg, hubs) : null;

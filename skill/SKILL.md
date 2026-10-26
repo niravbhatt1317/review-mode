@@ -1,6 +1,6 @@
 ---
 name: review
-description: Work the design review comments left on this project's running UI with Review mode (the review-mode package): list them, read their pictures, act on them, and move their status (In progress, For approval) as you go. Use when a brief starts with "Design review", when asked to fix review comments, or when asked about the review tool.
+description: Work the design review comments left on this project's running UI with Review mode (the review-mode package): list them, read their pictures, pick them up as the person you work for, fix them, ask before marking them done, answer the questions, and end with a summary. Use when a brief starts with "Design review", when asked to fix or answer review comments, or when asked about the review tool.
 ---
 
 # Review comments
@@ -15,16 +15,21 @@ Review mode is an overlay on the project's UI. A reviewer ⌥-clicks anything, w
 
 ## Commands
 
-From any folder of the project (no dev server needed):
+From any folder of the project (no dev server needed). Always add `--as <their GitHub handle>` (the brief gives it;
+else ask) so the change is theirs, and `--claude` so the card shows "… and Claude":
 
 ```sh
-npx review list                                   # every comment: n, id, status, tag, text, send-back note
-npx review show <id>                              # one comment as JSON (route, element, trail, history…)
-npx review status <id> progress                   # started on it
-npx review status <id> approval                   # done, and the reviewer confirmed it in the chat
+npx review list --open                            # every open comment: n, id, status, kind, [who has it], text, note
+npx review list --open --mine --as <handle>       # the ones that person has now
+npx review show <id>                              # one comment as JSON (route, element, trail, history, conversation)
+npx review status <id> progress --as <h> --claude # picked up; "Already picked up by X" (exit 2): leave it, tell them
+npx review status <id> approval --as <h> --claude # done, ONLY after the person said yes in the chat
+npx review reply <id> --as <h> --claude "<answer>"  # answer a question
 npx review pull <id> [<id>…]                      # the full pictures to .review/sessions/<project>/export/
-npx review reply <id> --claude "<answer>"         # answer a question (marked as Claude's answer)
 ```
+
+With the extension instead of the dev server, put `REVIEW_PROJECT=<project>` before `npx`; for a test session,
+`REVIEW_SESSION=_test`. The brief's commands already carry these.
 
 Statuses: `open` → `progress` (picked up) → `approval` (done, waiting for the reviewer) → `approved` (the reviewer only, from the panel). `open` again reopens; `progress` from `approval` is "sent back", and carries a note with the reason. **A comment with a note is rework: do what the note says first, then the rest.** Never change a comment's text without being asked.
 
@@ -32,10 +37,19 @@ Statuses: `open` → `progress` (picked up) → `approval` (done, waiting for th
 
 ## How to work a brief
 
-1. Read every comment and its picture before changing anything. Group the ones that share a cause (same component, same rule, same copy pattern) and say the groups first.
-2. For each group: set its comments to `progress`, make the change, say which numbers it closes and what moved.
-3. When the reviewer confirms a change in the chat, set those comments to `approval`. Do not set `approved`; that is theirs.
-4. If a comment is ambiguous, ask with its number. Never remove functionality to satisfy a comment.
+1. Read every comment and its picture before changing anything. Group the ones that share a cause (same component,
+   same rule, same copy pattern) and say the groups first. Leave comments someone else has (`[Name]` in the list,
+   "Who has it" in the brief).
+2. Sent-back notes first: a comment with one came back from approval, the note says what was still wrong.
+3. For each group: pick its comments up (`status <id> progress --as <h> --claude`), make the change, say which numbers
+   it closes and what moved.
+4. Show the person and ask "Mark #… as done?". Only on their yes: `status <id> approval --as <h> --claude`. Never
+   `approved`: that is the reviewer's.
+5. Questions: answer with `reply`, never a status (the command refuses and says so).
+6. Follow the project's own rules (its CLAUDE.md, its design system). Never remove functionality. Unclear: ask with
+   the number.
+7. End with a short table: number, what changed, where it stands (in progress, waiting for approval, answered, left
+   for someone else).
 
 ## The tool, in short
 

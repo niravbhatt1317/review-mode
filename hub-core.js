@@ -127,7 +127,11 @@ export function applyChange(c, body, who) {
     if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at });
     if (to === "approved") Object.assign(c, { approvedBy: who, approvedAt: at, resolvedAt: at });
     if (to === "open") Object.assign(c, { assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null });
-    const step = { at, by: who, status: to, from };
+    const step = { at, by: who, status: to, from, ...(body.via === "claude" ? { via: "claude" } : {}) };
+    /* CLAUDE ON THE CARD (2026-10-26): a move made with Claude (npx review --claude) keeps the mark while the work is
+       with that person; it goes when the comment goes back to New or is approved */
+    if (to === "progress" || to === "approval") c.withClaude = body.via === "claude" || (to === "approval" && !!c.withClaude && c.doneBy === who);
+    else c.withClaude = false;
     /* TAKE BACK (Nirav, 2026-10-24): the doer pulls it back from For approval before the approver acts; the hub's guard
        reads this step's kind to tell it from a send back. No reason asked, and a send-back note riding on it stays */
     const take = body.take === true && from === "approval" && to === "progress";

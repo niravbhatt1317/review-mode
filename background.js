@@ -142,7 +142,7 @@ async function answer(origin, { path, query, method, body }) {
   switch (path) {
     case "/__review/hub": {
       const approver = me.signedIn && (await approverIs(hub, me.handle));
-      return ok({ on: true, project, who: people[who]?.name || who, avatar: people[who]?.avatar || me.avatar || null, approver, signedIn: me.signedIn, role: me.signedIn ? roleIn(membersCache.map, me.handle) : null, usage: await hub.usage().catch(() => null) });
+      return ok({ on: true, project, who: people[who]?.name || who, handle: me.signedIn ? me.handle : null, avatar: people[who]?.avatar || me.avatar || null, approver, signedIn: me.signedIn, role: me.signedIn ? roleIn(membersCache.map, me.handle) : null, usage: await hub.usage().catch(() => null) });
     }
     case "/__review/members": {
       /* the waiting list: who asked to join (GET); an approver lets them in or refuses them (POST) */

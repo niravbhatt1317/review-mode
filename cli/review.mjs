@@ -5,6 +5,8 @@
 //   npx review list                       every comment of the project, one line each
 //   npx review show <id>                  one comment as JSON
 //   npx review status <id> <status> [note…]   open | progress | approval | approved
+//   flags anywhere: --as <github-handle> (who acts; else REVIEW_AS, else git's user.name), --claude (made with Claude),
+//   --force (pick up one someone else has); list also takes --open (no approved) and --mine
 //   npx review reply <id> <text…>         answer a question (or follow it up); --claude marks Claude's answer
 //   npx review resolve <id>               close a question (the asker's Got it)
 //   npx review pull <id> [<id>…]          the full pictures to .review/sessions/<project>/export/
@@ -16,7 +18,27 @@ import { loadConfig, pkgDir } from "../collector/config.js";
 import { storeFor, prepare } from "../collector/stores.js";
 import { withNames, applyChange, mergePeople } from "../hub-core.js";
 
-const [cmd, ...args] = process.argv.slice(2);
+/* flags, anywhere on the line (2026-10-26): --as <handle>, --claude, --force, --open, --mine */
+const argv = process.argv.slice(2);
+const flag = (name) => {
+  const i = argv.indexOf(name);
+  if (i < 0) return false;
+  argv.splice(i, 1);
+  return true;
+};
+const flagValue = (name) => {
+  const i = argv.indexOf(name);
+  if (i < 0) return null;
+  const v = argv[i + 1];
+  argv.splice(i, 2);
+  return v;
+};
+const AS = flagValue("--as");
+const CLAUDE = flag("--claude");
+const FORCE = flag("--force");
+const ONLY_OPEN = flag("--open");
+const MINE = flag("--mine");
+const [cmd, ...args] = argv;
 const cfg = loadConfig(process.cwd());
 
 if (cmd === "init") {
@@ -48,19 +70,24 @@ if (cmd === "init") {
 }
 
 const store = storeFor(cfg, new Map(), process.env.REVIEW_SESSION);
-let who = "";
-try {
-  who = execSync("git config user.name", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
-} catch {}
+/* who acts: the GitHub handle the drawer knows (--as, or REVIEW_AS), else git's name as before */
+let who = AS || process.env.REVIEW_AS || "";
+if (!who)
+  try {
+    who = execSync("git config user.name", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {}
 const people = mergePeople(cfg.people, store.kind === "hub" ? await store.people().catch(() => ({})) : {});
 const kind = (k) => (k === "question" || k === "idea" ? "question" : "fix"); // the old four read as the two kinds
 const QSTATUS = { open: "asked", progress: "asked", approval: "answered", approved: "resolved" }; // a question's words for the same states
 const noteWord = (c) => (c.note?.kind === "reply" ? (c.note.via === "claude" ? "Claude answered" : c.note.by === c.by ? "followed up" : "answered") : c.note?.to === "open" ? "put back" : "sent back");
-const line = (c) => `${String(c.n).padStart(3)}  ${c.id}  ${(kind(c.severity) === "question" ? QSTATUS[c.status] : c.status).padEnd(8)}  ${kind(c.severity).padEnd(8)}  ${c.text}${c.note?.text ? `  [${noteWord(c)}: ${c.note.text}]` : ""}`;
+const holder = (c) => (c.status === "progress" ? c.assignee : c.status === "approval" ? c.doneBy : null); // who has it now
+const line = (c) => `${String(c.n).padStart(3)}  ${c.id}  ${(kind(c.severity) === "question" ? QSTATUS[c.status] : c.status).padEnd(8)}  ${kind(c.severity).padEnd(8)}  ${holder(c) ? `[${holder(c)}${c.withClaude ? " + Claude" : ""}] ` : ""}${c.text}${c.note?.text ? `  [${noteWord(c)}: ${c.note.text}]` : ""}`;
 
 if (cmd === "list" || !cmd) {
-  const list = prepare(await store.list()).map((c) => withNames(c, people));
-  console.log(`${cfg.project}${store.kind === "hub" ? " (hub)" : " (local)"}: ${list.length} comments`);
+  const all = prepare(await store.list());
+  const mineToo = (c) => (c.status === "progress" && c.assignee === who) || (c.status === "approval" && c.doneBy === who); // the ones you have now
+  const list = all.filter((c) => (!ONLY_OPEN || c.status !== "approved") && (!MINE || mineToo(c))).map((c) => withNames(c, people));
+  console.log(`${cfg.project}${store.kind === "hub" ? " (hub)" : " (local)"}: ${list.length} comment${list.length === 1 ? "" : "s"}${ONLY_OPEN ? " open" : ""}${MINE ? ` for ${who}` : ""}`);
   for (const c of list) console.log(line(c));
 } else if (cmd === "show") {
   const c = await store.get(args[0]);
@@ -71,12 +98,21 @@ if (cmd === "list" || !cmd) {
   if (!["open", "progress", "approval", "approved"].includes(status)) throw new Error("status: open | progress | approval | approved");
   const c = await store.get(id);
   if (!c) throw new Error("no such comment");
-  applyChange(c, { status, note: note.join(" ") }, who || "cli");
+  /* someone else has it: say so, do not take it over (the hub would refuse a late pick-up too) */
+  if (status === "progress" && c.status === "progress" && c.assignee && c.assignee !== who && !FORCE) {
+    console.error(`Already picked up by ${withNames(c, people).assignee}: leave it, or ask them (--force takes it over)`);
+    process.exit(2);
+  }
+  if ((c.severity === "question" || c.severity === "idea") && status !== "approved" && status !== "open") {
+    console.error(`#${id} is a question: answer it with  npx review reply ${id} --claude "<answer>"`);
+    process.exit(2);
+  }
+  applyChange(c, { status, note: note.join(" "), ...(CLAUDE ? { via: "claude" } : {}) }, who || "cli");
   await store.put(c);
   console.log(line({ ...withNames(c, people), n: prepare(await store.list()).find((x) => x.id === id)?.n }));
 } else if (cmd === "reply") {
-  const claude = args.includes("--claude");
-  const [id, ...words] = args.filter((a) => a !== "--claude");
+  const claude = CLAUDE;
+  const [id, ...words] = args;
   if (!words.join(" ").trim()) throw new Error("reply <id> <text…>");
   const c = await store.get(id);
   if (!c) throw new Error("no such comment");
@@ -105,6 +141,6 @@ if (cmd === "list" || !cmd) {
     console.log(path.relative(process.cwd(), file));
   }
 } else {
-  console.error("review init [project] | list | show <id> | status <id> <status> [note] | reply <id> <text…> [--claude] | resolve <id> | pull <id…>");
+  console.error("review init [project] | list [--open] [--mine] | show <id> | status <id> <status> [note] | reply <id> <text…> | resolve <id> | pull <id…>   flags: --as <handle> --claude --force");
   process.exit(1);
 }
