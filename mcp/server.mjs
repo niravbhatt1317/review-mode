@@ -104,6 +104,7 @@ async function call(name, a = {}) {
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
 const INSTRUCTIONS = `Review mode (design-review comments on this project's running app). Use the review_* tools to list, read, pick up, finish and answer comments, acting as the person you work for (pass "as" with their GitHub handle; default ${defaultAs}). Briefs sent from the drawer arrive as <channel source="review" delivery_id="...">: call review_ack with the delivery_id first, then follow the brief. Ask the person before review_done. Never approve.`;
 let buf = "";
+let queue = Promise.resolve(); // tool calls, one after another
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
   buf += chunk;
@@ -135,8 +136,12 @@ async function handle(raw) {
   if (m.method === "ping") return send({ id: m.id, result: {} });
   if (m.method === "tools/list") return send({ id: m.id, result: { tools: TOOLS } });
   if (m.method === "tools/call") {
+    /* one at a time: two moves on one comment (Claude may call tools together) must not both read it before either
+       writes, or a second pick-up would slip past the "already picked up" check */
+    const run = queue.then(() => call(m.params?.name, m.params?.arguments || {}));
+    queue = run.catch(() => {});
     try {
-      const text = await call(m.params?.name, m.params?.arguments || {});
+      const text = await run;
       return send({ id: m.id, result: { content: [{ type: "text", text }] } });
     } catch (e) {
       return send({ id: m.id, result: { content: [{ type: "text", text: String(e.message || e) }], isError: true } });

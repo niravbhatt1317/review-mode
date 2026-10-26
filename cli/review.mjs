@@ -80,7 +80,14 @@ async function shellHook() {
     if (!SHELL_HOOK) {
       if (prefs().shell === "no" || !process.stdin.isTTY) return;
       const rl = (await import("node:readline/promises")).createInterface({ input: process.stdin, output: process.stdout });
-      const a = (await rl.question(`Make plain \`claude\` turn on "Send to Claude" by itself in this folder from now on? It adds a small claude function to ${rc.replace(process.env.HOME, "~")}. [Y/n] `)).trim().toLowerCase();
+      let a = "";
+      try {
+        a = (await rl.question(`Make plain \`claude\` turn on "Send to Claude" by itself in this folder from now on? It adds a small claude function to ${rc.replace(process.env.HOME, "~")}. [Y/n] `)).trim().toLowerCase();
+      } catch {
+        rl.close();
+        console.log("\nSkipped: it asks again next time.");
+        return; // Ctrl+D or Ctrl+C at the question: no change, no crash
+      }
       rl.close();
       if (a === "n" || a === "no") {
         fs.writeFileSync(prefsFile, JSON.stringify({ ...prefs(), shell: "no" }, null, 2));
