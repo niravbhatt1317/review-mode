@@ -23,14 +23,14 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   faces retry twice; and each signed-in browser stores its owner's 64 px photo in review_people (data URL), so faces
   no longer come from GitHub. Nirav's and Pranjal's rows switch over when their extensions next start.
 
-- [ ] **Loading skeletons** (Nirav, 2026-10-23): skeleton cards while the list loads, and a skeleton in a card's
+- [x] **Loading skeletons** (done 2026-10-25: skeleton cards while the list loads, a shimmer in the picture slot) (Nirav, 2026-10-23): skeleton cards while the list loads, and a skeleton in a card's
   picture slot while its picture is still loading (or failed), instead of an empty box.
 
 - [x] **The send-back / put-back note box looks off** (done 2026-10-24: the button sits inside the field at its right end, one 30 px control, for every box) (Nirav, 2026-10-24): the field is tall and the Put back button
   small beside it; make them one height and one family (field and button the same 28 px, or the button inside the
   field at its right end), and check the placeholder copy ("Why? Enter sends it, Esc keeps it here").
 
-- [ ] **Cute empty states** (Nirav, 2026-10-24): a small illustration and a friendly line for every empty view, per
+- [x] **Cute empty states** (done 2026-10-25: line illustrations and a friendly line for each empty view) (Nirav, 2026-10-24): a small illustration and a friendly line for every empty view, per
   role and per state: no comments yet, nothing new to pick up (team), nothing waiting for you (approver), nothing in
   progress, no match for the search, a type with none, all approved, signed out, the hub not answering.
 
@@ -173,6 +173,20 @@ Effort: S a day or less, M a few days, L a week or more.
 
 Claude's pick: source on every comment, before and after, and "maybe fixed?". Together they make Claude faster and
 the approver surer, which is where most of the time goes.
+
+## Designing with Claude (to discuss first)
+
+- [ ] **Draft mode: design together with Claude on the page** (Nirav, 2026-10-26; like the agentation tool he shared):
+  a designer opens their own draft in the project, pins tweaks on it ("tighter gap here", "this label in the
+  secondary colour"), sends them to the connected Claude session, and Claude makes the changes while the page
+  reloads in place. Not a review: no hub, no statuses, no approver, and these notes must never mix with the review
+  comments. To decide together before building:
+  - a switcher on the bar (Review / Draft), or a separate mode the designer turns on for a page;
+  - where draft notes live (on this machine only, in `.review/drafts/`, gone when done), and whether one can be
+    promoted to a real review comment;
+  - how each tweak closes: Claude says what it changed, the designer keeps it or undoes it (a checkpoint per tweak);
+  - sending one at a time as they are pinned, or a batch;
+  - before and after for each tweak (shares the work with "Before and after").
 
 ## Parked
 
