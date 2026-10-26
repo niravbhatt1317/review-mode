@@ -5074,14 +5074,20 @@ async function sendToClaude(btn) {
   done();
   if (!r?.ok) return toast(`Could not send: ${r?.error || "the session did not answer"}`, true);
   toast(`Sent ${list.length} comment${list.length === 1 ? "" : "s"} to Claude (${pick.label})`);
-  /* Claude says it has it (review_ack); if not within 20 s, the session is not taking channel messages */
-  for (let i = 0; i < 20; i++) {
+  /* Claude says it has it (review_ack). The first time, Claude Code may ask the person to allow the review tools, so the
+     wait is a minute and the message says where to look (Nirav, 2026-10-26) */
+  let told = false;
+  for (let i = 0; i < 60; i++) {
+    if (i === 15 && !told) {
+      told = true;
+      toast("Sent. Waiting for Claude to confirm: if the session asks to use the review tools, allow them.");
+    }
     await new Promise((res) => setTimeout(res, 1000));
     const st = await rv(`/__review/claude/status${q}${q ? "&" : "?"}port=${pick.port}&id=${r.id}`).then((x) => x.json()).catch(() => null);
     if (st?.acked) return toast(`Claude has the ${list.length === 1 ? "comment" : "comments"} and is starting`);
   }
   await navigator.clipboard.writeText(md).catch(() => {});
-  toast(`Claude has not picked it up. If that session was not started with channels on, start it with: ${CHANNEL_HINT}. The brief is also on your clipboard.`, true);
+  toast(`Sent, but Claude has not confirmed in a minute. Check that session: it may be asking to allow the review tools, or busy. If it shows nothing at all, it was not started with: ${CHANNEL_HINT}. The brief is also on your clipboard.`, true);
 }
 /* several sessions: a small menu under the button */
 function pickSession(btn, sessions) {
