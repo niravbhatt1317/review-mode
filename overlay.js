@@ -4415,13 +4415,16 @@ panelBody.addEventListener("click", async (e) => {
     /* let in or refuse: the approver's sign-in decides, so it goes through the extension */
     const row = join.closest(".join-row");
     const role = join.classList.contains("join-go") ? "member" : "refused";
+    /* letting in needs your GitHub sign-in, which only the extension holds (Nirav, 2026-10-26: "Sign in first") */
+    if (!EXT && (!extHere() || window.__reviewSession)) return toast("Letting people in needs your sign-in, which the Review mode extension holds: switch the extension on for this site (or use Open as a page from it), then try again.", true);
     join.classList.add("loading");
     row.classList.add("busy");
     const r = await rv(`/__review/members${sessQ()}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: row.dataset.h, role }) }, true).then(async (x) => ({ ok: x.ok, body: await x.json() })).catch(() => null);
     if (!r?.ok || !Array.isArray(r.body)) {
       join.classList.remove("loading");
       row.classList.remove("busy");
-      return toast(r?.body?.error || "Could not save that: the hub did not answer", true);
+      const said = r?.body?.error || "";
+      return toast(/did not answer/.test(said) ? "The extension did not answer. If it updated itself while this page was open, reload the page and try again." : said || "Could not save that: the hub did not answer", true);
     }
     state.joiners = r.body;
     teamCache.at = 0; // the hand-over list takes them in

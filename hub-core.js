@@ -203,19 +203,30 @@ export function avatarsOf(c, people) {
   return out;
 }
 /* who waits to be let in, with their name and picture when they have signed in */
+/* GitHub handles ignore case (Nirav, 2026-10-26: Nikhil482008 waited while nikhil482008 was on the team): the members
+   map is keyed in lower case, and every look-up lowers the handle first */
+const lc = (h) => String(h || "").toLowerCase();
+const personOf = (people, handle) => {
+  const k = Object.keys(people).find((x) => lc(x) === lc(handle));
+  return k ? { key: k, ...people[k] } : null;
+};
 export function waitingOf(members = null, people = {}) {
   if (!members) return [];
   return Object.entries(members)
     .filter(([, role]) => role === "waiting")
-    .map(([handle]) => ({ handle, name: people[handle]?.name || handle, avatar: people[handle]?.avatar || null }));
+    .map(([handle]) => {
+      const p = personOf(people, handle);
+      return { handle: p?.key || handle, name: p?.name || handle, avatar: p?.avatar || null };
+    });
 }
 /* a signed-in person's place: approver, member, waiting or refused; someone not listed yet is waiting (the hub adds
    them as they sign in); with no members table everyone is a member */
-export const roleIn = (members, handle) => (!members ? "member" : members[handle] || "waiting");
+export const roleIn = (members, handle) => (!members ? "member" : members[lc(handle)] || "waiting");
+export const isApproverIn = (members, handle) => !!members && members[lc(handle)] === "approver";
 /* the people a comment can be handed to: the team's map and everyone signed in, without the waiting list */
 export function teamOf(people = {}, members = null) {
   return Object.entries(people)
-    .filter(([h]) => !members || (members[h] && members[h] !== "waiting"))
+    .filter(([h]) => !members || (members[lc(h)] && members[lc(h)] !== "waiting" && members[lc(h)] !== "refused"))
     .map(([handle, p]) => ({ handle, name: p.name, avatar: p.avatar || null }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -470,7 +481,14 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
     async members() {
       try {
         const rows = await rest("GET", "review_members?select=handle,role");
-        return Object.fromEntries(rows.map((r) => [r.handle, r.role]));
+        /* lower-case keys; two rows for one person (a case twin) keep the stronger role */
+        const rank = { approver: 3, member: 2, refused: 1, waiting: 0 };
+        const out = {};
+        for (const r of rows) {
+          const k = String(r.handle).toLowerCase();
+          if (!(k in out) || (rank[r.role] ?? 0) > (rank[out[k]] ?? 0)) out[k] = r.role;
+        }
+        return out;
       } catch {
         return null;
       }
@@ -479,7 +497,7 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
        approvers only, so no row changed means no */
     async setMember(handle, role) {
       if (!["member", "refused", "approver"].includes(role)) throw Object.assign(new Error("role: member | refused"), { status: 400 });
-      const rows = await rest("PATCH", `review_members?handle=eq.${encodeURIComponent(handle)}`, { role }, { Prefer: "return=representation" });
+      const rows = await rest("PATCH", `review_members?handle=ilike.${encodeURIComponent(handle)}`, { role }, { Prefer: "return=representation" }); // any case
       if (!Array.isArray(rows) || !rows.length) throw Object.assign(new Error("Only an approver can let people in"), { status: 403 });
       return rows[0];
     },

@@ -4,7 +4,7 @@
 //      per site, so the overlay works on any page without the dev server;
 //   3. hosting: on a site switched on with the toolbar button it injects the overlay into the page.
 // On the console (localhost:4178) the dev server injects and answers itself; the extension only takes the picture.
-import { makeHub, prepare, withNames, applyChange, bytesOf, newId, sentence, normalise, mergePeople, avatarsOf, teamOf, waitingOf, roleIn, sigOf, lightList, facesOf, claudeSessions, claudeSend, claudeStatus } from "./hub-core.js";
+import { makeHub, prepare, withNames, applyChange, bytesOf, newId, sentence, normalise, mergePeople, avatarsOf, teamOf, waitingOf, roleIn, isApproverIn, sigOf, lightList, facesOf, claudeSessions, claudeSend, claudeStatus } from "./hub-core.js";
 import { makeAuth } from "./auth.js";
 
 /* ---------- configuration: hub.json beside this file, with what the options page saved over it ---------- */
@@ -107,7 +107,7 @@ async function peopleOn(hub) {
 let membersCache = { at: 0, map: null };
 async function approverIs(hub, handle) {
   if (Date.now() - membersCache.at > 60_000) membersCache = { at: Date.now(), map: await hub.members().catch(() => null) };
-  return membersCache.map ? membersCache.map[handle] === "approver" : (bundled.approvers || []).includes(handle);
+  return membersCache.map ? isApproverIn(membersCache.map, handle) : (bundled.approvers || []).some((a) => a.toLowerCase() === String(handle || "").toLowerCase());
 }
 /* the names shown: the team's map first (a first name chosen by the team), else the GitHub name's first word */
 function namesFrom(cfg, hubPeople, me) {

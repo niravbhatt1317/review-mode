@@ -19,7 +19,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { loadConfig, pkgDir } from "./config.js";
 import { storeFor, prepare } from "./stores.js";
-import { withNames, applyChange, mergePeople, avatarsOf, normalise, sentence, newId, teamOf, waitingOf, sigOf, lightList, facesOf, claudeSessions, claudeSend, claudeStatus } from "../hub-core.js";
+import { withNames, applyChange, mergePeople, avatarsOf, normalise, sentence, newId, teamOf, waitingOf, isApproverIn, sigOf, lightList, facesOf, claudeSessions, claudeSend, claudeStatus } from "../hub-core.js";
 
 /* who is reviewing on this machine: the git name, mapped to a person by the people map */
 let reviewer = "";
@@ -78,7 +78,7 @@ export default function review(options = {}) {
       const hub = store.kind === "hub" ? store : cfg.hub ? storeFor(cfg, hubs) : null;
       membersCache = { at: Date.now(), map: hub?.members ? await hub.members() : null };
     }
-    return membersCache.map ? membersCache.map[handle] === "approver" : (cfg.approvers || []).includes(handle);
+    return membersCache.map ? isApproverIn(membersCache.map, handle) : (cfg.approvers || []).some((a) => a.toLowerCase() === String(handle || "").toLowerCase());
   };
   const shownWith = (people) => (c) => ({ ...withNames(c, people), avatars: avatarsOf(c, people) });
   return {
