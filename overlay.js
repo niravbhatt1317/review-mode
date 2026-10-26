@@ -445,7 +445,15 @@ root.innerHTML = `
   .panel-copy .ring { position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); display: none; fill: none; stroke: var(--ring); stroke-width: 1.5; stroke-dasharray: 28 72; stroke-linecap: round; animation: rv-ring .9s linear infinite; }
   .panel-copy.busy { pointer-events: none; border-color: hsl(var(--rv-n20)); }
   .panel-copy.busy .ring { display: block; }
-  .panel-copy[data-kind="prompt"] { --ring: #D97757; }
+  .panel-copy[data-kind="prompt"], .panel-copy[data-kind="send"] { --ring: #D97757; }
+  .panel-copy .logo-send { color: hsl(var(--rv-n70)); transition: color .12s; }
+  .panel-copy:hover .logo-send, .panel-copy.busy .logo-send { color: #D97757; }
+  .claude-pick { position: absolute; z-index: 20; width: 280px; padding: 6px; border-radius: 10px; background: var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n20)), 0 12px 28px -8px rgba(29,43,62,.3); }
+  .claude-pick .cp-title { padding: 6px 8px 4px; font: 600 11px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); }
+  .claude-pick button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 7px 8px; border: 0; border-radius: 7px; background: none; text-align: left; cursor: pointer; }
+  .claude-pick button:hover, .claude-pick button:focus-visible { background: hsl(var(--rv-n10)); outline: none; }
+  .claude-pick b { font: 500 12px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink); }
+  .claude-pick span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--rv-ink-3); }
   .panel-copy[data-kind="loop"] { --ring: #7B3FE4; }
   @keyframes rv-ring { to { stroke-dashoffset: -100; } }
   .panel-copy.done { border-color: hsl(136 53% 43%); box-shadow: 0 0 0 2px hsl(136 53% 43% / .18); }
@@ -4977,9 +4985,10 @@ async function buildLoop(list) {
 let loopParts = null;
 /* the copy buttons' tooltips say what a press takes: the comments shown, with the scope and tags that narrow them */
 function copyLabel(kind) {
-  const n = panelBody.querySelectorAll(".card").length;
-  const picked = panelBody.querySelectorAll(".card.picked").length;
-  const what = kind === "prompt" ? "Copy a brief for Claude" : "Copy a checklist for Loop";
+  const shown = state.shownList || [];
+  const n = shown.length; // the whole shown list, built or not yet
+  const picked = shown.filter((c) => state.selected.has(c.id)).length;
+  const what = kind === "prompt" ? "Copy a brief for Claude" : kind === "send" ? "Send to Claude" : "Copy a checklist for Loop";
   if (picked) return `${what} · ${picked} selected`;
   const narrow = [];
   if (state.scope.kind === "group") narrow.push(state.scope.group);
@@ -5029,7 +5038,73 @@ async function copyOut(kind, btn) {
     btn.classList.remove("busy");
   }
 }
-for (const b of root.querySelectorAll(".panel-copy")) b.addEventListener("click", () => copyOut(b.dataset.kind, b));
+/* SEND TO CLAUDE (2026-10-26): the brief goes straight into an open Claude Code session (the review MCP server,
+   mcp/server.mjs, started with channels on); one session is sent to at once, several bring a small picker; no session,
+   or one not listening, falls back to the copy */
+$('.panel-copy[data-kind="prompt"]').insertAdjacentHTML("afterend", `<button class="panel-copy" data-kind="send" aria-label="Send to Claude"><svg class="logo-send" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Send to Claude</span></button>`);
+const CHANNEL_HINT = "claude --dangerously-load-development-channels server:review";
+async function sendToClaude(btn) {
+  const list = shownComments();
+  if (!list.length) return toast("Nothing shown to send");
+  btn.classList.add("busy");
+  const tip = btn.querySelector(".scope-tip");
+  tip.textContent = "Looking for Claude…";
+  const done = () => {
+    btn.classList.remove("busy");
+    refreshCopyLabels();
+  };
+  const q = window.__reviewSession ? `?session=${window.__reviewSession}` : "";
+  const sessions = await rv(`/__review/claude/sessions${q}`).then((r) => r.json()).catch(() => []);
+  if (!Array.isArray(sessions) || !sessions.length) {
+    done();
+    const md = await buildPrompt(list);
+    await navigator.clipboard.writeText(md).catch(() => {});
+    return toast(`No Claude session is listening, so the brief was copied instead. To send directly, start Claude in the project with: ${CHANNEL_HINT}`, true);
+  }
+  const pick = sessions.length === 1 ? sessions[0] : await pickSession(btn, sessions);
+  if (!pick) return done();
+  tip.textContent = "Sending…";
+  const md = await buildPrompt(list);
+  const r = await rv(`/__review/claude/send${q}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ port: pick.port, text: md, count: list.length }) })
+    .then((x) => x.json())
+    .catch(() => null);
+  done();
+  if (!r?.ok) return toast(`Could not send: ${r?.error || "the session did not answer"}`, true);
+  toast(`Sent ${list.length} comment${list.length === 1 ? "" : "s"} to Claude (${pick.label})`);
+  /* Claude says it has it (review_ack); if not within 20 s, the session is not taking channel messages */
+  for (let i = 0; i < 20; i++) {
+    await new Promise((res) => setTimeout(res, 1000));
+    const st = await rv(`/__review/claude/status${q}${q ? "&" : "?"}port=${pick.port}&id=${r.id}`).then((x) => x.json()).catch(() => null);
+    if (st?.acked) return toast(`Claude has the ${list.length === 1 ? "comment" : "comments"} and is starting`);
+  }
+  await navigator.clipboard.writeText(md).catch(() => {});
+  toast(`Claude has not picked it up. If that session was not started with channels on, start it with: ${CHANNEL_HINT}. The brief is also on your clipboard.`, true);
+}
+/* several sessions: a small menu under the button */
+function pickSession(btn, sessions) {
+  return new Promise((resolve) => {
+    root.querySelector(".claude-pick")?.remove();
+    const m = document.createElement("div");
+    m.className = "claude-pick";
+    m.innerHTML = `<div class="cp-title">Send to which Claude?</div>${sessions.map((s, i) => `<button type="button" data-i="${i}"><b>${esc(s.label)}</b><span>${esc(s.cwd)}</span></button>`).join("")}`;
+    btn.parentElement.appendChild(m);
+    const r = btn.getBoundingClientRect(), pr = btn.parentElement.getBoundingClientRect();
+    m.style.top = `${r.bottom - pr.top + 6}px`;
+    m.style.right = `${pr.right - r.right}px`;
+    const close = (v) => {
+      m.remove();
+      window.removeEventListener("pointerdown", away, true);
+      resolve(v);
+    };
+    const away = (e) => !e.composedPath().includes(m) && close(null);
+    window.addEventListener("pointerdown", away, true);
+    m.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-i]");
+      if (b) close(sessions[Number(b.dataset.i)]);
+    });
+  });
+}
+for (const b of root.querySelectorAll(".panel-copy")) b.addEventListener("click", () => (b.dataset.kind === "send" ? sendToClaude(b) : copyOut(b.dataset.kind, b)));
 
 /* ---------- the picture viewer ---------- */
 const lightbox = $(".lightbox");

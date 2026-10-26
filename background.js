@@ -4,7 +4,7 @@
 //      per site, so the overlay works on any page without the dev server;
 //   3. hosting: on a site switched on with the toolbar button it injects the overlay into the page.
 // On the console (localhost:4178) the dev server injects and answers itself; the extension only takes the picture.
-import { makeHub, prepare, withNames, applyChange, bytesOf, newId, sentence, normalise, mergePeople, avatarsOf, teamOf, waitingOf, roleIn, sigOf, lightList, facesOf } from "./hub-core.js";
+import { makeHub, prepare, withNames, applyChange, bytesOf, newId, sentence, normalise, mergePeople, avatarsOf, teamOf, waitingOf, roleIn, sigOf, lightList, facesOf, claudeSessions, claudeSend, claudeStatus } from "./hub-core.js";
 import { makeAuth } from "./auth.js";
 
 /* ---------- configuration: hub.json beside this file, with what the options page saved over it ---------- */
@@ -154,6 +154,18 @@ async function answer(origin, { path, query, method, body }) {
       }
       await approverIs(hub, me.handle);
       return ok(waitingOf(membersCache.map, people));
+    }
+    case "/__review/claude/sessions":
+      return ok(await claudeSessions(fetch, project));
+    case "/__review/claude/send":
+      try {
+        return ok(await claudeSend(data.port, String(data.text || ""), data.count));
+      } catch (e) {
+        return no(502, String(e.message || e));
+      }
+    case "/__review/claude/status": {
+      const q = new URLSearchParams(query || "");
+      return ok(await claudeStatus(q.get("port"), q.get("id")).catch(() => ({ acked: false })));
     }
     case "/__review/rules":
       return ok((await hub.rules().catch(() => null)) || []);

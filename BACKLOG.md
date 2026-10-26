@@ -125,7 +125,9 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   "with Claude" in the history; the mark stays through For approval) (Nirav, 2026-10-24): when Claude picks up a comment on someone's behalf,
   the card shows both faces, the person and Claude's mark ("Pranjal and Claude are working on it"); needs the move to
   record that Claude made it (for example `via: "claude"` from `npx review` / the skill).
-- [ ] **Send to Claude without copy and paste** (like the agentation plugin): link the current Claude session to the
+- [x] **Send to Claude without copy and paste** (done 2026-10-26: the review MCP server, tools in any session and a
+  channel for push; "Send to Claude" in the drawer, a picker for several sessions, Claude confirms it has it, the copy
+  as fallback; push needs Claude started with the channels flag while they are a research preview) (like the agentation plugin): link the current Claude session to the
   extension once, then a button sends the selected comments straight in; Claude adds them as its tasks, works through
   them, moves their statuses. Choose which session when several are open. Needs a small local bridge (the extension
   cannot talk to a Claude Code session directly); research the options first.

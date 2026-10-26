@@ -41,7 +41,11 @@ const MINE = flag("--mine");
 const [cmd, ...args] = argv;
 const cfg = loadConfig(process.cwd());
 
-if (cmd === "init") {
+if (cmd === "mcp") {
+  /* the MCP server Claude Code starts from .mcp.json (tools, and "Send to Claude" when channels are on) */
+  await import("../mcp/server.mjs");
+  await new Promise(() => {}); // it runs until Claude Code closes it; nothing below is for it
+} else if (cmd === "init") {
   const root = cfg.root;
   const pkgPath = path.join(root, "package.json");
   const pkg = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, "utf8")) : {};
@@ -65,7 +69,12 @@ if (cmd === "init") {
   const skillDir = path.join(root, ".claude", "skills", "review");
   fs.mkdirSync(skillDir, { recursive: true });
   fs.copyFileSync(path.join(pkgDir, "skill", "SKILL.md"), path.join(skillDir, "SKILL.md"));
-  console.log(`review mode set up for "${project}" in ${root}:\n  review.config.json, .review/vite.config.js, the dev:review script, .gitignore lines, .claude/skills/review/SKILL.md\n  start: npm run dev:review  (http://localhost:${Number(JSON.parse(fs.readFileSync(confPath, "utf8")).port) || 4178})`);
+  /* the MCP server for Claude Code: the review tools, and "Send to Claude" (2026-10-26); an existing .mcp.json keeps its other servers */
+  const mcpPath = path.join(root, ".mcp.json");
+  const mcp = fs.existsSync(mcpPath) ? JSON.parse(fs.readFileSync(mcpPath, "utf8")) : {};
+  mcp.mcpServers = { ...(mcp.mcpServers || {}), review: { command: "npx", args: ["review", "mcp"] } };
+  fs.writeFileSync(mcpPath, JSON.stringify(mcp, null, 2) + "\n");
+  console.log(`review mode set up for "${project}" in ${root}:\n  review.config.json, .review/vite.config.js, the dev:review script, .gitignore lines, .claude/skills/review/SKILL.md, .mcp.json (review)\n  start: npm run dev:review  (http://localhost:${Number(JSON.parse(fs.readFileSync(confPath, "utf8")).port) || 4178})`);
   process.exit(0);
 }
 

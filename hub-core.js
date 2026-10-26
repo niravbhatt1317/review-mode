@@ -63,6 +63,39 @@ export function facesOf(people = {}) {
   for (const p of Object.values(people)) if (p?.name && p.avatar) out[p.name] = p.avatar;
   return out;
 }
+/* SEND TO CLAUDE (2026-10-26): the open Claude Code sessions with the review MCP server listen on 127.0.0.1:47831-47840
+   (mcp/server.mjs); the dev server and the extension find them, and forward a brief to the one picked */
+export const CLAUDE_PORTS = Array.from({ length: 10 }, (_, i) => 47831 + i);
+export async function claudeSessions(fetchFn = globalThis.fetch, project = null) {
+  const found = await Promise.all(
+    CLAUDE_PORTS.map(async (port) => {
+      try {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), 600);
+        const r = await fetchFn(`http://127.0.0.1:${port}/hello`, { headers: { "x-review": "1" }, signal: ctl.signal });
+        clearTimeout(t);
+        const j = r.ok ? await r.json() : null;
+        return j?.app === "review-mode" ? { port, ...j } : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const all = found.filter(Boolean);
+  const same = project ? all.filter((s) => s.project === project) : all; // this project's first; any if none match
+  return (same.length ? same : all).sort((a, b) => b.startedAt - a.startedAt);
+}
+export async function claudeSend(port, text, count, fetchFn = globalThis.fetch) {
+  if (!CLAUDE_PORTS.includes(Number(port))) throw new Error("not a Claude session port");
+  const r = await fetchFn(`http://127.0.0.1:${port}/send`, { method: "POST", headers: { "x-review": "1", "Content-Type": "application/json" }, body: JSON.stringify({ text, count }) });
+  if (!r.ok) throw new Error(`the session said ${r.status}`);
+  return r.json();
+}
+export async function claudeStatus(port, id, fetchFn = globalThis.fetch) {
+  if (!CLAUDE_PORTS.includes(Number(port))) return { acked: false };
+  const r = await fetchFn(`http://127.0.0.1:${port}/status?id=${encodeURIComponent(id)}`, { headers: { "x-review": "1" } });
+  return r.ok ? r.json() : { acked: false };
+}
 export const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 /* an edit or a move: text, severity, status (with who did it and when), and the note that rides with a move back.

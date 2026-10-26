@@ -19,7 +19,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { loadConfig, pkgDir } from "./config.js";
 import { storeFor, prepare } from "./stores.js";
-import { withNames, applyChange, mergePeople, avatarsOf, normalise, sentence, newId, teamOf, waitingOf, sigOf, lightList, facesOf } from "../hub-core.js";
+import { withNames, applyChange, mergePeople, avatarsOf, normalise, sentence, newId, teamOf, waitingOf, sigOf, lightList, facesOf, claudeSessions, claudeSend, claudeStatus } from "../hub-core.js";
 
 /* who is reviewing on this machine: the git name, mapped to a person by the people map */
 let reviewer = "";
@@ -131,6 +131,20 @@ export default function review(options = {}) {
           if (url === "/__review/rules") {
             const hub = store.kind === "hub" ? store : cfg.hub ? storeFor(cfg, hubs) : null;
             return send(res, 200, (hub?.rules ? await hub.rules() : null) || []); // empty: the drawer's own defaults
+          }
+          /* Send to Claude: the open sessions, a send, whether Claude has it */
+          if (url === "/__review/claude/sessions") return send(res, 200, await claudeSessions(fetch, store.project));
+          if (url === "/__review/claude/send" && req.method === "POST") {
+            const body = JSON.parse(await readBody(req));
+            try {
+              return send(res, 200, await claudeSend(body.port, String(body.text || ""), body.count));
+            } catch (e) {
+              return send(res, 502, { error: String(e.message || e) });
+            }
+          }
+          if (url === "/__review/claude/status") {
+            const q = new URLSearchParams(qs || "");
+            return send(res, 200, await claudeStatus(q.get("port"), q.get("id")).catch(() => ({ acked: false })));
           }
           if (url === "/__review/members") {
             /* the waiting list to read; letting someone in needs the approver's sign-in, so the drawer sends that

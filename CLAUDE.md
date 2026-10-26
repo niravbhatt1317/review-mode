@@ -80,6 +80,13 @@ so a move is the person's (the drawer's face and checks) and marked `via: "claud
 "Pranjal and Claude are working on it"). `status` refuses a late pick-up ("Already picked up by …", `--force` takes
 it over) and a question's status (answer with `reply`).
 
+**Send to Claude** (2026-10-26): `npx review mcp` (mcp/server.mjs, no dependencies, MCP over stdio) gives Claude Code the
+review_* tools and, as a channel, takes briefs on 127.0.0.1:47831-47840 (`/hello`, `/send`, `/status`). It answers only
+requests with `x-review: 1` and no web-page Origin (extension origins pass), Host 127.0.0.1/localhost. The dev server
+and the extension find sessions (`/__review/claude/sessions`) and forward (`/__review/claude/send`); Claude calls
+`review_ack` so the drawer can say it has it. Push needs `claude --dangerously-load-development-channels server:review`
+(research preview); without it the drawer falls back to copying. `npx review init` adds the server to `.mcp.json`.
+
 **The rules live in the hub's `review_rules` table** (`hub/roles.sql`), not in code: one row per action and who may
 do it (`anyone`, `member`, `author`, `assignee`, `approver`), in which states, and whether it is `signed` (needs a
 GitHub sign-in; the hub refuses others) or drawer-only (the dev server, `npx review` and Claude act without a

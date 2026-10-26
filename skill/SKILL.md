@@ -20,6 +20,15 @@ If `npx review` is not found, the project has no Review mode yet. Ask first (it 
 gives; it adds review.config.json, .review/vite.config.js, a dev:review script, .gitignore lines and this skill).
 `npx review init` again later only refreshes this skill to the latest.
 
+## The review tools (MCP)
+
+`npx review init` also adds a `review` MCP server to `.mcp.json`. When it is loaded, prefer its tools to the shell:
+`review_list`, `review_show`, `review_pick_up`, `review_done` (only after the person said yes), `review_reply`,
+`review_picture`, each with `as` set to the person's handle; moves are marked as made with Claude. A brief sent from the
+drawer ("Send to Claude") arrives as `<channel source="review" delivery_id="...">`: call `review_ack` with that id
+first, then follow it. Sending needs Claude started with
+`claude --dangerously-load-development-channels server:review` (channels are a research preview).
+
 ## Commands
 
 From any folder of the project (no dev server needed). Always add `--as <their GitHub handle>` (the brief gives it;
