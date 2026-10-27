@@ -254,7 +254,7 @@ root.innerHTML = `
     --rv-st-new: #6626A6; --rv-st-new-dot: #A64DFF; --rv-st-prog: #994200; --rv-st-prog-dot: #FF6F00; --rv-st-appr: #1F7A71; --rv-st-appr-dot: #31BFB0; --rv-st-done: #1B6540; --rv-st-done-dot: #2BA66B; /* the system's purple, orange and teal: 60 for the dots, the text steps for the words (Nirav, 2026-10-23) */
     --rv-fill: #ecf1f9; --rv-line: #e4eaf3; --rv-line-2: #dbe3ef; --rv-hover: #f7fafc; --rv-page: #f6f8fb;
     --rv-bg: 0 0% 100%; --rv-n10: 210 50% 98%; --rv-n20: 217 52% 95%;
-    --rv-n30: 220 34.7% 91.9%; --rv-n50: 218 26% 65%; --rv-n70: 216 24% 52%;
+    --rv-n30: 220 34.7% 91.9%; --rv-n40: 218 29% 84%; /* the design system's neutral-40 */ --rv-n50: 218 26% 65%; --rv-n70: 216 24% 52%;
     --rv-n90: 218 23% 41%; --rv-n130: 214 36% 18%;
     --rv-ok-bg: 140 52% 91%; --rv-ok-ink: 135 59% 32%;
     --rv-danger-bg: 353 82% 94%; --rv-warn-bg: 40 100% 94%; --rv-warn-ink: 36 95% 32%;
@@ -270,7 +270,7 @@ root.innerHTML = `
     --rv-st-new: #CC99FF; --rv-st-new-dot: #A64DFF; --rv-st-prog: #FF8629; --rv-st-prog-dot: #FF6F00; --rv-st-appr: #64CEC3; --rv-st-appr-dot: #31BFB0; --rv-st-done: #4CCD8E; --rv-st-done-dot: #2BA66B;
     --rv-chip: hsl(216.36 36.26% 17.84%); --rv-chip-ink: hsl(217.83 25.56% 64.71%); --rv-chip-line: hsl(217.33 23.81% 37.06%);
     --rv-fill: hsl(216.36 36.26% 17.84%); --rv-line: hsl(216.36 36.26% 17.84%); --rv-line-2: hsl(217.33 23.81% 37.06%); --rv-hover: hsl(216.77 40.26% 15.1%); --rv-page: hsl(217.5 63.16% 7.45%);
-    --rv-bg: 217.5 63.16% 7.45%; --rv-n10: 216.43 56% 9.8%; --rv-n20: 216.36 36.26% 17.84%; --rv-n30: 216.77 40.26% 15.1%; --rv-n50: 216.67 22.13% 52.16%;
+    --rv-bg: 217.5 63.16% 7.45%; --rv-n10: 216.43 56% 9.8%; --rv-n20: 216.36 36.26% 17.84%; --rv-n30: 216.77 40.26% 15.1%; --rv-n40: 217.33 23.81% 37.06%; --rv-n50: 216.67 22.13% 52.16%;
     --rv-n70: 216.67 22.13% 52.16%; --rv-n90: 217.83 25.56% 64.71%; --rv-n130: 217.5 29.27% 83.92%;
     --rv-ok-bg: 181.18 54.84% 18.24%; --rv-ok-ink: 157 59.41% 60.39%; --rv-danger-bg: 332.5 23.08% 20.39%; --rv-warn-bg: 27 19% 21%; --rv-warn-ink: 35 73% 59%;
     --tag-must-ink: #f17a73; --tag-must-dot: #ec5b5b; --tag-must-fill: #402833;
@@ -494,8 +494,24 @@ root.innerHTML = `
   /* the product's drawer: a veil over the page, the sheet sliding in from the right */
   .panel-veil { position: fixed; inset: 0; background: hsl(218 61% 7% / .25); pointer-events: auto; opacity: 0; visibility: hidden; transition: opacity .2s ease-out, visibility 0s linear .2s; z-index: 1; }
   .panel-veil.on { opacity: 1; visibility: visible; transition: opacity .2s ease-out; }
-  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 100vw; background: var(--rv-surface); color: var(--rv-ink); box-shadow: -12px 0 32px rgba(29,43,62,.18); pointer-events: auto; display: flex; flex-direction: column; z-index: 2; transform: translateX(100%); visibility: hidden; transition: transform .22s cubic-bezier(.32,.72,0,1), visibility 0s linear .22s; }
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: var(--panel-w, 520px); max-width: 100vw; background: var(--rv-surface); color: var(--rv-ink); box-shadow: -12px 0 32px rgba(29,43,62,.18); pointer-events: auto; display: flex; flex-direction: column; z-index: 2; transform: translateX(100%); visibility: hidden; transition: transform .22s cubic-bezier(.32,.72,0,1), visibility 0s linear .22s; }
   .panel.on { transform: none; visibility: visible; transition: transform .22s cubic-bezier(.32,.72,0,1); }
+  /* A DRAWER YOU CAN RESIZE (Nirav, 2026-10-27): its left edge drags it wider or narrower (480 to 720 px); a double-click puts the default back; the width is remembered */
+  .panel-edge { position: absolute; left: -6px; top: 0; bottom: 0; width: 12px; z-index: 7; cursor: col-resize; touch-action: none; } /* centred on the drawer's border (its x 0) */
+  /* the grip (Nirav, 2026-10-27): a small pill with two columns of dots, halfway down the edge,
+     shown under the pointer; blue while dragging */
+  .panel-edge::after { content: ""; position: absolute; left: 1px; top: 50%; width: 10px; height: 25px; margin-top: -12.5px; box-sizing: border-box; padding: 5px 1px; border-radius: 999px; background: radial-gradient(circle, hsl(var(--rv-n70)) 0.9px, transparent 1.2px) 0 0 / 4px 5px repeat content-box, padding-box var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n30)), 0 2px 6px rgba(29,43,62,.12); opacity: 0; transform: scale(.85); transition: opacity .15s ease .05s, transform .15s ease .05s; }
+  .panel-edge:hover::after, .panel.resizing .panel-edge::after { opacity: 1; transform: none; }
+  /* and the line along the whole edge under it (Nirav, 2026-10-27: the grip alone looked odd) */
+  .panel-edge::before { content: ""; position: absolute; left: 5px; top: 0; bottom: 0; width: 2px; background: hsl(var(--rv-n40, 216 28% 82%)); opacity: 0; transition: opacity .15s ease .05s, background-color .15s ease; }
+  .panel-edge:hover::before { opacity: 1; }
+  .panel.resizing .panel-edge::before { opacity: 1; background: hsl(214 98% 44%); } /* blue only while dragging */
+  :host([data-theme="dark"]) .panel-edge::before { background: hsl(var(--rv-n50) / .6); }
+  :host([data-theme="dark"]) .panel.resizing .panel-edge::before { background: hsl(214 98% 54%); }
+  .panel.resizing .panel-edge::after { background: radial-gradient(circle, #fff 0.9px, transparent 1.2px) 0 0 / 4px 5px repeat content-box, padding-box hsl(214 98% 44%); box-shadow: 0 2px 8px hsl(214 98% 44% / .35); }
+  .panel.resizing { transition: none; user-select: none; }
+  .panel.resizing * { pointer-events: none; }
+  :host([data-page]) .panel-edge { display: none; }
   .panel-head { position: relative; z-index: 6; display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; }
   /* the title opens the panel as a page: on hover a dotted underline and the arrow beside it, with the instant tooltip */
   .panel-title { position: relative; display: inline-flex; align-items: center; gap: 5px; margin-right: auto; font-size: 14px; font-weight: 600; color: inherit; text-decoration: none; cursor: pointer; }
@@ -721,8 +737,8 @@ root.innerHTML = `
   :host([data-theme="dark"]) .panel-tools::before { background: linear-gradient(to bottom, hsl(var(--rv-n10) / 0), hsl(var(--rv-n10) / .5) 30%, hsl(var(--rv-n10) / .85) 60%, hsl(var(--rv-n10))); -webkit-backdrop-filter: none; backdrop-filter: none; -webkit-mask-image: none; mask-image: none; }
   .panel-tools.away > * { pointer-events: none; }
   .panel-tools.away::before { pointer-events: none; } /* the faded band takes the pointer only while it shows: nothing under it opens by accident */
-  .glass { height: 30px; border-radius: 999px; background: color-mix(in srgb, var(--rv-surface) 72%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); border: 1px solid rgba(29,43,62,.09); box-shadow: 0 6px 18px rgba(29,43,62,.14), 0 1px 2px rgba(29,43,62,.06), inset 0 1px 0 rgba(255,255,255,.35); }
-  :host([data-theme="dark"]) .glass { background: color-mix(in srgb, hsl(217 40% 16%) 70%, transparent); border-color: rgba(255,255,255,.1); box-shadow: 0 8px 22px rgba(0,0,0,.4); } /* one edge only: no inner highlight in dark */
+  .glass { height: 32px; border-radius: 999px; background: color-mix(in srgb, var(--rv-surface) 72%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); border: 1px solid hsl(var(--rv-n40)); /* 32 and neutral-40: as the selection bar's buttons (Nirav, 2026-10-27) */ box-shadow: 0 6px 18px rgba(29,43,62,.14), 0 1px 2px rgba(29,43,62,.06), inset 0 1px 0 rgba(255,255,255,.35); }
+  :host([data-theme="dark"]) .glass { background: color-mix(in srgb, hsl(217 40% 16%) 70%, transparent); border-color: hsl(var(--rv-n40)); box-shadow: 0 8px 22px rgba(0,0,0,.4); } /* one edge only: no inner highlight in dark */
   .pt-search { flex: 0 0 auto; width: 84px; display: flex; align-items: center; gap: 6px; padding: 0 0 0 10px; color: var(--rv-ink-2); cursor: pointer; overflow: hidden; transition: width .3s cubic-bezier(.32,.72,0,1), flex-grow .3s; }
   .pt-search svg:first-child { flex: 0 0 auto; width: 13px; height: 13px; }
   .pt-search:hover { color: var(--rv-ink); }
@@ -738,18 +754,7 @@ root.innerHTML = `
   .pt-clear { display: none; flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--rv-ink-3); align-items: center; justify-content: center; cursor: pointer; }
   .pt-clear:hover { background: var(--rv-fill); color: var(--rv-ink); }
   .panel-tools.has-q .pt-clear { display: inline-flex; }
-  .type-pick { display: inline-flex; align-items: center; gap: 0; padding: 0 3px; flex: 0 1 auto; min-width: 0; overflow: hidden; transition: opacity .2s, max-width .3s cubic-bezier(.32,.72,0,1), padding .3s; max-width: 320px; }
-  .panel-tools:has(.pt-search:focus-within) .type-pick, .panel-tools.has-q .type-pick { max-width: 0; padding: 0; opacity: 0; border-width: 0; }
-  .type-pick .tp { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent; color: var(--rv-ink-2); font: 400 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; white-space: nowrap; transition: background-color .15s, color .15s; }
   /* the capsule with words only (Nirav, 2026-10-23): no dots, no icons; the picked one on a soft fill */
-  .type-pick .tp[aria-pressed="true"][data-k="fix"] .ti { color: var(--tag-fix-dot); }
-  .type-pick .tp[aria-pressed="true"][data-k="question"] .ti { color: var(--tag-question-dot); }
-  .type-pick .tp b { font-weight: 400; color: var(--rv-ink-3); opacity: .8; }
-  .type-pick .tp:hover:not(:disabled) { background: color-mix(in srgb, var(--rv-ink) 5%, transparent); color: var(--rv-ink); }
-  .type-pick .tp:hover:not(:disabled) b { color: var(--rv-ink-2); }
-  .type-pick .tp[aria-pressed="true"] { background: color-mix(in srgb, var(--rv-ink) 9%, transparent); color: var(--rv-ink); }
-  .type-pick .tp[aria-pressed="true"] b { color: var(--rv-ink); opacity: 1; }
-  .type-pick .tp:disabled { opacity: .4; cursor: default; }
   .panel-empty { color: var(--rv-ink-3); padding: 24px 8px; text-align: center; }
   .card { border: 1px solid var(--rv-fill); border-radius: 10px; padding: 9px 14px 9px; margin-bottom: 16px; background: var(--rv-surface); }
   .card.here { border-color: var(--rv-line-2); }
@@ -1021,6 +1026,16 @@ root.innerHTML = `
   .card-pick:hover { border-color: hsl(214 98% 44%); }
   .card.picked .card-pick { background: hsl(214 98% 44%); border-color: hsl(214 98% 44%); }
   .card-pick svg { opacity: 0; transition: opacity .12s; }
+  /* the group's box: like a card's, before the chevron; under the pointer, or while some of the group are picked */
+  .lg-pick { position: relative; width: 16px; height: 16px; margin-left: auto; margin-right: 8px; flex: 0 0 auto; border-radius: 50%; border: 1.5px solid hsl(var(--rv-n70)); background: var(--rv-surface); display: inline-flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .12s, background-color .12s, border-color .12s; }
+  .list-group:hover .lg-pick, .lg-pick.some, .lg-pick.all, .panel.picking-bar .lg-pick { opacity: 1; }
+  .lg-pick:hover { border-color: hsl(214 98% 44%); }
+  .lg-pick svg { opacity: 0; }
+  .lg-pick i { position: absolute; width: 7px; height: 2px; border-radius: 1px; background: #fff; opacity: 0; }
+  .lg-pick.all, .lg-pick.some { background: hsl(214 98% 44%); border-color: hsl(214 98% 44%); }
+  .lg-pick.all svg { opacity: 1; }
+  .lg-pick.some i { opacity: 1; }
+  .list-group .lg-pick ~ .lg-chev { margin-left: 0; }
   .card.picked .card-pick svg { opacity: 1; }
   .card:focus { outline: none; }
   .card:focus-visible { outline: 2px solid hsl(214 98% 44% / .55); outline-offset: 2px; }
@@ -1038,10 +1053,160 @@ root.innerHTML = `
   .card-n { transition: background-color .5s ease, color .5s ease, box-shadow .5s ease; }
   .card.unread .card-n { background: hsl(214 98% 44%); color: #fff; box-shadow: 0 0 0 3px hsl(214 98% 44% / .18); }
   .pin.unread { box-shadow: 0 0 0 3px hsl(214 98% 44% / .35), 0 1px 3px rgba(0,0,0,.25); }
-  .panel-pick { display: inline-flex; align-items: center; height: 26px; padding: 0 4px 0 10px; gap: 6px; margin-right: 4px; border-radius: 999px; background: hsl(214 98% 44% / .1); color: hsl(214 98% 44%); font-weight: 600; font-size: 12px; flex: 0 0 auto; }
-  .panel-pick .x { position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-  .panel-pick .x:hover { background: hsl(214 98% 44% / .15); }
-  .panel-pick .x:hover .scope-tip { opacity: 1; }
+  .pick-bar { position: absolute; right: 16px; bottom: 16px; z-index: 5; display: flex; align-items: center; gap: 6px; font: 500 12px/1 -apple-system, system-ui, sans-serif; white-space: nowrap; transform: translateY(12px); opacity: 0; pointer-events: none; transition: transform .26s cubic-bezier(.32,.72,0,1), opacity .2s ease; }
+  .pick-bar.on { transform: none; opacity: 1; pointer-events: auto; }
+  .pick-bar { transition: transform .26s cubic-bezier(.32,.72,0,1), opacity .2s ease; }
+  .pick-bar .pb-count, .pick-bar .pb-acts { position: relative; display: flex; align-items: center; gap: 2px; height: 32px; border-radius: 999px; background: #1d2b3e; color: #fff; box-shadow: 0 10px 28px rgba(29,43,62,.3); }
+  .pick-bar .pb-count { padding: 0 4px; }
+  .pick-bar .pb-num { font-variant-numeric: tabular-nums; min-width: 10px; text-align: center; font-size: 12px; }
+  /* each action its own button (Nirav, 2026-10-27): no shared pill around them */
+  .pick-bar .pb-acts { padding: 0; gap: 6px; background: transparent; box-shadow: none; }
+  .pick-bar .pb-acts > .pb-act { height: 32px; background: #1d2b3e; box-shadow: 0 10px 28px rgba(29,43,62,.3); }
+  .pick-bar .pb-acts > .pb-act:hover { background: #2f4260; }
+  .pick-bar .pb-acts > .pb-act { padding: 0 13px 0 11px; }
+  /* icons, as in the header (Nirav, 2026-10-27, picked C): Send keeps its short word in the orange; Brief is Claude's
+     mark alone in a circle */
+  .pick-bar .pb-acts > .pb-act:not(.primary) { width: 32px; padding: 0; justify-content: center; } /* Brief and Loop: their marks alone (Nirav, 2026-10-27: Loop out of ⋯, the only thing in it) */
+  .pick-bar .pb-acts > .pb-act:not(.primary) .pb-i, .pick-bar .pb-acts > .pb-act:not(.primary) .pb-i svg { width: 15px; height: 15px; }
+  /* as the header (Nirav, 2026-10-27): the marks in one light colour at rest, their own colours under the pointer and
+     while working or done */
+  .pick-bar .pb-acts > .pb-act:not(.primary) .pb-i { position: relative; }
+  .pick-bar .pb-acts > .pb-act:not(.primary) .pb-i svg { position: absolute; inset: 0; }
+  .pick-bar .pb-act[data-kind="prompt"] .pb-i svg.logo-claude, .pick-bar .pb-act[data-kind="prompt"] .pb-i svg.logo-claude * { fill: #cfd8e6; transition: fill .12s; }
+  .pick-bar .pb-act[data-kind="prompt"]:is(:hover, .busy, .done) .pb-i svg.logo-claude, .pick-bar .pb-act[data-kind="prompt"]:is(:hover, .busy, .done) .pb-i svg.logo-claude * { fill: #D97757; }
+  .pick-bar .pb-act[data-kind="loop"] .pb-i svg.logo-loop { display: none; }
+  .pick-bar .pb-act[data-kind="loop"]:is(:hover, .busy, .done) .pb-i svg.logo-loop { display: block; }
+  .pick-bar .pb-act[data-kind="loop"]:is(:hover, .busy, .done) .pb-i svg.logo-loop-rest { display: none; }
+  .pick-bar .pb-act[data-kind="loop"] .pb-i svg.logo-loop-rest, .pick-bar .pb-act[data-kind="loop"] .pb-i svg.logo-loop-rest * { fill: #cfd8e6; }
+  /* the moving line while it works, in the product's colour, as on the header's square buttons */
+  .pick-bar .pb-ring { position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); display: none; fill: none; stroke-width: 1.6; stroke-dasharray: 28 72; stroke-linecap: round; animation: rv-ring .9s linear infinite; pointer-events: none; }
+  .pick-bar .pb-act[data-kind="prompt"] .pb-ring { stroke: #D97757; }
+  .pick-bar .pb-act[data-kind="loop"] .pb-ring { stroke: #A66BFF; }
+  .pick-bar .pb-act.busy .pb-ring { display: block; }
+  .pick-bar .pb-act:not([data-kind="send"]).busy .pb-i svg { animation: none !important; } /* Brief and Loop: the line moves, not the mark (the plane still flies) */
+  /* "2/5": the part of a long Loop checklist, on the button's corner */
+  .pick-bar .pb-part { position: absolute; top: -5px; right: -6px; padding: 0 4px; border-radius: 6px; background: #fff; color: #1d2b3e; box-shadow: 0 1px 4px rgba(29,43,62,.25); font: 700 9px/13px -apple-system, system-ui, sans-serif; font-style: normal; }
+  .pick-bar .pb-part:empty { display: none; }
+  /* the last button's tooltip to its left, inside the drawer (it was cut at the edge) */
+  .pick-bar .pb-acts > .pb-act.tip-wide .scope-tip, .pick-bar .pb-acts > .pb-act:last-child .scope-tip { left: auto; right: 0; transform: none; } /* a long tip, or the last button's, to the left: inside the drawer; a short one ("Copied") centred */
+  .pick-bar .pb-n { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 24px; min-width: 24px; padding: 0 7px; border: 0; border-radius: 999px; background: transparent; color: #fff; font: 600 12px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .pick-bar .pb-n:not(:disabled):hover { background: rgba(255,255,255,.12); }
+  .pick-bar .pb-n:disabled { cursor: default; }
+  .pick-bar > .pb-all { position: absolute; right: calc(100% + 6px); top: 50%; width: 28px; height: 28px; margin-top: -14px; padding: 0; border: 0; border-radius: 50%; background: #1d2b3e; color: #e6ecf5; box-shadow: 0 6px 16px rgba(29,43,62,.28); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transform: scale(.7); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+  .pick-bar > .pb-all:hover { background: #2f4260; color: #fff; }
+  .pick-bar > .pb-all.gone { opacity: 0 !important; transform: scale(.7) !important; pointer-events: none !important; }
+  .pick-bar:hover > .pb-all, .pick-bar > .pb-all:focus-visible { opacity: 1; transform: none; pointer-events: auto; }
+  .pick-bar > .pb-all:hover .scope-tip { opacity: 1; }
+  .pick-bar:has(> .pb-all.gone) > .pb-x { right: calc(100% + 6px); } /* all picked: Select all goes, the clear comes in beside the count */
+  .pb-hint { position: absolute; left: 50%; bottom: 60px; z-index: 5; transform: translate(-50%, 4px); padding: 4px 10px; border-radius: 999px; background: hsl(var(--rv-n20)); color: var(--rv-ink-2); font: 500 11px/1.4 -apple-system, system-ui, sans-serif; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease; }
+  .pb-hint.on { opacity: 1; transform: translate(-50%, 0); } /* at the drawer's foot, above the search: over no card */
+  .panel:has(.pick-bar:hover) .pb-hint, .panel:has(.pick-bar .pb-act.done, .pick-bar .pb-act.sent) .pb-hint { opacity: 0; } /* the bar's own tooltips, and its Copied / Sent tips, take that place */
+  .pick-bar .pb-n:hover .scope-tip { opacity: 1; }
+  .pick-bar .pb-count.only { background: hsl(214 98% 44%); } /* the list shows only these */
+  .pick-bar .pb-count.only .pb-n:hover { background: rgba(255,255,255,.18); }
+  /* the clear: small, at the far left (before Select all), only while the pointer is on the bar (Nirav, 2026-10-27); outside the bar's
+     width, so nothing moves when it shows; an invisible reach lets the pointer cross to it */
+  .pick-bar > .pb-x { position: absolute; right: calc(100% + 40px); top: 50%; width: 28px; height: 28px; margin-top: -14px; background: #1d2b3e; color: #cfd8e6; box-shadow: 0 6px 16px rgba(29,43,62,.28); opacity: 0; transform: scale(.7); pointer-events: none; transition: opacity .15s ease, transform .15s ease, right .2s ease; }
+  .pick-bar > .pb-x svg { width: 10px; height: 10px; }
+  .pick-bar > .pb-all svg { width: 14px; height: 14px; }
+  .pick-bar::before { content: ""; position: absolute; top: -6px; bottom: -6px; right: 100%; width: 76px; } /* the reach out to Select all and the clear */
+  .pick-bar > .pb-x, .pick-bar > .pb-all { z-index: 1; } /* above the reach, or the reach takes their clicks */
+  .pick-bar:hover > .pb-x, .pick-bar > .pb-x:focus-visible { opacity: 1; transform: none; pointer-events: auto; }
+  .pick-bar > button.pb-x:hover { background: #2f4260; color: #fff; } /* its own dark ground: the inner buttons' see-through hover turned it white on the drawer */
+  .pick-bar .pb-x { padding: 0; border: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .pick-bar .pb-x:hover .scope-tip, .pick-bar .pb-act:hover .scope-tip { opacity: 1; }
+  .pick-bar .pb-act.done .scope-tip, .pick-bar .pb-act.sent .scope-tip { opacity: 1; } /* after copying or sending, the tip says so, as on the header's buttons */
+  .pick-bar .pb-act.busy .scope-tip { opacity: 0; }
+  .pick-bar .pb-act { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px 0 7px; border: 0; border-radius: 999px; background: transparent; color: #e6ecf5; font: inherit; cursor: pointer; }
+  .pick-bar .pb-act:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .pick-bar .pb-acts > .pb-act.primary { background: #D97757; color: #fff; font-weight: 600; } /* Send to Claude, the main thing to do with them */
+  .pick-bar .pb-acts > .pb-act.primary:hover { background: #c96a4b; }
+  .pick-bar .pb-i { display: inline-flex; width: 13px; height: 13px; align-items: center; justify-content: center; }
+  .pick-bar .pb-i svg { width: 13px; height: 13px; }
+  /* the plane, in white on the orange (its header twin is orange on white) */
+  .pick-bar .send-clip { width: 19px; height: 19px; margin: -3px; border-radius: 4px; }
+  .pick-bar .send-clip svg { width: 13px; height: 13px; }
+  .pick-bar .pb-act.primary .logo-send, .pick-bar .pb-act.primary .sent-tick { color: #fff; }
+  .pick-bar .pb-act.primary .send-clip .boost { stroke: #fff; }
+  .pick-bar .pb-act.busy, .pick-bar .pb-act.sent { pointer-events: none; }
+  .pick-bar .pb-act.busy .logo-send { animation: rv-lift .35s cubic-bezier(.3,1.4,.5,1) forwards, rv-bob .5s ease-in-out .35s infinite alternate; }
+  .pick-bar .pb-act.busy .boost { opacity: 1; animation: rv-lift .35s cubic-bezier(.3,1.4,.5,1) forwards, rv-bob .5s ease-in-out .35s infinite alternate; }
+  .pick-bar .pb-act.busy .boost path { animation: rv-boost .42s linear infinite; }
+  .pick-bar .pb-act.busy .boost path:nth-child(2) { animation-delay: .14s; }
+  .pick-bar .pb-act.busy .boost path:nth-child(3) { animation-delay: .28s; }
+  .pick-bar .pb-act.sent .logo-send { animation: rv-away .38s cubic-bezier(.5,0,.9,.5) forwards; }
+  .pick-bar .pb-act.sent .boost { opacity: 1; animation: rv-away-trail .38s cubic-bezier(.5,0,.9,.5) .05s both; }
+  .pick-bar .pb-act.sent .boost path { stroke-dashoffset: 0; animation: none; }
+  .pick-bar .pb-act.sent .sent-tick { opacity: 1; transition: opacity .1s .3s; }
+  .pick-bar .pb-act.sent .sent-tick path { animation: rv-tick-draw .35s cubic-bezier(.4,0,.2,1) .34s forwards; }
+  /* the brief (and Loop): the mark turns while it works; a green ring once copied */
+  .pick-bar .pb-acts > .pb-act.done { box-shadow: 0 0 0 2px hsl(136 53% 43%), 0 10px 28px rgba(29,43,62,.3); }
+  /* D, "mixed": the selection quiet, in the surface colour with a hairline; the actions keep their weight */
+  .pick-bar[data-look="mixed"] .pb-count, .pick-bar[data-look="mixed"] > .pb-x, .pick-bar[data-look="mixed"] > .pb-all { background: var(--rv-surface); color: var(--rv-ink); box-shadow: 0 2px 8px rgba(29,43,62,.1), 0 0 0 1px hsl(var(--rv-n30)); }
+  .pick-bar[data-look="mixed"] .pb-n { color: var(--rv-ink); }
+  .pick-bar[data-look="mixed"] .pb-n:not(:disabled):hover { background: hsl(var(--rv-n20)); }
+  .pick-bar[data-look="mixed"] > button.pb-x:hover, .pick-bar[data-look="mixed"] > .pb-all:hover { background: hsl(var(--rv-n20)); color: var(--rv-ink); }
+  /* C, "line": outlines, no fill (a touch of the ground behind, so a picture under it does not show through); Send filled */
+  .pick-bar[data-look="line"] .pb-count, .pick-bar[data-look="line"] > .pb-x, .pick-bar[data-look="line"] > .pb-all, .pick-bar[data-look="line"] .pb-acts > .pb-act:not(.primary) { background: hsl(var(--rv-n10) / .85); color: var(--rv-ink); box-shadow: inset 0 0 0 1.5px hsl(var(--rv-n40, 216 28% 82%)); backdrop-filter: blur(6px); }
+  .pick-bar[data-look="line"] .pb-n { color: var(--rv-ink); }
+  .pick-bar[data-look="line"] .pb-n:not(:disabled):hover, .pick-bar[data-look="line"] > button.pb-x:hover, .pick-bar[data-look="line"] > .pb-all:hover, .pick-bar[data-look="line"] .pb-acts > .pb-act:not(.primary):hover { background: hsl(var(--rv-n20)); color: var(--rv-ink); }
+  .pick-bar[data-look="line"] .pb-act[data-kind="prompt"] .pb-i svg.logo-claude, .pick-bar[data-look="line"] .pb-act[data-kind="prompt"] .pb-i svg.logo-claude *, .pick-bar[data-look="line"] .pb-act[data-kind="loop"] .pb-i svg.logo-loop-rest, .pick-bar[data-look="line"] .pb-act[data-kind="loop"] .pb-i svg.logo-loop-rest * { fill: hsl(var(--rv-n70)); }
+  /* copied (Nirav, 2026-10-27, as the header's): a thin green edge with a soft green halo, on a light green ground */
+  .pick-bar[data-look="line"] .pb-acts > .pb-act.done { background: color-mix(in srgb, hsl(136 53% 43%) 8%, var(--rv-surface)) !important; box-shadow: inset 0 0 0 1px hsl(136 53% 43%), 0 0 0 3px hsl(136 53% 43% / .18), 0 6px 18px rgba(29,43,62,.12) !important; }
+  /* under the pointer (and working, done) the marks take their own colours here too: the grey above outranked them */
+  .pick-bar[data-look="line"] .pb-act[data-kind="prompt"]:is(:hover, .busy, .done) .pb-i svg.logo-claude, .pick-bar[data-look="line"] .pb-act[data-kind="prompt"]:is(:hover, .busy, .done) .pb-i svg.logo-claude * { fill: #D97757; }
+  /* the count: its number in the selection's blue, its ring the same grey as the others (Nirav, 2026-10-27: a blue ring
+     was too much); "only these" fills it blue */
+  .pick-bar[data-look="line"] .pb-count:not(.only) .pb-n { color: hsl(214 98% 44%); font-weight: 600; }
+  /* the count and Select all as one drop-shaped glass (the line look): the svg draws the shape; the count's own
+     background and edge step aside; Select all sits on the small circle */
+  :host([data-no-head-acts]) .panel-head .panel-copy { position: absolute !important; width: 1px !important; height: 1px !important; opacity: 0 !important; pointer-events: none !important; overflow: hidden !important; clip-path: inset(50%) !important; } /* the backup, out of sight */
+  .pick-bar .pb-drop { display: none; }
+  .pick-bar[data-look="line"] .pb-count, .pick-bar[data-look="line"] .pb-count.only, .pick-bar[data-look="line"] .pb-count:hover, .pick-bar[data-look="line"] .pb-count.only:hover { background: transparent !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .pick-bar[data-look="line"] .pb-count { position: relative; overflow: visible !important; padding: 0 3px; } /* 26 + 2 x 3: the count stays a 32 px circle */
+  .pick-bar[data-look="line"] .pb-drop { display: block; position: absolute; left: 0; top: 0; width: 100%; height: 32px; overflow: visible; z-index: 0; pointer-events: none; filter: drop-shadow(0 6px 10px rgba(29,43,62,.12)) drop-shadow(0 1px 1px rgba(29,43,62,.06)); }
+  .pick-bar[data-look="line"] .pb-drop path { fill: color-mix(in srgb, var(--rv-surface) 86%, transparent); stroke: hsl(var(--rv-n40)); stroke-width: 1; transition: fill .15s ease, stroke .15s ease; }
+  :host([data-theme="dark"]) .pick-bar[data-look="line"] .pb-drop path { fill: color-mix(in srgb, hsl(217 40% 16%) 86%, transparent); }
+  .pick-bar[data-look="line"] .pb-count:has(.pb-n:not(:disabled):hover) .pb-drop path, .pick-bar[data-look="line"]:has(> .pb-all:hover) .pb-drop path { fill: var(--rv-surface); stroke: hsl(var(--rv-n50)); }
+  /* "only these" on (Nirav, 2026-10-27): the outline stays grey; a blue ring round the number, inside it, open or not */
+  .pick-bar[data-look="line"] .pb-count.only .pb-n, .pick-bar[data-look="line"] .pb-count.only .pb-n:hover { background: hsl(214 98% 44% / .1) !important; box-shadow: inset 0 0 0 1.5px hsl(214 98% 44% / .4); } /* a light blue ground and a light blue ring (Nirav, 2026-10-27) */
+  :host([data-theme="dark"]) .pick-bar[data-look="line"] .pb-count.only .pb-n { background: hsl(214 98% 60% / .16) !important; box-shadow: inset 0 0 0 1.5px hsl(214 98% 60% / .45); }
+  .pick-bar[data-look="line"] .pb-n { position: relative; z-index: 1; }
+  .pick-bar[data-look="line"] > .pb-all { right: auto; left: -26px; width: 28px; height: 28px; margin-top: -14px; background: transparent !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; opacity: 1 !important; transform: none !important; z-index: 2; }
+  .pick-bar[data-look="line"] > .pb-all svg { opacity: var(--drop, 0); transform: scale(calc(.6 + .4 * var(--drop, 0))); }
+  /* each part's own ground under the pointer, inside the shape (Nirav, 2026-10-27): Select all light grey, the count a
+     very light blue */
+  .pick-bar[data-look="line"] > .pb-all { border-radius: 50%; transition: background-color .15s ease; }
+  .pick-bar[data-look="line"] > .pb-all:hover { color: var(--rv-ink); background: radial-gradient(circle closest-side, hsl(var(--rv-n20)) 77%, transparent 80%) !important; } /* 3 px inside the small circle's edge, as the count's */
+  .pick-bar[data-look="line"] .pb-count .pb-n { border-radius: 999px; height: 26px; min-width: 26px; transition: background-color .15s ease; } /* fills the count's circle, inside its edge */
+  .pick-bar[data-look="line"] .pb-count .pb-n:not(:disabled):hover { background: hsl(214 98% 44% / .1) !important; }
+  .pick-bar[data-look="line"] > .pb-x { right: calc(100% + 32px); } /* outside the drop */
+  /* everything but Send in the search's glass (Nirav, 2026-10-27): frosted surface, a hairline, its soft shadow */
+  .pick-bar[data-look="line"] > .pb-x, .pick-bar[data-look="line"] .pb-acts > .pb-act:not(.primary):not(.done) { background: color-mix(in srgb, var(--rv-surface) 72%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); color: var(--rv-ink-2); box-shadow: inset 0 0 0 1px hsl(var(--rv-n40)), 0 6px 18px rgba(29,43,62,.14), 0 1px 2px rgba(29,43,62,.06); } /* the edge: neutral-40 (Nirav, 2026-10-27) */
+  :host([data-theme="dark"]) .pick-bar[data-look="line"] > .pb-x, :host([data-theme="dark"]) .pick-bar[data-look="line"] .pb-acts > .pb-act:not(.primary):not(.done) { background: color-mix(in srgb, hsl(217 40% 16%) 70%, transparent); box-shadow: inset 0 0 0 1px hsl(var(--rv-n40)), 0 8px 22px rgba(0,0,0,.4); }
+  /* under the pointer: solid surface, and the edge one step darker (neutral-50) */
+  .pick-bar[data-look="line"] > button.pb-x:hover, .pick-bar[data-look="line"] > .pb-all:hover, .pick-bar[data-look="line"] .pb-acts > .pb-act:not(.primary):not(.done):hover, .pick-bar[data-look="line"] .pb-count:not(.only):has(.pb-n:not(:disabled):hover) { background: var(--rv-surface); color: var(--rv-ink); box-shadow: inset 0 0 0 1px hsl(var(--rv-n50)), 0 6px 18px rgba(29,43,62,.14), 0 1px 2px rgba(29,43,62,.06); }
+  :host([data-theme="dark"]) .pick-bar[data-look="line"] > button.pb-x:hover, :host([data-theme="dark"]) .pick-bar[data-look="line"] > .pb-all:hover, :host([data-theme="dark"]) .pick-bar[data-look="line"] .pb-acts > .pb-act:not(.primary):not(.done):hover, :host([data-theme="dark"]) .pick-bar[data-look="line"] .pb-count:not(.only):has(.pb-n:not(:disabled):hover) { box-shadow: inset 0 0 0 1px hsl(var(--rv-n50)), 0 8px 22px rgba(0,0,0,.4); }
+  .pick-bar[data-look="line"] .pb-count:not(.only) .pb-n:not(:disabled):hover { background: transparent; }
+  /* in every look, "only these" keeps the count blue */
+  /* "only these" on: a blue border, the glass kept (Nirav, 2026-10-27: a blue fill was too much) */
+  .pick-bar[data-look] .pb-count.only { background: color-mix(in srgb, var(--rv-surface) 72%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); box-shadow: inset 0 0 0 1.5px hsl(214 98% 44%), 0 6px 18px rgba(29,43,62,.14), 0 1px 2px rgba(29,43,62,.06); }
+  .pick-bar[data-look] .pb-count.only .pb-n, .pick-bar[data-look] .pb-count.only .pb-n:hover { color: hsl(214 98% 44%); font-weight: 600; background: transparent; }
+  .pick-bar[data-look] .pb-count.only:hover { background: var(--rv-surface); }
+  :host([data-theme="dark"]) .pick-bar[data-look] .pb-count.only { background: color-mix(in srgb, hsl(217 40% 16%) 70%, transparent); box-shadow: inset 0 0 0 1.5px hsl(214 98% 60%), 0 8px 22px rgba(0,0,0,.4); }
+  :host([data-theme="dark"]) .pick-bar[data-look] .pb-count.only .pb-n { color: hsl(214 98% 66%); }
+  .pick-bar .pb-act[data-kind="prompt"] .pb-i svg, .pick-bar .pb-act[data-kind="prompt"] .pb-i svg * { fill: #D97757; }
+  .pick-bar .pb-i svg.logo-loop-rest, .pick-bar .pb-i svg.logo-loop-rest * { fill: currentColor; } /* the plain mark, light on the dark bar (the coloured one borrows the header's gradients) */
+  .pick-bar button:focus { outline: none; }
+  .pick-bar button:focus-visible { outline: 2px solid hsl(214 98% 60% / .7); outline-offset: 1px; } /* only from the keyboard */
+  .pick-bar .scope-tip { top: auto; bottom: calc(100% + 8px); }
+  .pick-bar.tight .pb-count .pb-n { font-size: 11px; }
+  /* IN THE BOTTOM ROW (Nirav, 2026-10-27): with the type filter gone, the row has the search on the left and room on
+     the right; the bar sits there, so nothing is pushed or covered and the top stays quiet. The search grows only up to
+     the bar while it shows */
+  .panel.picking-bar .panel-tools { padding-right: calc(var(--pb-w, 300px) + 68px + 8px); } /* the bar, and the clear and Select all on its left */
+  .panel.picking-bar .panel-body { padding-bottom: 72px; }
+
   .card-c .card-line .card-text { margin: 0 0 0 -4px; padding: 2px 4px; }
   .card-c .card-n.out { position: absolute; left: -32px; top: 12px; }
   .card-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--rv-ink-2); min-height: 24px; }
@@ -1355,8 +1520,8 @@ root.innerHTML = `
 </div>
 <div class="island ui" role="status" aria-live="polite"><span class="is-in"></span></div><div class="bar ui"><button class="sat dock" aria-label="Minimise to the edge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><rect x="12" y="12" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Minimise to the edge</span></button><button class="sat off" aria-label="Turn off review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg><span class="scope-tip">Turn off review · ${HIDE_KEY} turns it on</span></button><span class="bar-main"><span class="brand"><button class="dot" title="Pictures: off. Click to share this tab (or load the review extension for silent pictures)"></button><b>Review${window.__reviewSession ? ` · ${window.__reviewSession}` : ""}</b></span><span class="k"></span></span><button class="pins-toggle on disc" aria-label="Pins"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4.5l-4 4-4 1.5-1.5 1.5 7 7 1.5-1.5 1.5-4 4-4"/><path d="M9 15l-4.5 4.5"/><path d="M14.5 4l5.5 5.5"/></svg><span class="scope-tip">Show or hide the pins</span></button><button class="list disc" aria-label="Comments"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14.5 4v16"/></svg><span class="count"></span><span class="scope-tip">Comments, in a side panel</span></button></div>
 <div class="panel-veil"></div>
-<aside class="panel ui" aria-label="Review comments" role="dialog" aria-modal="true">
-  <div class="panel-head"><a class="panel-back" href="/" aria-label="Back to the console"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="scope-tip">Back to the console</span></a><a class="panel-title" href="/__review/" target="_blank" aria-label="Open as a page"><span class="txt">Comments</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="scope-tip">Open as a page</span></a><div class="scope-switch panel-view" role="group"><button type="button" class="side" data-v="open">Open<b></b></button><button type="button" class="side" data-v="resolved">Approved<b></b></button><button type="button" class="side" data-v="numbers">Numbers</button></div><div class="scope-switch theme-switch" role="group" aria-label="Theme"><button type="button" class="side" data-t="auto" aria-pressed="false" aria-label="Auto, follows your computer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Auto, follows your computer</span></button><button type="button" class="side" data-t="light" aria-pressed="false" aria-label="Light"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg><span class="scope-tip">Light</span></button><button type="button" class="side" data-t="dark" aria-pressed="false" aria-label="Dark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span class="scope-tip">Dark</span></button></div><button type="button" class="note-faces" hidden aria-expanded="false" aria-label="What others did since you were here"></button><div class="note-drop" hidden></div><button class="panel-copy" data-kind="prompt" aria-label="Copy a brief for Claude"><svg class="logo-claude" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a brief for Claude</span></button><button class="panel-copy" data-kind="loop" aria-label="Copy a checklist for Loop"><svg class="logo-loop-rest" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z"/></svg><svg class="logo-loop" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"> <path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z" fill="url(#rv-loop-a)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-b)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-c)" fill-opacity=".56"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-d)" fill-opacity=".15"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-e)"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-f)"/> <defs> <radialGradient id="rv-loop-c" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(4 2.75 -4.83318 7.0301 5.5 17.75)"> <stop/> <stop offset=".7" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-d" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.4 4.6 -8.08463 13.0057 4.3 17)"> <stop offset=".33"/> <stop offset=".6" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-f" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(13.40004 -2.3 6.04701 35.2304 .3 8.2)"> <stop stop-color="#6D05E8"/> <stop offset="1" stop-color="#6D05E8" stop-opacity="0"/> </radialGradient> <linearGradient id="rv-loop-a" x1="14.2" y1="9.1" x2="10.9" y2="22.6" gradientUnits="userSpaceOnUse"> <stop stop-color="#9237E3"/> <stop offset="1" stop-color="#48E6F3"/> </linearGradient> <linearGradient id="rv-loop-b" x1="8.5" y1="20.5" x2="17.3" y2="18.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#51E6FF"/> <stop offset="1" stop-color="#71D4FF" stop-opacity="0"/> </linearGradient> <linearGradient id="rv-loop-e" x1="6.1" y1="12.7" x2="11.2" y2="5.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#6E06E9"/> <stop offset="1" stop-color="#AB5ADD" stop-opacity="0"/> </linearGradient> </defs> </svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a checklist for Loop</span><i class="more"></i></button></div>
+<aside class="panel ui" aria-label="Review comments" role="dialog" aria-modal="true"><div class="panel-edge" title="Drag to resize · double-click for the default width"></div>
+  <div class="panel-head"><a class="panel-back" href="/" aria-label="Back to the console"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="scope-tip">Back to the console</span></a><a class="panel-title" href="/__review/" target="_blank" aria-label="Open as a page"><span class="txt">Comments</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="scope-tip">Open as a page</span></a><div class="scope-switch panel-view" role="group"><button type="button" class="side" data-v="open">Open<b></b></button><button type="button" class="side" data-v="resolved">Approved<b></b></button><button type="button" class="side" data-v="numbers">Numbers</button></div><div class="scope-switch theme-switch" role="group" aria-label="Theme"><button type="button" class="side" data-t="auto" aria-pressed="false" aria-label="Auto, follows your computer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Auto, follows your computer</span></button><button type="button" class="side" data-t="light" aria-pressed="false" aria-label="Light"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg><span class="scope-tip">Light</span></button><button type="button" class="side" data-t="dark" aria-pressed="false" aria-label="Dark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span class="scope-tip">Dark</span></button></div><button type="button" class="note-faces" hidden aria-expanded="false" aria-label="What others did since you were here"></button><div class="note-drop" hidden></div><button class="panel-copy" data-kind="prompt" aria-label="Copy a brief for Claude"><svg class="logo-claude" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy prompt</span></button><button class="panel-copy" data-kind="loop" aria-label="Copy a checklist for Loop"><svg class="logo-loop-rest" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z"/></svg><svg class="logo-loop" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"> <path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z" fill="url(#rv-loop-a)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-b)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-c)" fill-opacity=".56"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-d)" fill-opacity=".15"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-e)"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-f)"/> <defs> <radialGradient id="rv-loop-c" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(4 2.75 -4.83318 7.0301 5.5 17.75)"> <stop/> <stop offset=".7" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-d" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.4 4.6 -8.08463 13.0057 4.3 17)"> <stop offset=".33"/> <stop offset=".6" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-f" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(13.40004 -2.3 6.04701 35.2304 .3 8.2)"> <stop stop-color="#6D05E8"/> <stop offset="1" stop-color="#6D05E8" stop-opacity="0"/> </radialGradient> <linearGradient id="rv-loop-a" x1="14.2" y1="9.1" x2="10.9" y2="22.6" gradientUnits="userSpaceOnUse"> <stop stop-color="#9237E3"/> <stop offset="1" stop-color="#48E6F3"/> </linearGradient> <linearGradient id="rv-loop-b" x1="8.5" y1="20.5" x2="17.3" y2="18.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#51E6FF"/> <stop offset="1" stop-color="#71D4FF" stop-opacity="0"/> </linearGradient> <linearGradient id="rv-loop-e" x1="6.1" y1="12.7" x2="11.2" y2="5.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#6E06E9"/> <stop offset="1" stop-color="#AB5ADD" stop-opacity="0"/> </linearGradient> </defs> </svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a checklist for Loop</span><i class="more"></i></button></div>
   <div class="panel-bar"><div class="panel-scope"></div><div class="panel-filter"></div></div>
   <div class="panel-sync" hidden><span class="ring"></span><span class="txt"></span></div>
   <div class="panel-body"></div>
@@ -1866,6 +2031,7 @@ window.addEventListener(
         e.preventDefault();
         for (const x of panelBody.querySelectorAll(".card.picked")) setPicked(x, false);
         state.selected.clear();
+        if (state.onlyPicked) { state.onlyPicked = false; renderPanel(); } // everything again
         renderPickPill();
         refreshCopyLabels();
       } else if (panel.classList.contains("on")) {
@@ -2854,6 +3020,7 @@ function islandFlush() {
       text: noticeSentence(who, parts.map((p) => ({ kind: p.kind, ns: p.cs.map((c) => c.n).sort((a, b) => a - b) })), claude),
       sub: all.length === 1 ? noticeSnippet(all[0]) : "",
       kind: parts.every((p) => p.kind === "new") ? "new" : "notice",
+      ids: all.map((c) => c.id),
       tone: NOTICE_TONE[parts[0].kind] || "blue",
       rank: NOTICE_RANK[parts[0].kind],
       count: all.length,
@@ -2908,8 +3075,10 @@ function islandPlaces(ev) {
 }
 const ISLAND_EXIT = "together"; // how it leaves: "together" (shrinks while it moves over the list button) or "glide" (shrinks in the middle, then glides over)
 let islandEv = null;
+let islandDone = false;
 async function islandShow(ev) {
   islandEv = ev;
+  islandDone = false;
   island.dataset.tone = ev.tone || "blue";
   const inner = island.querySelector(".is-in");
   /* the first face alone in the circle; the others come in and go out with the words (Nirav, 2026-10-27: a summary
@@ -2949,7 +3118,7 @@ async function islandShow(ev) {
   }
   /* stays while the pointer is on it */
   const until = Date.now() + 3000;
-  while (Date.now() < until || island.matches(":hover")) await sleep(150);
+  while (!islandDone && (Date.now() < until || island.matches(":hover"))) await sleep(80); // a click sends it away at once
   /* out: the words go, it shrinks to the face, and the face flies into the list button (where it is then, if the bar
      was moved meanwhile); the button gives a small pulse as it lands */
   const { into, intoEl, inDrawer } = islandPlaces(ev);
@@ -2984,8 +3153,20 @@ async function islandShow(ev) {
   island.classList.remove("on");
   islandEv = null;
 }
+/* A CLICK ON IT (Nirav, 2026-10-27): about one comment, straight to its card (and its notice is done); about several,
+   or one that is approved (not in the open list), the drawer with the notices; new comments, the first of them */
 island.addEventListener("click", () => {
   const ev = islandEv;
+  islandDone = true;
+  const one = ev?.ids?.length === 1 ? state.comments.find((c) => c.id === ev.ids[0]) : null;
+  if (one) {
+    const m = noticeMemo();
+    for (const g of noticesNow()) for (const { c, s } of g.steps) if (c.id === one.id) m.gone.add(`${c.id}:${s.at}`);
+    noticeSave(m);
+    showInList(one);
+    updateNotices();
+    return;
+  }
   openPanel(true);
   if (ev?.kind === "new") setTimeout(() => panelBody.querySelector(".card.unread")?.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
   else setTimeout(() => state.noticeList?.length && noticeDrop(true), 300);
@@ -3698,6 +3879,41 @@ tip.addEventListener("click", async (e) => {
 /* a click on a pin opens the list on that comment. Pins are redrawn every frame, so the pressed element may be
    gone by the release and no click would fire: the press is noted, the release on the same pin acts. */
 let pinDown = null;
+/* the drawer's width: dragged at its left edge, remembered, a double-click for the default */
+{
+  const KEY = "review.panelWidth";
+  /* 480: the filter row ("This page 84" and the statuses) fits whole; 720: wide enough for pictures and long comments
+     without taking over the page (Nirav, 2026-10-27) */
+  const MIN = 480, max = () => Math.max(MIN, Math.min(720, innerWidth - 80));
+  const apply = (w) => (w ? host.style.setProperty("--panel-w", `${Math.round(Math.min(max(), Math.max(MIN, w)))}px`) : host.style.removeProperty("--panel-w"));
+  try { const w = Number(localStorage.getItem(KEY)); if (w) apply(w); } catch {}
+  const edge = $(".panel-edge"), pn = $(".panel");
+  edge.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    edge.setPointerCapture(e.pointerId);
+    pn.classList.add("resizing");
+    const move = (m) => apply(innerWidth - m.clientX);
+    const up = () => {
+      edge.removeEventListener("pointermove", move);
+      edge.removeEventListener("pointerup", up);
+      edge.removeEventListener("pointercancel", up);
+      pn.classList.remove("resizing");
+      try { localStorage.setItem(KEY, String(Math.round(pn.getBoundingClientRect().width))); } catch {}
+      renderPickPill(); // the selection bar keeps its labels, or only its icons, to the new width
+    };
+    edge.addEventListener("pointermove", move);
+    edge.addEventListener("pointerup", up);
+    edge.addEventListener("pointercancel", up);
+  });
+  edge.addEventListener("dblclick", () => {
+    apply(null);
+    try { localStorage.removeItem(KEY); } catch {}
+    renderPickPill();
+  });
+  /* a window made smaller: the drawer never wider than it allows */
+  addEventListener("resize", () => { try { const w = Number(localStorage.getItem(KEY)); if (w) apply(w); } catch {} });
+}
 /* a tapped fan closes on a tap anywhere but its pins and their card */
 window.addEventListener("pointerdown", (e) => {
   if (!state.fan?.tapped) return;
@@ -4019,10 +4235,18 @@ function clearBody() {
   if (tools.parentNode !== panel) panel.appendChild(tools);
 }
 /* a comment matches the search by its words, its number, its page or place, or a person on it */
+/* the search, and the type by name: "question(s)" or "fix(es)" as a word of it keeps only that type (Nirav, 2026-10-27,
+   in place of the Fix / Question filter); the other words search the text as before */
+const TYPE_WORDS = { question: "question", questions: "question", fix: "fix", fixes: "fix" };
 function matchesQ(c, q) {
   if (!q) return true;
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const types = words.map((w) => TYPE_WORDS[w]).filter(Boolean);
+  if (types.length && !types.includes(c.severity)) return false;
+  const rest = words.filter((w) => !TYPE_WORDS[w]);
+  if (!rest.length) return true;
   const hay = [c.text, `#${c.n}`, String(c.n), c.pageTitle, c.route, c.context, c.assignee, c.doneBy, c.approvedBy, c.by, c.note?.text].filter(Boolean).join(" \n ").toLowerCase();
-  return q.toLowerCase().split(/\s+/).every((w) => hay.includes(w));
+  return rest.every((w) => hay.includes(w));
 }
 const shotUrl = (c) => c.localShot || c.urls?.shot || `/__review/shot/${c.shot}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`;
 /* THUMBNAILS (2026-10-21): the list shows a small JPEG (720 wide), the full PNG is fetched only for the lightbox and
@@ -5348,34 +5572,10 @@ function renderPanel() {
   state.filter.clear();
   const sel = state.status || new Set();
   const inTab = view === "resolved" ? scoped : scoped.filter((c) => !sel.size || sel.has(c.status));
-  /* the type pill in the list's toolbar: All, Fix, Question, with their counts in the current status and scope */
-  {
-    const tp = tools.querySelector(".type-pick");
-    tp.innerHTML = "";
-    const n = { all: inTab.length, fix: inTab.filter((c) => c.severity === "fix").length, question: inTab.filter((c) => c.severity === "question").length };
-    if (state.type !== "all" && !n[state.type]) state.type = "all";
-    /* not a switch (Nirav, 2026-10-23): two quiet words with their dots at the end of the search field; a click shows
-       only that type, a second click shows both again */
-    for (const [k, label] of SEVERITIES) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "tp";
-      b.dataset.k = k;
-      b.setAttribute("aria-pressed", String(state.type === k));
-      /* icons, not coloured dots (Nirav, 2026-10-23): red already means For approval up top; the picked one takes its colour */
-      const ICON = { fix: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-.4-.4-2.1z"/>', question: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17h.01"/>' };
-      b.innerHTML = `<span class="w"></span><b>${n[k]}</b>`; // words only (Nirav, 2026-10-23); ICON kept for a later try
-      b.querySelector(".w").textContent = label;
-      b.setAttribute("aria-label", state.type === k ? `Showing ${label.toLowerCase()} only, click to show all` : `Only ${label.toLowerCase()}`); // no native title: the hover state says it
-      if (!n[k]) b.disabled = true;
-      b.addEventListener("click", (e) => {
-        e.preventDefault();
-        state.type = state.type === k ? "all" : k;
-        renderPanel();
-      });
-      tp.appendChild(b);
-    }
-  }
+  /* NO TYPE FILTER (Nirav, 2026-10-27: questions are few and marked on their cards; the search does it instead:
+     "question" or "fix" in it shows only that type) */
+  state.type = "all";
+  tools.querySelector(".type-pick")?.remove();
   clearBody();
   if (isWaiting()) {
     panelBody.insertAdjacentHTML("beforeend", waitScreenHtml());
@@ -5406,7 +5606,10 @@ function renderPanel() {
     return;
   }
   if (isApprover() && state.joiners.length && view === "open") panelBody.insertAdjacentHTML("beforeend", joinHtml());
-  const shown = inTab.filter((c) => (state.type === "all" || c.severity === state.type) && matchesQ(c, state.q));
+  if (state.onlyPicked && !state.selected.size) state.onlyPicked = false; // nothing picked: everything again
+  /* what "all" means for the selection bar: this view before "only these" narrows it */
+  state.viewIds = inTab.filter((c) => (state.type === "all" || c.severity === state.type) && matchesQ(c, state.q)).map((c) => c.id);
+  const shown = inTab.filter((c) => (state.type === "all" || c.severity === state.type) && matchesQ(c, state.q) && (!state.onlyPicked || state.selected.has(c.id)));
   if (!shown.length) {
     /* FRIENDLY EMPTY STATES (Nirav, 2026-10-25): a face, a title and a kind line for every empty view */
     const one = sel.size === 1 ? [...sel][0] : null;
@@ -5483,7 +5686,7 @@ function renderPanel() {
       into = document.createElement("section");
       into.className = "list-sec";
       panelBody.appendChild(into);
-      into.insertAdjacentHTML("beforeend", `<button type="button" class="list-group${foldedNow ? " folded" : ""}" data-g="${esc(g.key)}" aria-expanded="${!foldedNow}">${g.label}<svg class="lg-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`);
+      into.insertAdjacentHTML("beforeend", `<button type="button" class="list-group${foldedNow ? " folded" : ""}" data-g="${esc(g.key)}" aria-expanded="${!foldedNow}">${g.label}${foldedNow ? "" : `<span class="lg-pick" role="checkbox" aria-checked="false" aria-label="Pick this group"><svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 6.3l2.2 2.2 4.6-4.8"/></svg><i></i></span>`}<svg class="lg-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`);
     }
     if (foldedNow) continue;
     /* THE CARD (Nirav, 2026-10-19, picked from seven trials): a soft fill, no border; the number outside in the
@@ -5558,31 +5761,228 @@ function renderPanel() {
   }
   refreshCopyLabels();
 }
-/* the selection pill in the bar: how many of the shown cards are picked, and a clear */
-function renderPickPill() {
-  const head = $(".panel-head");
-  const n = panelBody.querySelectorAll(".card.picked").length;
-  let pick = head.querySelector(".panel-pick");
-  if (!n) {
-    pick?.remove();
-    return;
+/* THE SHORTCUTS, SAID ONCE OR TWICE (Nirav, 2026-10-27): the first two times a selection starts, a line over the bar */
+function pickHint() {
+  let seen = 0;
+  try { seen = Number(localStorage.getItem("review.pickHint")) || 0; } catch {}
+  if (seen >= 2 || state.pickHinted) return;
+  state.pickHinted = true; // once per page at most
+  try { localStorage.setItem("review.pickHint", String(seen + 1)); } catch {}
+  const pn = $(".panel");
+  let hint = pn.querySelector(".pb-hint");
+  if (!hint) {
+    hint = document.createElement("div");
+    hint.className = "pb-hint";
+    pn.appendChild(hint);
   }
-  if (!pick) {
-    pick = document.createElement("span");
-    pick.className = "panel-pick";
-    pick.innerHTML = `<span class="n"></span><button type="button" class="x" aria-label="Clear the selection"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg><span class="scope-tip">Clear the selection</span></button>`;
-    pick.querySelector(".x").addEventListener("click", () => {
+  hint.textContent = `Shift-click for a range · ${MOD === "⌥" ? "⌘" : "Ctrl+"}A for all`;
+  hint.classList.add("on");
+  setTimeout(() => hint.classList.remove("on"), 5000);
+}
+/* SELECT ALL SWELLS OUT OF THE COUNT (Nirav, 2026-10-27, "like a drop, but it does not split"): one shape, the count
+   and a smaller circle on its left joined by a pinched neck; at rest the circle is drawn back inside the count. t runs
+   0..1 between the two; the outline is one path, so the edge, the fill and the shadow go round both as one. */
+function dropPath(t, w) {
+  const R = 16, cy = 16, c2 = R, xR = Math.max(w, 32) - R; // the count: a circle, or a pill when its number is wide
+  const r1 = 10 + 4 * t, dist = 28 * t, x1 = c2 - dist; // the small circle: grows as it comes out
+  /* SMOOTH (Nirav, 2026-10-27): the neck leaves each circle along its own edge, from points well round the top (60
+     degrees), as one wide curve on each side: no corner, no flat */
+  const a1 = Math.PI / 3, a2 = Math.PI - Math.PI / 3;
+  const stadium = `M${c2} ${cy - R}L${xR} ${cy - R}A${R} ${R} 0 0 1 ${xR} ${cy + R}L${c2} ${cy + R}A${R} ${R} 0 0 1 ${c2} ${cy - R}Z`;
+  const p1x = x1 + r1 * Math.cos(a1), p1y = r1 * Math.sin(a1);
+  const p2x = c2 + R * Math.cos(a2), p2y = R * Math.sin(a2);
+  if (t <= 0.02 || p1x >= p2x - 0.5) return stadium; // still inside the count
+  const gap = p2x - p1x, h = gap * 0.5;
+  const d1x = Math.sin(a1), d1y = Math.cos(a1); // leaving the small circle, clockwise: right and down
+  const d2x = Math.sin(a2), d2y = -Math.cos(a2); // arriving on the count: right and up
+  const f = (n) => n.toFixed(2);
+  const top = `C${f(p1x + h * d1x)} ${f(cy - p1y + h * d1y)} ${f(p2x - h * d2x)} ${f(cy - p2y + h * d2y)} ${f(p2x)} ${f(cy - p2y)}`;
+  const bot = `C${f(p2x - h * d2x)} ${f(cy + p2y - h * d2y)} ${f(p1x + h * d1x)} ${f(cy + p1y - h * d1y)} ${f(p1x)} ${f(cy + p1y)}`;
+  return `M${f(p1x)} ${f(cy - p1y)}${top}A${R} ${R} 0 0 1 ${c2} ${cy - R}L${xR} ${cy - R}A${R} ${R} 0 0 1 ${xR} ${cy + R}L${c2} ${cy + R}A${R} ${R} 0 0 1 ${f(p2x)} ${f(cy + p2y)}${bot}A${f(r1)} ${f(r1)} 0 1 1 ${f(p1x)} ${f(cy - p1y)}Z`;
+}
+const drop = { t: 0, to: 0, raf: 0 };
+function dropDraw() {
+  const bar = $(".pick-bar"), pill = bar?.querySelector(".pb-count"), svg = pill?.querySelector(".pb-drop");
+  if (!svg) return;
+  const w = pill.getBoundingClientRect().width || 32;
+  svg.querySelector("path").setAttribute("d", dropPath(drop.t, w));
+  pill.toggleAttribute("data-open", drop.t > 0.3); // "only these" puts its blue on the count alone while Select all is out
+  const all = bar.querySelector(".pb-all");
+  if (all) {
+    all.style.setProperty("--drop", String(Math.max(0, (drop.t - 0.45) / 0.55))); // the icon shows once the circle is out
+    all.style.pointerEvents = drop.t > 0.8 ? "auto" : "none";
+  }
+}
+function dropTo(to) {
+  if (drop.to === to && drop.raf) return;
+  drop.to = to;
+  if (calm()) { drop.t = to; dropDraw(); return; }
+  cancelAnimationFrame(drop.raf);
+  const from = drop.t, t0 = performance.now(), dur = to ? 380 : 240;
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / dur);
+    /* out: eased with a small overshoot, like a drop settling; in: drawn back quickly */
+    const e = to ? 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2) : 1 - Math.pow(1 - k, 2); // out: settles with a slight overshoot
+    drop.t = from + (to - from) * e;
+    dropDraw();
+    drop.raf = k < 1 ? requestAnimationFrame(step) : 0;
+    if (k >= 1) { drop.t = to; dropDraw(); }
+  };
+  drop.raf = requestAnimationFrame(step);
+}
+function dropAim() {
+  const bar = $(".pick-bar");
+  if (!bar) return;
+  /* open while the pointer is on the bar, or the keyboard is in it (a click leaves focus behind: that does not count) */
+  const out = (bar.matches(":hover") || !!bar.querySelector(":focus-visible")) && bar.classList.contains("on") && !bar.querySelector(".pb-all")?.classList.contains("gone");
+  dropTo(out ? 1 : 0);
+}
+/* THE BAR'S LOOK (Nirav, 2026-10-27), one word to switch: "dark" (everything dark, as first built: kept to go back to),
+   "mixed" (D: the selection, its count, clear and Select all, quiet in the surface colour; the actions dark), "line"
+   (C: outlines, no fill; only Send filled) */
+/* THE HEADER'S THREE BUTTONS (Nirav, 2026-10-27): kept as a backup, out of sight; the selection bar does their work.
+   They stay in the page (the bar's buttons press them), so true brings them back as they were */
+const HEADER_ACTIONS = false;
+host.toggleAttribute("data-no-head-acts", !HEADER_ACTIONS);
+const PICK_LOOK = "line"; // trying C (Nirav, 2026-10-27); "mixed" was D
+/* SELECTION ACTIONS IN A BAR (Nirav, 2026-10-27): with cards picked, a bar rises at the foot of the drawer with how
+   many and a clear, and beside it the three actions for them (the same as the header's: a brief for Claude, send to
+   Claude, a checklist for Loop); a narrow drawer keeps their icons only */
+function renderPickPill() {
+  const pn = $(".panel");
+  const n = panelBody.querySelectorAll(".card.picked").length;
+  let bar = pn.querySelector(".pick-bar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.className = "pick-bar";
+    bar.dataset.look = PICK_LOOK;
+    bar.setAttribute("role", "toolbar");
+    bar.setAttribute("aria-label", "Actions for the selected comments");
+    /* two pills (Nirav, 2026-10-27): how many and a clear; then the actions, Send to Claude first and highlighted,
+       Brief, and the rest (Loop) behind ⋯ */
+    const X = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+    bar.innerHTML = `<button type="button" class="pb-x" aria-label="Clear the selection">${X}<span class="scope-tip">Clear</span></button><div class="pb-count"><svg class="pb-drop" aria-hidden="true"><path/></svg><button type="button" class="pb-n" aria-pressed="false"></button></div><div class="pb-acts"><button type="button" class="pb-act primary" data-kind="send" aria-label="Send to Claude"><span class="pb-i"></span><span class="pb-l">Send</span><span class="scope-tip">Send to Claude</span></button><button type="button" class="pb-act" data-kind="prompt" aria-label="Copy a brief for Claude"><span class="pb-i"></span><span class="scope-tip">Copy prompt</span></button><button type="button" class="pb-act" data-kind="loop" aria-label="Copy a checklist for Loop"><span class="pb-i"></span><span class="scope-tip">Copy for Loop</span></button></div></div>`;
+    /* SHOW ONLY THESE (Nirav, 2026-10-27): the count toggles the list to the picked cards and back */
+    bar.insertAdjacentHTML("afterbegin", `<button type="button" class="pb-all gone" aria-label="Select all"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12.2l2.4 2.4 4.8-5"/></svg><span class="scope-tip">Select all</span></button>`); // left of the count, right of the clear; only while the pointer is on the bar (Nirav, 2026-10-27)
+    bar.querySelector(".pb-all").addEventListener("click", () => {
+      /* every card of the view, also those "only these" keeps out of sight */
+      for (const id of state.viewIds || []) state.selected.add(id);
+      pickMany(panelBody.querySelectorAll(".card:not(.picked)"), true);
+      if (state.onlyPicked) renderPanel();
+    });
+    bar.querySelector(".pb-n").addEventListener("click", () => {
+      state.onlyPicked = !state.onlyPicked;
+      renderPanel();
+    });
+    bar.querySelector(".pb-x").addEventListener("click", () => {
+      const was = state.onlyPicked;
+      state.onlyPicked = false;
       state.selected.clear();
       for (const card of panelBody.querySelectorAll(".card.picked")) {
         card.classList.remove("picked");
         card.querySelector(".card-pick")?.setAttribute("aria-pressed", "false");
       }
+      if (was) renderPanel(); // the list was showing only these: everything again
       renderPickPill();
       refreshCopyLabels();
     });
-    head.insertBefore(pick, head.querySelector(".panel-copy"));
+    /* each action is the header's own button, so it does exactly what that does (and shows its busy and done) */
+    bar.addEventListener("click", (e) => {
+      const b = e.target.closest(".pb-act");
+      if (!b) return;
+      $(`.panel-head .panel-copy[data-kind="${b.dataset.kind}"]`)?.click();
+    });
+    pn.appendChild(bar);
+    for (const ev of ["pointerenter", "pointerleave", "focusin", "focusout"]) bar.addEventListener(ev, () => requestAnimationFrame(dropAim));
+    /* THE SAME MOTION AS THE HEADER (Nirav, 2026-10-27): each bar button wears its header button's state (working,
+       sent, done) as it changes, so the plane flies and the brief spins here too */
+    const mirror = (hb) => {
+      const kind = hb.dataset.kind;
+      for (const bb of bar.querySelectorAll(`.pb-act[data-kind="${kind}"]`)) {
+        for (const k of ["busy", "sent", "done"]) bb.classList.toggle(k, hb.classList.contains(k));
+        const part = bb.querySelector(".pb-part");
+        if (part) part.textContent = hb.querySelector(".more")?.textContent || "";
+        /* its words too: "Copied", "Copy part 2 of 5 for Loop", the count it acts on; and "Sent to Claude" once sent */
+        const tipB = bb.querySelector(":scope > .scope-tip"), tipH = hb.querySelector(".scope-tip");
+        /* short words here (Nirav, 2026-10-27): "Copied" and "Sent to Claude" as they come, a Loop part as "Part 2 of 5" */
+        const SHORT = { send: "Send to Claude", prompt: "Copy prompt", loop: "Copy for Loop" };
+        const said = tipH?.textContent || "";
+        const ofN = /part (\d+) of (\d+)/i.exec(said);
+        if (tipB) tipB.textContent = hb.classList.contains("sent") ? "Sent to Claude" : hb.classList.contains("done") ? said : ofN ? `Part ${ofN[1]} of ${ofN[2]}` : SHORT[kind] || said;
+        if (tipB) bb.classList.toggle("tip-wide", tipB.textContent.length > 14);
+      }
+    };
+    const watch = new MutationObserver((ms) => { for (const m of ms) mirror(m.target.closest?.(".panel-copy") || m.target.parentElement?.closest(".panel-copy")); });
+    const hook = () => { for (const hb of root.querySelectorAll(".panel-head .panel-copy")) if (!hb.dataset.mirrored) { hb.dataset.mirrored = "1"; watch.observe(hb, { attributes: true, attributeFilter: ["class"], childList: true, characterData: true, subtree: true }); } };
+    hook();
+    setTimeout(hook, 0); // the send button is added a little later
   }
-  pick.querySelector(".n").textContent = `${n} selected`;
+  /* the icons: Claude's mark and Loop's from the header, a paper plane for send */
+  for (const b of bar.querySelectorAll(".pb-act")) {
+    const i = b.querySelector(".pb-i");
+    if (!i || i.firstChild) continue;
+    if (b.dataset.kind === "send") {
+      const clip = $('.panel-head .panel-copy[data-kind="send"] .send-clip'); // the header's plane, booster lines and tick: the same flight
+      if (clip) i.appendChild(clip.cloneNode(true));
+    } else if (b.dataset.kind === "loop") {
+      const rest = $('.panel-head .panel-copy[data-kind="loop"] svg.logo-loop-rest'), col = $('.panel-head .panel-copy[data-kind="loop"] svg.logo-loop');
+      if (rest) i.appendChild(rest.cloneNode(true));
+      if (col) i.insertAdjacentHTML("beforeend", col.outerHTML.replace(/rv-loop-/g, "pb-loop-")); // its own gradients: the header's are hidden
+    } else {
+      const svg = $('.panel-head .panel-copy[data-kind="prompt"] svg.logo-claude');
+      if (svg) i.appendChild(svg.cloneNode(true));
+    }
+    /* the moving line round the button while it works (the header's ring, as a circle) */
+    if (b.dataset.kind !== "send" && !b.querySelector(".pb-ring")) b.insertAdjacentHTML("beforeend", `<svg class="pb-ring" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="16" pathLength="100"/></svg>`);
+    if (b.dataset.kind === "loop" && !b.querySelector(".pb-part")) b.insertAdjacentHTML("beforeend", `<i class="pb-part"></i>`); // "2/5", the part of a long checklist
+  }
+  /* the labels while they fit, with room to spare on both sides; else the icons alone */
+  bar.classList.remove("tight");
+  const roomy = bar.scrollWidth + 40 <= pn.getBoundingClientRect().width;
+  bar.classList.toggle("tight", !roomy);
+  pn.style.setProperty("--pb-w", `${Math.ceil(bar.getBoundingClientRect().width)}px`);
+  if (n && !bar.classList.contains("on")) pickHint(); // a selection starts
+  bar.classList.toggle("on", !!n);
+  pn.classList.toggle("picking-bar", !!n);
+  /* each group's box: empty, partly (a dash) or all (a tick) */
+  for (const sec of panelBody.querySelectorAll(".list-sec")) {
+    const box = sec.querySelector(".lg-pick");
+    if (!box) continue;
+    const cards = sec.querySelectorAll(".card"), k = sec.querySelectorAll(".card.picked").length;
+    box.classList.toggle("all", !!cards.length && k === cards.length);
+    box.classList.toggle("some", k > 0 && k < cards.length);
+    box.setAttribute("aria-checked", k === cards.length && k ? "true" : k ? "mixed" : "false");
+  }
+  /* SELECT ALL (Nirav, 2026-10-27): beside the count while some are not picked; all picked, the count says so */
+  const total = state.viewIds ? state.viewIds.length : panelBody.querySelectorAll(".card").length; // the whole view, also while "only these" shows
+  const allPicked = !!n && (state.viewIds ? state.viewIds.every((id) => state.selected.has(id)) : n >= total);
+  bar.querySelector(".pb-all").classList.toggle("gone", !n || allPicked); // fades away, not gone in a frame
+  requestAnimationFrame(() => { dropDraw(); dropAim(); }); // the shape follows the count's width and the select-all state
+
+  if (n) {
+    const nb = bar.querySelector(".pb-n");
+    const pill = bar.querySelector(".pb-count");
+    const wasW = pill.getBoundingClientRect().width, wasText = nb.querySelector(".pb-num")?.textContent;
+    /* the number alone (Nirav, 2026-10-27: no word, no box); the tooltip says it in full */
+    /* all of them picked: "only these" would show the same list, so the count is just a count (Nirav, 2026-10-27) */
+    const still = allPicked && !state.onlyPicked;
+    nb.innerHTML = `<span class="pb-num">${allPicked && total > 1 ? `All ${n}` : n}</span>${still ? "" : `<span class="scope-tip">${state.onlyPicked ? "Show all" : "Show only these"}</span>`}`;
+    nb.setAttribute("aria-label", still ? `All ${n} selected` : `${n} selected, ${state.onlyPicked ? "show all" : "show only these"}`);
+    nb.disabled = still;
+    /* SMOOTH (Nirav, 2026-10-27: "1" to "All 91" jerked the whole bar): the count's pill eases to its new width, so
+       the centred bar glides, and the new number rises in */
+    const num = nb.querySelector(".pb-num");
+    if (wasText != null && num.textContent !== wasText && bar.classList.contains("on") && !calm()) {
+      const nowW = pill.getBoundingClientRect().width;
+      if (Math.abs(nowW - wasW) > 1) {
+        pill.style.overflow = "hidden";
+        pill.animate([{ width: `${wasW}px` }, { width: `${nowW}px` }], { duration: 240, easing: "cubic-bezier(.32,.72,0,1)" }).finished.finally(() => (pill.style.overflow = ""));
+      }
+      num.animate([{ opacity: 0, transform: "translateY(5px)" }, { opacity: 1, transform: "none" }], { duration: 200, easing: "ease-out" });
+    }
+    nb.setAttribute("aria-pressed", String(!!state.onlyPicked));
+    bar.querySelector(".pb-count").classList.toggle("only", !!state.onlyPicked);
+  }
 }
 /* the drawer's last line: how many are resolved, and where to see them */
 /* "Shared on the hub · next-gen-console · pictures 120 MB of 1 GB" */
@@ -5802,6 +6202,15 @@ panelBody.addEventListener("click", async (e) => {
     teamCache.at = 0; // the hand-over list takes them in
     toast(role === "member" ? `${row.dataset.name} is in` : `${row.dataset.name} was refused`);
     renderPanel();
+    return;
+  }
+  /* A WHOLE GROUP (Nirav, 2026-10-27): its checkbox picks every card in it, or drops them when all are picked */
+  const lp = e.target.closest(".lg-pick");
+  if (lp) {
+    const cards = [...lp.closest(".list-sec").querySelectorAll(".card")];
+    const all = cards.length && cards.every((x) => x.classList.contains("picked"));
+    pickMany(cards.filter((x) => x.classList.contains("picked") === all), !all);
+    pickHint();
     return;
   }
   const head = e.target.closest(".list-group");
@@ -6065,6 +6474,17 @@ function setPicked(card, on) {
   renderPickPill();
   refreshCopyLabels();
 }
+/* many at once (select all, a group): one redraw of the bar, so its count changes once, smoothly */
+function pickMany(cards, on) {
+  for (const card of cards) {
+    if (on) state.selected.add(card.dataset.id);
+    else state.selected.delete(card.dataset.id);
+    card.classList.toggle("picked", on);
+    card.querySelector(".card-pick")?.setAttribute("aria-pressed", String(on));
+  }
+  renderPickPill();
+  refreshCopyLabels();
+}
 const shownCards = () => [...panelBody.querySelectorAll(".card")];
 function pickRange(fromId, toId, on) {
   const cards = shownCards();
@@ -6153,6 +6573,7 @@ panelBody.addEventListener("keydown", (e) => {
     e.stopPropagation();
     for (const x of cards) if (state.selected.has(x.dataset.id)) setPicked(x, false);
     state.selected.clear();
+    if (state.onlyPicked) { state.onlyPicked = false; renderPanel(); }
     renderPickPill();
     refreshCopyLabels();
     return;

@@ -202,7 +202,7 @@ the approver surer, which is where most of the time goes.
 
 ## The drawer
 
-- [ ] **Selection actions move to a bar** (Nirav, 2026-10-27): with comments selected, the "N selected ×" count moves
+- [x] **Selection actions move to a bar** (done 2026-10-27): with comments selected, the "N selected ×" count moves
   next to the three actions (Copy prompt, Send to Claude, Copy for Loop), in one bar, perhaps at the bottom of the
   drawer.
 - [ ] **The title hides on scroll** (Nirav, 2026-10-27): scrolling the list hides the drawer's title row (nothing
@@ -210,7 +210,7 @@ the approver surer, which is where most of the time goes.
 - [ ] **The pin card like the drawer card** (Nirav, 2026-10-27): the card that opens on a pin shows much less than the
   same comment's card in the drawer; bring them together (the status line with faces, the history, the note,
   Claude's suggestion, Read more, the same actions), one card design in both places.
-- [ ] **A drawer you can resize** (Nirav, 2026-10-27): drag its edge to make it wider or narrower, between a minimum
+- [x] **A drawer you can resize** (done 2026-10-27): drag its edge to make it wider or narrower, between a minimum
   and a maximum width; double-click the edge to go back to the default width; the width is remembered.
 
 ## Parked
