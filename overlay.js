@@ -335,6 +335,14 @@ root.innerHTML = `
   .composer .sev button[data-k="must"] .dot { background: var(--tag-must-dot); } .composer .sev button[data-k="should"] .dot { background: var(--tag-should-dot); } .composer .sev button[data-k="idea"] .dot { background: var(--tag-idea-dot); } .composer .sev button[data-k="question"] .dot { background: var(--tag-question-dot); }
   .composer .sev button[data-k="fix"] .dot { background: var(--tag-fix-dot); }
   .composer textarea { width: 100%; min-height: 72px; resize: vertical; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 8px 10px; background: hsl(218 61% 7% / .45); font: 13px/1.45 -apple-system, system-ui, sans-serif; color: #fff; outline: none; box-sizing: border-box; transition: border-color .12s, box-shadow .12s; }
+  .composer .twin { display: flex; align-items: flex-start; gap: 7px; margin-top: 8px; padding: 7px 8px; border-radius: 8px; background: hsl(36 100% 60% / .12); font-size: 12px; line-height: 1.4; color: hsl(216 30% 88%); }
+  .composer .twin[hidden] { display: none; }
+  .composer .twin .tw-ico { flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; background: hsl(36 100% 60%); color: hsl(216 36% 14%); font: 700 10px/1 -apple-system, system-ui, sans-serif; }
+  .composer .twin .tw-words { flex: 1; min-width: 0; }
+  .composer .twin b { color: #fff; font-weight: 600; }
+  .composer .twin i { font-style: normal; color: hsl(216 25% 75%); }
+  .composer .twin .tw-show { flex: none; height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: rgba(255,255,255,.12); color: #fff; font: 500 11px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .composer .twin .tw-show:hover { background: rgba(255,255,255,.2); }
   .composer textarea::placeholder { color: hsl(216 25% 65%); }
   .composer textarea:focus { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 1px hsl(214 98% 44%); }
   .actions { display: flex; justify-content: flex-end; gap: 4px; align-items: center; margin-top: 10px; }
@@ -1209,6 +1217,7 @@ root.innerHTML = `
   <div class="pin-row"><span class="num">1</span><span class="what"></span></div>
   <div class="sev scope-switch"></div>
   <textarea placeholder="What should change here?" rows="3"></textarea>
+  <div class="twin" hidden></div>
   <div class="actions"><button class="btn cancel">Cancel</button><button class="btn primary save">Save</button></div>
 </div>
 <div class="bar ui"><button class="sat dock" aria-label="Minimise to the edge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><rect x="12" y="12" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Minimise to the edge</span></button><button class="sat off" aria-label="Turn off review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg><span class="scope-tip">Turn off review · ${HIDE_KEY} turns it on</span></button><span class="bar-main"><span class="brand"><button class="dot" title="Pictures: off. Click to share this tab (or load the review extension for silent pictures)"></button><b>Review${window.__reviewSession ? ` · ${window.__reviewSession}` : ""}</b></span><span class="k"></span></span><button class="pins-toggle on disc" aria-label="Pins"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4.5l-4 4-4 1.5-1.5 1.5 7 7 1.5-1.5 1.5-4 4-4"/><path d="M9 15l-4.5 4.5"/><path d="M14.5 4l5.5 5.5"/></svg><span class="scope-tip">Show or hide the pins</span></button><button class="list disc" aria-label="Comments"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14.5 4v16"/></svg><span class="count"></span><span class="scope-tip">Comments, in a side panel</span></button></div>
@@ -1822,6 +1831,7 @@ $(".bar .k").textContent = `${MOD} + click to comment`;
   what.querySelector("b").textContent = describe(el);
   what.querySelector("span").textContent = ` · ${pageTitle()} · ${contextOf(el)}${state.pending.shot ? "" : " · no picture"}`;
   ta.value = "";
+  twinCheck();
   const W = 320;
   const H = 230;
   let left = Math.min(Math.max(8, rect.x), window.innerWidth - W - 8);
@@ -1838,6 +1848,52 @@ $(".bar .k").textContent = `${MOD} + click to comment`;
   host.setAttribute("data-composing", "");
   setTimeout(() => ta.focus(), 0);
 }
+/* SAME THING TWICE (Nirav, 2026-10-27): while a comment is written, an open one already on the same element, or one on
+   this page saying much the same, is named under the box ("#12 on this element already says …"), with Show to see it
+   in the list; saving still works, it is only a heads-up */
+const STOP = new Set("the and for are but not you all can her was one our out has have this that with from they will would there their what about which when make like than then them these some into more also just only very should could here look looks feel feels".split(" "));
+const words = (t) => new Set(String(t || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
+function alike(a, b) {
+  const A = words(a), B = words(b);
+  if (A.size < 2 || B.size < 2) return 0;
+  let both = 0;
+  for (const w of A) if (B.has(w)) both++;
+  return both >= 2 ? both / Math.min(A.size, B.size) : 0;
+}
+let twinTimer = 0;
+function twinCheck() {
+  const box = $(".composer .twin");
+  const p = state.pending;
+  if (!p?.el) return (box.hidden = true);
+  const here = location.pathname;
+  const sel = selectorFor(p.el), stamp = p.el.getAttribute?.(SRC_ATTR) || "", key = txt(p.el).slice(0, 80);
+  const open = state.comments.filter((c) => !c.pending && c.status !== "approved" && (c.route || "").split("?")[0] === here);
+  const sameEl = (c) => state.pinEls.get(c.id) === p.el || (c.selector === sel && (c.textKey || "") === key) || (!!stamp && c.anchor?.stamp === stamp && (c.textKey || "") === key);
+  const typed = ta.value.trim();
+  let best = null;
+  for (const c of open) {
+    const score = alike(typed, c.text);
+    const on = sameEl(c);
+    const rank = (on ? 1 : 0) + score; // on this element first, then the closest words
+    if ((on || score >= 0.5) && (!best || rank > best.rank)) best = { c, on, score, rank };
+  }
+  if (!best) return (box.hidden = true);
+  const { c, on, score } = best;
+  const short = c.text.length > 70 ? `${c.text.slice(0, 68).trimEnd()}…` : c.text;
+  box.innerHTML = `<span class="tw-ico">!</span><span class="tw-words"><b>#${c.n}</b> ${on ? (score >= 0.5 ? "on this element already says something like this" : "is already on this element") : "on this page says something like this"}: <i></i></span><button type="button" class="tw-show">Show</button>`;
+  box.querySelector("i").textContent = `“${short}”`;
+  box.querySelector(".tw-show").dataset.id = c.id;
+  box.hidden = false;
+}
+ta.addEventListener("input", () => {
+  clearTimeout(twinTimer);
+  twinTimer = setTimeout(twinCheck, 250);
+});
+$(".composer .twin").addEventListener("click", (e) => {
+  const b = e.target.closest(".tw-show");
+  const c = b && state.comments.find((x) => x.id === b.dataset.id);
+  if (c) showInList(c);
+});
 function closeComposer() {
   state.pending = null;
   composer.classList.remove("on");

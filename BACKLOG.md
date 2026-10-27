@@ -144,8 +144,6 @@ Effort: S a day or less, M a few days, L a week or more.
   file, line and component (JSX/TSX, Vue, Svelte); without the stamps, what the framework knows (React, Vue, Svelte,
   Angular, web components). Data for Claude only, never shown in the drawer: briefs and `show` carry it. Pins also keep
   anchors (test id, role, name, heading), so a row added above no longer moves them.
-- [ ] **Before and after** (M): when Claude marks a comment done, the dev server takes the same picture again (same
-  page, same element, same window size). The approver sees a before/after slider on the card and approves from it.
 - [x] **"Maybe fixed?"** (S, done 2026-10-26): an open fix whose element changed (new words), is gone, or whose own
   tag in the code was edited after the comment (dev server, from the source stamp) gets a quiet "Maybe fixed?" pill;
   the tip says what changed. Only a hint, no status moves by itself; the brief tells Claude to check first.
@@ -154,21 +152,12 @@ Effort: S a day or less, M a few days, L a week or more.
   do, or posts a question's answer; Ignore hides it. No session open: drafted when one opens.
 
 **Better comments**
-- [ ] **Design-token check** (S): on a colour, spacing or type comment, the card shows the element's computed value
-  next to the nearest design-system token ("#6b7280, looks like neutral-60"), so the fix starts from the rulebook.
-- [ ] **Accessibility on the spot** (S): contrast ratio, missing label or focus problems of the picked element,
-  attached to the comment automatically.
-- [ ] **Short recordings** (L): a 10-second screen clip on a comment, for animations and flows a still picture misses.
-- [ ] **Same thing twice** (S): while typing, "#12 on this element already says something like this", to link
-  instead of duplicating.
+- [x] **Same thing twice** (S, done 2026-10-27): while a comment is written, an open one on the same element, or one
+  on this page with much the same words, is named under the box with Show; saving still works.
 
 **Running a review**
-- [ ] **Review rounds** (M): name a round ("Sprint 14, IAM"), see its progress, and close it with a one-page summary
-  (what was raised, fixed, answered, left), ready for Teams or Loop.
 - [ ] **A daily digest** (S, after notices): what waits for you, what came back, who is on what, in the drawer each
   morning.
-- [ ] **Turn fixes into rules** (M): when the same kind of fix repeats (three "use the token" fixes), Claude proposes a
-  rulebook line or a lint check so it stops coming back.
 - [ ] **Numbers** (S): time from raised to approved, sent-back rate, per page and per person, on the full page.
 
 Claude's pick: source on every comment, before and after, and "maybe fixed?". Together they make Claude faster and
@@ -187,8 +176,40 @@ the approver surer, which is where most of the time goes.
   - how each tweak closes: Claude says what it changed, the designer keeps it or undoes it (a checkpoint per tweak);
   - sending one at a time as they are pinned, or a batch;
   - before and after for each tweak (shares the work with "Before and after").
+- [ ] **Review / Design switch on the review bar** (Nirav, 2026-10-27): one switch on the bar moves between Review mode
+  and Design mode (Draft mode above).
+- [ ] **The same switch in the drawer** (Nirav, 2026-10-27): a toggle in the drawer's header, like the one in Zomato
+  and similar apps, so the mode can change from the list too.
+- [ ] **Each mode its own colours** (Nirav, 2026-10-27): the drawer, the review bar and the pins change colour when
+  the mode changes, so it is always clear which one is on.
+
+## The drawer
+
+- [ ] **Selection actions move to a bar** (Nirav, 2026-10-27): with comments selected, the "N selected ×" count moves
+  next to the three actions (Copy prompt, Send to Claude, Copy for Loop), in one bar, perhaps at the bottom of the
+  drawer.
+- [ ] **The title hides on scroll** (Nirav, 2026-10-27): scrolling the list hides the drawer's title row (nothing
+  sits under it); scrolling back up shows it again.
+- [ ] **The pin card like the drawer card** (Nirav, 2026-10-27): the card that opens on a pin shows much less than the
+  same comment's card in the drawer; bring them together (the status line with faces, the history, the note,
+  Claude's suggestion, Read more, the same actions), one card design in both places.
+- [ ] **A drawer you can resize** (Nirav, 2026-10-27): drag its edge to make it wider or narrower, between a minimum
+  and a maximum width; double-click the edge to go back to the default width; the width is remembered.
 
 ## Parked
+
+- **Before and after** (M): when Claude marks a comment done, the dev server takes the same picture again (same
+  page, same element, same window size). The approver sees a before/after slider on the card and approves from it.
+- **Design-token check** (S): on a colour, spacing or type comment, the card shows the element's computed value
+  next to the nearest design-system token ("#6b7280, looks like neutral-60"), so the fix starts from the rulebook.
+- **Accessibility on the spot** (S): contrast ratio, missing label or focus problems of the picked element,
+  attached to the comment automatically.
+- **Short recordings** (L): a 10-second screen clip on a comment, for animations and flows a still picture misses.
+- **Review rounds** (M): name a round ("Sprint 14, IAM"), see its progress, and close it with a one-page summary
+  (what was raised, fixed, answered, left), ready for Teams or Loop.
+- **Turn fixes into rules** (M): when the same kind of fix repeats (three "use the token" fixes), Claude proposes a
+  rulebook line or a lint check so it stops coming back.
+  (Parked by Nirav, 2026-10-27: the small ones first.)
 
 - Canvas pins (Figma and other canvas pages): see `HANDOFF.md`, "Parked ideas".
 
