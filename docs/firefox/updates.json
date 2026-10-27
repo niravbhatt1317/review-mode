@@ -26,6 +26,11 @@
           "version": "2.0.47",
           "update_link": "https://niravbhatt1317.github.io/review-mode/firefox/review-mode-2.0.47.xpi",
           "update_hash": "sha256:f6f9464fff00ffd97d6a29461c6b3a55736d51ccda753b59a2b7d2b5e132d0d9"
+        },
+        {
+          "version": "2.0.48",
+          "update_link": "https://niravbhatt1317.github.io/review-mode/firefox/review-mode-2.0.48.xpi",
+          "update_hash": "sha256:72ccbad5bb14e7184b4512b9af2bcb0e931a8769763028ff894f9fb6c6640fc2"
         }
       ]
     }
