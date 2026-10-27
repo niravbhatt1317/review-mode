@@ -205,7 +205,7 @@ the approver surer, which is where most of the time goes.
 - [x] **Selection actions move to a bar** (done 2026-10-27): with comments selected, the "N selected ×" count moves
   next to the three actions (Copy prompt, Send to Claude, Copy for Loop), in one bar, perhaps at the bottom of the
   drawer.
-- [ ] **The title hides on scroll** (Nirav, 2026-10-27): scrolling the list hides the drawer's title row (nothing
+- [x] **The title hides on scroll** (done 2026-10-27): scrolling the list hides the drawer's title row (nothing
   sits under it); scrolling back up shows it again.
 - [ ] **The pin card like the drawer card** (Nirav, 2026-10-27): the card that opens on a pin shows much less than the
   same comment's card in the drawer; bring them together (the status line with faces, the history, the note,

@@ -513,6 +513,10 @@ root.innerHTML = `
   .panel.resizing * { pointer-events: none; }
   :host([data-page]) .panel-edge { display: none; }
   .panel-head { position: relative; z-index: 6; display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; }
+  .panel-head { transition: margin-top .26s cubic-bezier(.32,.72,0,1), opacity .2s ease; }
+  .panel[data-headaway] .panel-head { margin-top: calc(-1 * var(--head-h, 48px)); opacity: 0; pointer-events: none; } /* slid up out of the drawer; the filter row and the list take its room */
+  .panel-bar { transition: padding .26s cubic-bezier(.32,.72,0,1); }
+  .panel[data-headaway] .panel-bar { padding-top: 9px; padding-bottom: 8px; } /* even above and below once alone: the same 18 px as 6 + 12, so it grows no taller */
   /* the title opens the panel as a page: on hover a dotted underline and the arrow beside it, with the instant tooltip */
   .panel-title { position: relative; display: inline-flex; align-items: center; gap: 5px; margin-right: auto; font-size: 14px; font-weight: 600; color: inherit; text-decoration: none; cursor: pointer; }
   .panel-title .txt { text-decoration: underline dotted transparent; text-underline-offset: 3px; text-decoration-thickness: 1px; transition: text-decoration-color .12s; }
@@ -574,6 +578,48 @@ root.innerHTML = `
   /* the send sheet, under the head */
   .claude-sheet { flex: 0 0 auto; display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s cubic-bezier(.22,1,.36,1); }
   .claude-sheet.on { grid-template-rows: 1fr; }
+  .claude-sheet.instant, .claude-sheet.instant > .cs-card { transition: none !important; }
+  /* BY THE SEND BUTTON (Nirav, 2026-10-27): with the header's buttons hidden, Send lives in the bottom bar, so the sheet
+     floats just above the bottom row and grows upward from there, over the cards */
+  :host([data-no-head-acts]) .claude-sheet { position: absolute; left: 0; right: 0; bottom: 58px; z-index: 6; pointer-events: none; }
+  :host([data-no-head-acts]) .claude-sheet.on { pointer-events: auto; }
+  /* the message closed: a pill right-aligned over Send, on the message's lower-right corner, so it shrinks into it */
+  .claude-pill { position: absolute; right: 16px; bottom: 58px; z-index: 6; display: none; align-items: center; gap: 7px; height: 30px; padding: 0 12px 0 8px; border: 0; border-radius: 999px; background: var(--rv-surface); color: var(--rv-ink); box-shadow: inset 0 0 0 1px hsl(var(--rv-n40)), 0 8px 20px rgba(29,43,62,.16); font: 500 12px/1 -apple-system, system-ui, sans-serif; white-space: nowrap; cursor: pointer; transition: opacity .2s ease, transform .2s ease; }
+  .claude-pill.on, .claude-pill.measuring { display: inline-flex; }
+  /* C: in the bottom row, right of the search's icon, as tall as the buttons; the search folds to its icon meanwhile,
+     unless it is in use (then the pill steps aside) */
+  .panel[data-pill-at="row"] .claude-pill { right: auto; left: 54px; bottom: 16px; height: 32px; }
+  /* the search folds to its icon while the pill shows, unless it is open (Nirav, 2026-10-27: a click on the icon opens
+     it); open, the pill folds to its icon instead, at the row's start, and the search sits after it */
+  .panel[data-pill-at="row"]:is(:has(.claude-pill.on), [data-pill-morph]):not([data-search-open]) .pt-search:not(:focus-within) { width: 32px; padding: 0; justify-content: center; }
+  .panel[data-pill-at="row"]:is(:has(.claude-pill.on), [data-pill-morph]):not([data-search-open]) .pt-search:not(:focus-within) > :not(svg:first-child) { display: none; }
+  .panel[data-pill-at="row"][data-search-open] .claude-pill { left: 16px; width: 32px; padding: 0; justify-content: center; }
+  .panel[data-pill-at="row"][data-search-open] .claude-pill > :not(.cs-spin, .cs-warn, .cs-ok) { display: none; }
+  .panel[data-pill-at="row"][data-search-open]:has(.claude-pill.on) .panel-tools { padding-left: 38px; }
+  .panel[data-pill-at="row"] .panel-tools { transition: transform .32s cubic-bezier(.32,.72,0,1), opacity .22s ease, padding .2s ease; }
+  .panel[data-pill-at="row"]:has(.panel-tools.away) .claude-pill { opacity: 0; transform: translateY(calc(100% + 24px)); pointer-events: none; } /* slides away with the row while the list scrolls */
+  .claude-pill.measuring { visibility: hidden; }
+  .claude-pill.on { animation: rv-pill-in .2s ease-out; }
+  .claude-pill.going { opacity: 0; transform: translateY(4px); }
+  /* a banner, not a button (Nirav, 2026-10-27): a tinted ground and edge by what it says, no grey line */
+  /* the edge drawn inside, as the search's border: the pill is its 32 px, not 34 (Nirav, 2026-10-27) */
+  .claude-pill[data-tone="warn"] { background: hsl(36 100% 95%); color: hsl(28 80% 30%); box-shadow: inset 0 0 0 1px hsl(32 90% 80%), 0 8px 20px rgba(194,110,30,.16); }
+  .claude-pill[data-tone="wait"] { background: color-mix(in srgb, #D97757 9%, var(--rv-surface)); color: hsl(15 55% 32%); box-shadow: inset 0 0 0 1px color-mix(in srgb, #D97757 30%, transparent), 0 8px 20px rgba(217,119,87,.16); }
+  .claude-pill[data-tone="ok"] { background: hsl(140 55% 95%); color: hsl(140 50% 25%); box-shadow: inset 0 0 0 1px hsl(140 45% 78%), 0 8px 20px rgba(40,140,80,.14); }
+  .claude-pill[data-tone="warn"]:hover { background: hsl(36 100% 92%); }
+  .claude-pill[data-tone="wait"]:hover { background: color-mix(in srgb, #D97757 14%, var(--rv-surface)); }
+  .claude-pill[data-tone] i { color: inherit; opacity: .7; }
+  .claude-pill[data-tone="warn"] .cs-warn { background: hsl(32 100% 86%); }
+  :host([data-theme="dark"]) .claude-pill[data-tone="warn"] { background: hsl(32 55% 16%); color: hsl(36 100% 78%); box-shadow: inset 0 0 0 1px hsl(32 60% 32%), 0 8px 20px rgba(0,0,0,.4); }
+  :host([data-theme="dark"]) .claude-pill[data-tone="wait"] { background: color-mix(in srgb, #D97757 18%, hsl(217 40% 14%)); color: hsl(15 80% 82%); box-shadow: inset 0 0 0 1px color-mix(in srgb, #D97757 40%, transparent), 0 8px 20px rgba(0,0,0,.4); }
+  :host([data-theme="dark"]) .claude-pill[data-tone="ok"] { background: hsl(140 35% 15%); color: hsl(140 50% 78%); box-shadow: inset 0 0 0 1px hsl(140 35% 30%), 0 8px 20px rgba(0,0,0,.4); }
+  .claude-pill i { font-style: normal; color: var(--rv-ink-3); }
+  .claude-pill .cs-spin { width: 14px; height: 14px; }
+  .claude-pill .cs-warn, .claude-pill .cs-ok { width: 16px; height: 16px; font-size: 10px; animation: none; }
+  @keyframes rv-pill-in { from { opacity: 0; } to { opacity: 1; } }
+  .cs-morph { position: absolute; z-index: 7; pointer-events: none; background: var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n30)), 0 16px 36px -10px rgba(29,43,62,.28); }
+  .panel:has(.claude-sheet.on, .claude-pill.on, .cs-morph) .pb-hint { opacity: 0 !important; } /* the message or its pill take that place */
+  :host([data-no-head-acts]) .claude-sheet.on > .cs-card { margin: 0 16px; box-shadow: 0 0 0 1px hsl(var(--rv-n30)), 0 16px 36px -10px rgba(29,43,62,.28); }
   .claude-sheet > .cs-card { min-height: 0; overflow: hidden; margin: 0 16px; }
   .claude-sheet.on > .cs-card { margin: 12px 16px 2px; padding: 12px 14px; border-radius: 10px; background: var(--rv-surface); box-shadow: 0 0 0 1px hsl(var(--rv-n20)), 0 4px 14px -6px rgba(29,43,62,.18); }
   .cs-head { display: flex; align-items: center; gap: 8px; }
@@ -751,6 +797,7 @@ root.innerHTML = `
   .panel-tools .pt-tip { top: auto; bottom: calc(100% + 8px); left: 0; transform: none; display: inline-flex; align-items: center; gap: 6px; }
   .panel-tools .pt-tip kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 15px; padding: 0 3px; border: 1px solid rgba(255,255,255,.35); border-radius: 4px; font: 500 10px/1 -apple-system, system-ui, sans-serif; }
   .panel-tools:has(.pt-search:hover):not(:has(.pt-search:focus-within)):not(.has-q) .pt-tip { opacity: 1; }
+  .panel[data-search-centre]:not(.picking-bar):not(:has(.claude-pill.on)) .panel-tools .pt-tip { left: 50%; transform: translateX(-50%); } /* over the search where it is: in the middle */
   .pt-clear { display: none; flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--rv-ink-3); align-items: center; justify-content: center; cursor: pointer; }
   .pt-clear:hover { background: var(--rv-fill); color: var(--rv-ink); }
   .panel-tools.has-q .pt-clear { display: inline-flex; }
@@ -1100,6 +1147,7 @@ root.innerHTML = `
   .pick-bar:has(> .pb-all.gone) > .pb-x { right: calc(100% + 6px); } /* all picked: Select all goes, the clear comes in beside the count */
   .pb-hint { position: absolute; left: 50%; bottom: 60px; z-index: 5; transform: translate(-50%, 4px); padding: 4px 10px; border-radius: 999px; background: hsl(var(--rv-n20)); color: var(--rv-ink-2); font: 500 11px/1.4 -apple-system, system-ui, sans-serif; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease; }
   .pb-hint.on { opacity: 1; transform: translate(-50%, 0); } /* at the drawer's foot, above the search: over no card */
+  .panel:not(.picking-bar) .pb-hint { opacity: 0 !important; } /* only while picking: once cleared, it would cover the search's tooltip */
   .panel:has(.pick-bar:hover) .pb-hint, .panel:has(.pick-bar .pb-act.done, .pick-bar .pb-act.sent) .pb-hint { opacity: 0; } /* the bar's own tooltips, and its Copied / Sent tips, take that place */
   .pick-bar .pb-n:hover .scope-tip { opacity: 1; }
   .pick-bar .pb-count.only { background: hsl(214 98% 44%); } /* the list shows only these */
@@ -1206,6 +1254,18 @@ root.innerHTML = `
      the bar while it shows */
   .panel.picking-bar .panel-tools { padding-right: calc(var(--pb-w, 300px) + 68px + 8px); } /* the bar, and the clear and Select all on its left */
   .panel.picking-bar .panel-body { padding-bottom: 72px; }
+  /* the search's place: the middle while nothing is picked, no pill shows and it is not open; it glides between */
+  .panel[data-search-centre] .pt-search { transition: width .3s cubic-bezier(.32,.72,0,1), flex-grow .3s, margin-left .4s cubic-bezier(.32,.72,0,1) .12s; } /* back to the middle a moment after the bar has gone */
+  .panel[data-search-centre]:not(.picking-bar):not(:has(.claude-pill.on)) .panel-tools:not(.has-q) .pt-search:not(:focus-within) { width: var(--ph-w, 236px); margin-left: calc(50% - var(--ph-w, 236px) / 2); } /* alone in the middle: as wide as its words (measured), with its fuller words (Nirav, 2026-10-27); the open flag only matters beside the pill */ /* the open flag only matters beside the pill: Esc closing it no longer sends it left */
+  .panel[data-search-centre].picking-bar .pt-search { transition: width .3s cubic-bezier(.32,.72,0,1), flex-grow .3s, margin-left .36s cubic-bezier(.32,.72,0,1); } /* to the left at once as picking starts */
+  /* the bar: in from the right a beat after the search starts to move; out to the right first when cleared */
+  /* opened with nothing picked: it stays in the middle and grows out evenly on both sides (Nirav, 2026-10-27: jumping
+     left as it grew looked wrong), to a comfortable width; with cards picked it opens as before, up to the bar */
+  .panel[data-search-centre]:not(.picking-bar):not(:has(.claude-pill.on)) .panel-tools:is(:has(.pt-search:focus-within), .has-q) .pt-search { flex: 0 0 auto; width: min(340px, 100%); margin-left: calc(50% - min(170px, 50%)); transition: width .34s cubic-bezier(.32,.72,0,1), margin-left .34s cubic-bezier(.32,.72,0,1); }
+  .panel[data-search-centre]:not(.picking-bar):not(:has(.claude-pill.on)) .pt-search { transition: width .34s cubic-bezier(.32,.72,0,1), margin-left .34s cubic-bezier(.32,.72,0,1); }
+  .panel[data-settling] .pt-search, .panel[data-settling] .pick-bar { transition: none !important; }
+  .panel[data-search-centre] .pick-bar { transform: translateX(28px); transition: transform .34s cubic-bezier(.32,.72,0,1), opacity .22s ease; }
+  .panel[data-search-centre] .pick-bar.on { transform: none; transition: transform .38s cubic-bezier(.32,.72,0,1) .1s, opacity .26s ease .1s; }
 
   .card-c .card-line .card-text { margin: 0 0 0 -4px; padding: 2px 4px; }
   .card-c .card-n.out { position: absolute; left: -32px; top: 12px; }
@@ -4120,6 +4180,29 @@ const tools = document.createElement("div");
 tools.className = "panel-tools";
 tools.innerHTML = `<label class="pt-search glass"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input type="search" placeholder="Search" aria-label="Search comments"><button type="button" class="pt-clear" aria-label="Clear the search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></label><span class="type-pick glass" role="group" aria-label="Type"></span><span class="scope-tip pt-tip">Search <kbd>/</kbd></span>`;
 const toolsIn = tools.querySelector("input");
+/* the search open or not, for the pill beside it (C): a click on the folded icon opens it; empty and left, it folds */
+tools.querySelector(".pt-search").addEventListener("pointerdown", () => {
+  if (panel.hasAttribute("data-search-open")) return;
+  panel.setAttribute("data-search-open", "");
+  requestAnimationFrame(() => toolsIn.focus());
+});
+toolsIn.addEventListener("focus", () => panel.setAttribute("data-search-open", ""));
+/* the search's words: "Search comments" while it sits alone in the middle, "Search" when it shares the row */
+function searchWords() {
+  const alone = panel.hasAttribute("data-search-centre") && !panel.classList.contains("picking-bar") && !root.querySelector(".claude-pill.on");
+  toolsIn.placeholder = alone ? "Search, #12, fix or question" : "Search"; // what it can find, while there is room to say it
+  /* its width in the middle: just its words, the icon and even padding (measured in its own font) */
+  const cs = getComputedStyle(toolsIn);
+  const ctx = (searchWords.cv ||= document.createElement("canvas")).getContext("2d");
+  ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const text = Math.ceil(ctx.measureText("Search, #12, fix or question").width);
+  const lead = (toolsIn.getBoundingClientRect().left - toolsIn.closest(".pt-search").getBoundingClientRect().left) || 30; // the padding and the icon before the words
+  if (text > 20) panel.style.setProperty("--ph-w", `${lead + text + 14}px`);
+}
+const searchOpenSync = () => { if (!toolsIn.value && root.activeElement !== toolsIn) panel.removeAttribute("data-search-open"); };
+toolsIn.addEventListener("blur", () => setTimeout(searchOpenSync, 120));
+toolsIn.addEventListener("input", () => setTimeout(searchOpenSync, 0));
+addEventListener("pointerdown", (e) => { if (panel.hasAttribute("data-search-open") && !e.composedPath().includes(tools)) setTimeout(searchOpenSync, 120); }, true);
 let toolsT = 0;
 toolsIn.addEventListener("input", () => {
   clearTimeout(toolsT);
@@ -4139,7 +4222,10 @@ toolsIn.addEventListener("keydown", (e) => {
     state.q = "";
     tools.classList.remove("has-q");
     renderPanel();
-  } else toolsIn.blur();
+  } else {
+    toolsIn.blur();
+    searchOpenSync();
+  }
 });
 tools.querySelector(".pt-clear").addEventListener("click", () => {
   toolsIn.value = "";
@@ -4235,7 +4321,8 @@ function clearBody() {
   if (tools.parentNode !== panel) panel.appendChild(tools);
 }
 /* a comment matches the search by its words, its number, its page or place, or a person on it */
-/* the search, and the type by name: "question(s)" or "fix(es)" as a word of it keeps only that type (Nirav, 2026-10-27,
+/* the search, and the type by name: "question(s)" or "fix(es)" as a word of it keeps only that type; a number, that
+   comment (Nirav, 2026-10-27,
    in place of the Fix / Question filter); the other words search the text as before */
 const TYPE_WORDS = { question: "question", questions: "question", fix: "fix", fixes: "fix" };
 function matchesQ(c, q) {
@@ -4243,7 +4330,10 @@ function matchesQ(c, q) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const types = words.map((w) => TYPE_WORDS[w]).filter(Boolean);
   if (types.length && !types.includes(c.severity)) return false;
-  const rest = words.filter((w) => !TYPE_WORDS[w]);
+  /* a number on its own, or "#12": that comment, not every one with those digits (#120, "12px") */
+  const nums = words.map((w) => /^#?(\d+)$/.exec(w)).filter(Boolean).map((m) => Number(m[1]));
+  if (nums.length && !nums.includes(c.n)) return false;
+  const rest = words.filter((w) => !TYPE_WORDS[w] && !/^#?\d+$/.test(w));
   if (!rest.length) return true;
   const hay = [c.text, `#${c.n}`, String(c.n), c.pageTitle, c.route, c.context, c.assignee, c.doneBy, c.approvedBy, c.by, c.note?.text].filter(Boolean).join(" \n ").toLowerCase();
   return rest.every((w) => hay.includes(w));
@@ -5942,6 +6032,10 @@ function renderPickPill() {
   bar.classList.toggle("tight", !roomy);
   pn.style.setProperty("--pb-w", `${Math.ceil(bar.getBoundingClientRect().width)}px`);
   if (n && !bar.classList.contains("on")) pickHint(); // a selection starts
+  /* the selection cleared: a warning about that send is stale, it goes; a send on its way stays till Claude answers
+     (Nirav, 2026-10-27) */
+  if (STALE_KINDS?.has(sheetKind) && pickSig() !== sheetFor) dropStaleSheet();
+  requestAnimationFrame(searchWords);
   bar.classList.toggle("on", !!n);
   pn.classList.toggle("picking-bar", !!n);
   /* each group's box: empty, partly (a dash) or all (a tick) */
@@ -6037,8 +6131,33 @@ panelBody.addEventListener("scroll", () => {
   toolsRest = setTimeout(() => tools.classList.remove("away"), 420);
   if (panelBody.scrollTop > 4) panel.setAttribute("data-scrolled", "");
   else panel.removeAttribute("data-scrolled");
+  headOnScroll(y);
 });
+/* THE TITLE HIDES ON SCROLL (Nirav, 2026-10-27): scrolling down the list slides the title row up out of the drawer, so
+   the cards get its room (nothing sits under it); scrolling back up, or reaching the top, brings it back. It stays while
+   the notices list is open. Small moves either way are ignored, so it does not flicker. */
+let headY = 0, headRun = 0;
+function headOnScroll(y) {
+  const dy = y - headY;
+  headY = y;
+  if (PAGE_MODE) return;
+  headRun = Math.sign(dy) === Math.sign(headRun) ? headRun + dy : dy;
+  const head = $(".panel-head");
+  panel.style.setProperty("--head-h", `${head.offsetHeight}px`);
+  const away = panel.hasAttribute("data-headaway");
+  if (y < 24 || !$(".note-drop").hidden) panel.removeAttribute("data-headaway");
+  else if (!away && headRun > 24) panel.setAttribute("data-headaway", "");
+  else if (away && headRun < -16) panel.removeAttribute("data-headaway");
+}
 function openPanel(on) {
+  /* opening: the search takes its place and size at once, no glide from wherever it last was (Nirav, 2026-10-27: it
+     showed narrow at the left, then slid into the middle) */
+  if (on && !panel.classList.contains("on")) {
+    panel.setAttribute("data-settling", "");
+    try { searchWords(); } catch {}
+    setTimeout(() => panel.removeAttribute("data-settling"), 450);
+  }
+  if (!on && STALE_KINDS?.has(sheetKind)) dropStaleSheet(); // the drawer closed: a warning about that send is done with
   panel.classList.toggle("on", on);
   $(".panel-veil").classList.toggle("on", on && !PAGE_MODE);
   $(".list").classList.toggle("on", on);
@@ -6904,8 +7023,10 @@ panelBody.before(sheet);
 const COPY_ICO = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`;
 const cmdBox = (cmd, again) => `<div class="cs-row"><div class="cs-cmd"><code>${esc(cmd)}</code><button type="button" class="cs-copy" data-copy="${esc(cmd)}" aria-label="Copy the command">${COPY_ICO}<span>Copy</span></button></div>${again === true ? '<button type="button" class="cs-again">Check again</button>' : again || ""}</div>`;
 let sheetTimer = 0;
+window.__reviewSheet = (kind, o) => showSheet(kind, o); // for drives: a state of the sheet on screen, nothing sent
 function showSheet(kind, o = {}) {
   clearTimeout(sheetTimer);
+  const wasOpen = sheet.classList.contains("on") && !sheetMini, prevH = wasOpen ? sheet.querySelector(".cs-card")?.getBoundingClientRect().height : 0;
   const ICON = {
     wait: `<span class="cs-spin"></span>`,
     ok: `<span class="cs-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`,
@@ -6927,13 +7048,151 @@ function showSheet(kind, o = {}) {
     fail: [ICON.warn, "Could not send", `<p>${esc(String(o.error || "The session did not answer").replace(/^./, (c) => c.toUpperCase()).replace(/[^.!?]$/, "$&."))} The brief is on your clipboard.</p>`],
   }[kind];
   sheet.innerHTML = `<div class="cs-card cs-is-${kind}"><div class="cs-head">${body[0]}<b>${body[1]}</b><button type="button" class="cs-close" aria-label="Close">×</button></div>${body[2]}</div>`;
-  sheet.classList.add("on");
-  if (kind === "ok") sheetTimer = setTimeout(hideSheet, 3500);
+  sheetKind = kind;
+  sheetOpts = o;
+  sheetFor = pickSig(); // the picked cards it is about
+  clearTimeout(sheetStale);
+  if (STALE_KINDS.has(kind)) sheetStale = setTimeout(dropStaleSheet, 120000); // a warning left alone for 2 minutes goes
+  const wasMini = sheetMini;
+  /* OPENING (Nirav, 2026-10-27: smoother): at its full size at once, then it rises a little from the bottom row as it
+     fades in and settles; a message that changes while open cross-fades, its height easing to the new one */
+  sheet.classList.add("instant", "on");
+  const card = sheet.querySelector(".cs-card");
+  if (wasMini) sheetGrow(); // something new: the pill opens back into the message
+  else if (card && !calm()) {
+    if (!wasOpen) card.animate([{ opacity: 0, transform: "translateY(12px) scale(.97)" }, { opacity: 1, transform: "none" }], { duration: 340, easing: "cubic-bezier(.2,.9,.25,1)" });
+    else {
+      const h = card.getBoundingClientRect().height;
+      if (prevH && Math.abs(h - prevH) > 1) card.animate([{ height: `${prevH}px` }, { height: `${h}px` }], { duration: 260, easing: "cubic-bezier(.32,.72,0,1)" });
+      card.querySelectorAll(":scope > *").forEach((el) => el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: "ease-out" }));
+    }
+  }
+  requestAnimationFrame(() => { if (!sheetMini) sheet.classList.remove("instant"); });
+  if (kind === "ok") sheetTimer = setTimeout(fadeSheet, 3500); // done: a notice that leaves, not a pill (Nirav, 2026-10-27)
+}
+function dropStaleSheet() {
+  clearTimeout(sheetStale);
+  if (!STALE_KINDS.has(sheetKind)) return;
+  if (sheetMini) {
+    sheetPill.classList.add("going");
+    setTimeout(hideSheet, 240);
+  } else if (sheet.classList.contains("on")) fadeSheet();
+  sheetKind = "";
+}
+/* a done notice leaves softly: fades and sinks a little, then closes */
+async function fadeSheet() {
+  const card = sheet.querySelector(".cs-card");
+  if (card && !calm()) await card.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(6px)" }], { duration: 220, easing: "ease-in", fill: "both" }).finished.catch(() => {});
+  hideSheet();
+  card?.getAnimations().forEach((x) => x.cancel());
 }
 function hideSheet() {
   clearTimeout(sheetTimer);
   sheet.classList.remove("on");
+  sheetMini = false;
+  sheetPill.classList.remove("on");
+  searchWords();
 }
+/* CLOSED, NOT GONE (Nirav, 2026-10-27, "B"): with Send in the bottom bar, closing the message shrinks it into a small
+   pill above Send ("Sent 3 · waiting", "Start Claude"); a click on the pill, or the next change of state, opens it
+   back into the message. The shrink and the growth are one motion: the card's outline closes onto the pill's place. */
+const SHEET_MINI = !HEADER_ACTIONS;
+/* where the closed message sits, one word to switch (Nirav, 2026-10-27, trying both): "above" (B, a pill over Send) or
+   "row" (C, in the bottom row beside the search, which folds to its icon meanwhile) */
+const PILL_AT = "row";
+panel.dataset.pillAt = PILL_AT;
+/* THE SEARCH IN THE MIDDLE (Nirav, 2026-10-27, trying it; false puts it back at the left, as before): at rest it sits
+   in the middle of the bottom row; picking cards glides it to the left and the selection bar slides in after it from
+   the right; clearing plays it backwards */
+const SEARCH_CENTRE = true;
+panel.toggleAttribute("data-search-centre", SEARCH_CENTRE);
+searchWords();
+var sheetKind = "", sheetOpts = {}, sheetMini = false, sheetFor = "", sheetStale = 0; // var: the selection bar, defined earlier, reads these
+/* WHEN THE MESSAGE STAYS (Nirav, 2026-10-27, the cases): "Connect" is closed for good by Got it or ×; "Sent · waiting"
+   stays until Claude answers; "Claude has them" is a notice that fades; the warnings (not confirmed, start Claude,
+   already with Claude, could not send) are about one send: they go when its picked cards change (cleared, or another
+   set), when the drawer closes, or after 2 minutes left alone */
+var STALE_KINDS = new Set(["late", "none", "again", "fail"]);
+function pickSig() { return [...(state.selected || [])].sort().join(","); }
+const sheetPill = document.createElement("button");
+sheetPill.type = "button";
+sheetPill.className = "claude-pill";
+sheetPill.setAttribute("aria-label", "Show the message");
+panelBody.after(sheetPill);
+function pillHtml() {
+  const n = sheetOpts.count || 0;
+  const SPIN = `<span class="cs-spin"></span>`, WARN = `<span class="cs-warn">!</span>`, OK = `<span class="cs-ok"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`;
+  const words = {
+    sent: [SPIN, `Sent ${n}`, "waiting"],
+    late: [WARN, "Not confirmed", ""],
+    none: [WARN, "Start Claude", ""],
+    again: [WARN, "Already with Claude", ""],
+    fail: [WARN, "Could not send", ""],
+  }[sheetKind];
+  return words ? `${words[0]}<span class="cp-w">${esc(words[1])}</span>${words[2] ? `<i>· ${esc(words[2])}</i>` : ""}` : "";
+}
+/* THE MORPH: a plain shape in the card's own surface and edge moves between the card's box and the pill's, so the
+   motion reads as one thing shrinking or growing; the words fade out before, in after */
+function rectIn(el) { const r = el.getBoundingClientRect(), p = panel.getBoundingClientRect(); return { left: r.left - p.left, top: r.top - p.top, width: r.width, height: r.height }; }
+function pillBox() {
+  sheetPill.classList.add("measuring");
+  const r = rectIn(sheetPill);
+  sheetPill.classList.remove("measuring");
+  return r;
+}
+async function morph(from, to, fromR, toR, ms, toPill) {
+  const g = document.createElement("div");
+  g.className = "cs-morph";
+  panel.toggleAttribute("data-pill-morph", true); // the search folds as the motion starts, not after
+  /* the shape takes the pill's banner colour at the pill's end of the motion */
+  sheetPill.classList.add("measuring");
+  const pc = getComputedStyle(sheetPill), tint = pc.backgroundColor, edge = pc.boxShadow;
+  sheetPill.classList.remove("measuring");
+  panel.appendChild(g);
+  const box = (r, rad) => ({ left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, borderRadius: `${rad}px` });
+  const surf = getComputedStyle(panel).getPropertyValue("--rv-surface").trim() || "#fff";
+  const ends = toPill ? [{ backgroundColor: surf }, { backgroundColor: tint, boxShadow: edge }] : [{ backgroundColor: tint, boxShadow: edge }, { backgroundColor: surf }];
+  await g.animate([{ ...box(from, fromR), ...ends[0] }, { ...box(to, toR), ...ends[1] }], { duration: ms, easing: "cubic-bezier(.32,.72,0,1)", fill: "both" }).finished.catch(() => {});
+  g.remove();
+  panel.removeAttribute("data-pill-morph");
+}
+async function sheetShrink() {
+  const card = sheet.querySelector(".cs-card");
+  const html = pillHtml();
+  if (!card || !html) return hideSheet();
+  sheetPill.innerHTML = html;
+  sheetPill.dataset.tone = pillTone();
+  const from = rectIn(card), to = pillBox();
+  sheet.classList.remove("on"); // the card goes at once; the shape carries the motion
+  sheetMini = true;
+  if (!calm()) await morph(from, to, 10, 999, 300, true);
+  sheetPill.classList.add("on");
+  searchWords();
+}
+const pillTone = () => (sheetKind === "ok" ? "ok" : sheetKind === "sent" ? "wait" : "warn"); // its banner colour
+async function sheetGrow() {
+  sheetMini = false;
+  const from = pillBox();
+  const card = sheet.querySelector(".cs-card");
+  requestAnimationFrame(searchWords);
+  if (!card || calm()) return sheetPill.classList.remove("on", "going");
+  /* SMOOTH (Nirav, 2026-10-27: it jerked): the message opens at its full size at once, unseen, so the shape grows to its
+     true box; then the words fade in where the shape ends */
+  sheet.classList.add("instant");
+  card.style.visibility = "hidden";
+  void card.offsetHeight;
+  const to = rectIn(card);
+  sheetPill.classList.remove("on", "going"); // the pill is the shape's start; the search unfolds meanwhile
+  await morph(from, to, 999, 10, 340);
+  card.style.visibility = "";
+  sheet.classList.remove("instant");
+  card.querySelectorAll(":scope > *").forEach((el) => el.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 1, transform: "none" }], { duration: 180, easing: "ease-out" }));
+}
+sheetPill.addEventListener("click", () => {
+  clearTimeout(sheetTimer);
+  sheet.classList.add("on");
+  sheetGrow();
+});
 sheet.addEventListener("click", async (e) => {
   if (e.target.closest(".cs-new, .cs-again-all")) {
     const ask = sendAsk;
@@ -6944,6 +7203,7 @@ sheet.addEventListener("click", async (e) => {
   }
   if (e.target.closest(".cs-close, .cs-gotit")) {
     if (sheet.querySelector(".cs-is-intro")) introSeen(true);
+    if (SHEET_MINI && e.target.closest(".cs-close") && !sheet.querySelector(".cs-is-intro, .cs-is-ok")) return sheetShrink(); // closed into the pill (a done notice just closes)
     return hideSheet();
   }
   const cp = e.target.closest(".cs-copy");
