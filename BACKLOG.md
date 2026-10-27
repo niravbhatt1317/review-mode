@@ -158,7 +158,9 @@ Effort: S a day or less, M a few days, L a week or more.
 **Running a review**
 - [ ] **A daily digest** (S, after notices): what waits for you, what came back, who is on what, in the drawer each
   morning.
-- [ ] **Numbers** (S): time from raised to approved, sent-back rate, per page and per person, on the full page.
+- [x] **Numbers** (S, done 2026-10-27): a Numbers view on the full page (Open, Approved, Numbers): raised to approved,
+  picked up within, sent back, open now; per page and per person (raised, finished, pick up to done, sent back, with
+  Claude); all time, 30 or 7 days.
 
 Claude's pick: source on every comment, before and after, and "maybe fixed?". Together they make Claude faster and
 the approver surer, which is where most of the time goes.

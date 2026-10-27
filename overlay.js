@@ -27,8 +27,11 @@ if (!EXT) {
     else s = sessionStorage.getItem("review.session");
   } catch {}
   if (s && /^_[a-z0-9-]+$/.test(s)) window.__reviewSession = s;
-  if (PAGE_MODE) window.__reviewView = q.get("view") === "resolved" ? "resolved" : "open";
-} else if (PAGE_MODE) window.__reviewView = new URLSearchParams(location.search).get("view") === "resolved" ? "resolved" : "open";
+  if (PAGE_MODE) window.__reviewView = ["resolved", "numbers"].includes(q.get("view")) ? q.get("view") : "open";
+} else if (PAGE_MODE) {
+  const v = new URLSearchParams(location.search).get("view");
+  window.__reviewView = ["resolved", "numbers"].includes(v) ? v : "open";
+}
 /* one call, either host: a Response-like answer with json() and text() */
 let rvSeq = 0;
 const rvWaiting = new Map();
@@ -261,8 +264,15 @@ root.innerHTML = `
   .pin { position: fixed; pointer-events: auto; cursor: default; width: 22px; height: 22px; border-radius: 50%; background: #e11d48; color: #fff; font: 700 11px/22px -apple-system, system-ui, sans-serif; text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.25); transform: translate(-8px, -8px); }
   .pin.faded { opacity: .55; }
   .pin-wrap { position: fixed; inset: 0; pointer-events: none; }
-  .pin-wrap.ghost .pin-box { border-style: dotted; opacity: .5; }
-  .pin-wrap.ghost .pin { opacity: .6; }
+  .pin-one { display: contents; }
+  .pin-one .pin-box:not(.flash) { display: none; } /* an outline only for the hovered pin's element */
+  .pin-one.lit .pin-box { display: block; border: 1.5px solid #e11d48; }
+  .pin-one.ghost .pin-box { border-style: dotted; opacity: .5; }
+  .pin-one.lit .pin { opacity: 1; }
+  .pins.focus .pin-one:not(.lit) .pin { opacity: .22; }
+  .pin.more { background: #fff; color: #e11d48; box-shadow: 0 0 0 1.5px #e11d48, 0 2px 6px rgba(0,0,0,.25); font-size: 10px; letter-spacing: -.2px; }
+  .pin-one.fan .pin { z-index: 1; }
+  .pin-one.ghost .pin { opacity: .6; }
   .pin-box { position: fixed; pointer-events: none; border: 1px dashed rgba(225,29,72,.55); border-radius: 4px; }
   .pin:hover { opacity: 1; }
   .pin.flash { opacity: 1; animation: rv-pulse 1s ease-out 3; }
@@ -984,6 +994,27 @@ root.innerHTML = `
   /* on the page the Open / Resolved switch sits in the middle of the head, whatever is on either side */
   :host([data-page]) .panel-view { display: inline-flex; position: absolute; left: 50%; top: 50%; transform: translate(-50%, calc(-50% + 4px)); }
   .scope-switch.panel-view .side { width: auto; height: 24px; padding: 0 10px; font: 500 12px/24px -apple-system, system-ui, sans-serif; color: hsl(var(--rv-n90)); }
+  :host([data-view="numbers"]) .panel-bar, :host([data-view="numbers"]) .panel-tools, :host([data-view="numbers"]) .panel-copy { display: none !important; }
+  .nm { max-width: 960px; margin: 0 auto; padding: 8px 4px 40px; color: var(--rv-ink); }
+  .nm-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 14px; }
+  .nm h2 { margin: 0; font: 600 18px/1.3 -apple-system, system-ui, sans-serif; }
+  .nm h3 { margin: 26px 0 8px; font: 600 13px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); }
+  .nm-win .side { width: auto; height: 26px; padding: 0 10px; font: 500 12px/26px -apple-system, system-ui, sans-serif; }
+  .nm-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .nm-tile { padding: 14px 16px; border-radius: 12px; background: var(--rv-surface); box-shadow: inset 0 0 0 1px var(--rv-line); }
+  .nm-label { font: 500 12px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); }
+  .nm-value { margin-top: 6px; font: 600 26px/1.15 -apple-system, system-ui, sans-serif; letter-spacing: -.01em; }
+  .nm-sub { margin-top: 6px; font-size: 11.5px; line-height: 1.4; color: var(--rv-ink-3); }
+  .nm-table { width: 100%; border-collapse: collapse; background: var(--rv-surface); border-radius: 12px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--rv-line); font-size: 13px; }
+  .nm-table th { padding: 9px 14px; text-align: left; font: 500 11.5px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); border-bottom: 1px solid var(--rv-line); }
+  .nm-table td { padding: 9px 14px; border-bottom: 1px solid var(--rv-line); }
+  .nm-table tr:last-child td { border-bottom: 0; }
+  .nm-table .r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .nm-table .nm-none { text-align: center; color: var(--rv-ink-3); }
+  .nm-who { display: inline-flex; align-items: center; gap: 7px; }
+  .nm-who .av { display: block; flex: none; width: 18px; height: 18px; margin: 0; position: static; vertical-align: 0; }
+  .nm-who .av-i { display: grid; place-items: center; font-size: 9px; }
+  .nm-foot { margin: 14px 2px 0; font-size: 11.5px; color: var(--rv-ink-3); }
   .scope-switch.panel-view .side b { font-weight: 500; color: hsl(var(--rv-n70)); margin-left: 4px; }
   .scope-switch.panel-view .side[aria-pressed="true"] b { color: hsl(var(--rv-n130)); }
   .card-foot .where { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1223,7 +1254,7 @@ root.innerHTML = `
 <div class="bar ui"><button class="sat dock" aria-label="Minimise to the edge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><rect x="12" y="12" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Minimise to the edge</span></button><button class="sat off" aria-label="Turn off review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg><span class="scope-tip">Turn off review · ${HIDE_KEY} turns it on</span></button><span class="bar-main"><span class="brand"><button class="dot" title="Pictures: off. Click to share this tab (or load the review extension for silent pictures)"></button><b>Review${window.__reviewSession ? ` · ${window.__reviewSession}` : ""}</b></span><span class="k"></span></span><button class="pins-toggle on disc" aria-label="Pins"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4.5l-4 4-4 1.5-1.5 1.5 7 7 1.5-1.5 1.5-4 4-4"/><path d="M9 15l-4.5 4.5"/><path d="M14.5 4l5.5 5.5"/></svg><span class="scope-tip">Show or hide the pins</span></button><button class="list disc" aria-label="Comments"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14.5 4v16"/></svg><span class="count"></span><span class="scope-tip">Comments, in a side panel</span></button></div>
 <div class="panel-veil"></div>
 <aside class="panel ui" aria-label="Review comments" role="dialog" aria-modal="true">
-  <div class="panel-head"><a class="panel-back" href="/" aria-label="Back to the console"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="scope-tip">Back to the console</span></a><a class="panel-title" href="/__review/" target="_blank" aria-label="Open as a page"><span class="txt">Comments</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="scope-tip">Open as a page</span></a><div class="scope-switch panel-view" role="group"><button type="button" class="side" data-v="open">Open<b></b></button><button type="button" class="side" data-v="resolved">Approved<b></b></button></div><div class="scope-switch theme-switch" role="group" aria-label="Theme"><button type="button" class="side" data-t="auto" aria-pressed="false" aria-label="Auto, follows your computer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Auto, follows your computer</span></button><button type="button" class="side" data-t="light" aria-pressed="false" aria-label="Light"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg><span class="scope-tip">Light</span></button><button type="button" class="side" data-t="dark" aria-pressed="false" aria-label="Dark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span class="scope-tip">Dark</span></button></div><button class="panel-copy" data-kind="prompt" aria-label="Copy a brief for Claude"><svg class="logo-claude" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a brief for Claude</span></button><button class="panel-copy" data-kind="loop" aria-label="Copy a checklist for Loop"><svg class="logo-loop-rest" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z"/></svg><svg class="logo-loop" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"> <path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z" fill="url(#rv-loop-a)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-b)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-c)" fill-opacity=".56"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-d)" fill-opacity=".15"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-e)"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-f)"/> <defs> <radialGradient id="rv-loop-c" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(4 2.75 -4.83318 7.0301 5.5 17.75)"> <stop/> <stop offset=".7" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-d" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.4 4.6 -8.08463 13.0057 4.3 17)"> <stop offset=".33"/> <stop offset=".6" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-f" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(13.40004 -2.3 6.04701 35.2304 .3 8.2)"> <stop stop-color="#6D05E8"/> <stop offset="1" stop-color="#6D05E8" stop-opacity="0"/> </radialGradient> <linearGradient id="rv-loop-a" x1="14.2" y1="9.1" x2="10.9" y2="22.6" gradientUnits="userSpaceOnUse"> <stop stop-color="#9237E3"/> <stop offset="1" stop-color="#48E6F3"/> </linearGradient> <linearGradient id="rv-loop-b" x1="8.5" y1="20.5" x2="17.3" y2="18.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#51E6FF"/> <stop offset="1" stop-color="#71D4FF" stop-opacity="0"/> </linearGradient> <linearGradient id="rv-loop-e" x1="6.1" y1="12.7" x2="11.2" y2="5.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#6E06E9"/> <stop offset="1" stop-color="#AB5ADD" stop-opacity="0"/> </linearGradient> </defs> </svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a checklist for Loop</span><i class="more"></i></button></div>
+  <div class="panel-head"><a class="panel-back" href="/" aria-label="Back to the console"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="scope-tip">Back to the console</span></a><a class="panel-title" href="/__review/" target="_blank" aria-label="Open as a page"><span class="txt">Comments</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="scope-tip">Open as a page</span></a><div class="scope-switch panel-view" role="group"><button type="button" class="side" data-v="open">Open<b></b></button><button type="button" class="side" data-v="resolved">Approved<b></b></button><button type="button" class="side" data-v="numbers">Numbers</button></div><div class="scope-switch theme-switch" role="group" aria-label="Theme"><button type="button" class="side" data-t="auto" aria-pressed="false" aria-label="Auto, follows your computer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Auto, follows your computer</span></button><button type="button" class="side" data-t="light" aria-pressed="false" aria-label="Light"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg><span class="scope-tip">Light</span></button><button type="button" class="side" data-t="dark" aria-pressed="false" aria-label="Dark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span class="scope-tip">Dark</span></button></div><button class="panel-copy" data-kind="prompt" aria-label="Copy a brief for Claude"><svg class="logo-claude" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a brief for Claude</span></button><button class="panel-copy" data-kind="loop" aria-label="Copy a checklist for Loop"><svg class="logo-loop-rest" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z"/></svg><svg class="logo-loop" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"> <path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z" fill="url(#rv-loop-a)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-b)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-c)" fill-opacity=".56"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-d)" fill-opacity=".15"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-e)"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-f)"/> <defs> <radialGradient id="rv-loop-c" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(4 2.75 -4.83318 7.0301 5.5 17.75)"> <stop/> <stop offset=".7" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-d" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.4 4.6 -8.08463 13.0057 4.3 17)"> <stop offset=".33"/> <stop offset=".6" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-f" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(13.40004 -2.3 6.04701 35.2304 .3 8.2)"> <stop stop-color="#6D05E8"/> <stop offset="1" stop-color="#6D05E8" stop-opacity="0"/> </radialGradient> <linearGradient id="rv-loop-a" x1="14.2" y1="9.1" x2="10.9" y2="22.6" gradientUnits="userSpaceOnUse"> <stop stop-color="#9237E3"/> <stop offset="1" stop-color="#48E6F3"/> </linearGradient> <linearGradient id="rv-loop-b" x1="8.5" y1="20.5" x2="17.3" y2="18.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#51E6FF"/> <stop offset="1" stop-color="#71D4FF" stop-opacity="0"/> </linearGradient> <linearGradient id="rv-loop-e" x1="6.1" y1="12.7" x2="11.2" y2="5.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#6E06E9"/> <stop offset="1" stop-color="#AB5ADD" stop-opacity="0"/> </linearGradient> </defs> </svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a checklist for Loop</span><i class="more"></i></button></div>
   <div class="panel-bar"><div class="panel-scope"></div><div class="panel-filter"></div></div>
   <div class="panel-sync" hidden><span class="ring"></span><span class="txt"></span></div>
   <div class="panel-body"></div>
@@ -1587,14 +1618,28 @@ function pageTitle() {
 }
 
 /* ---------- hover outline ---------- */
-function targetAt(x, y) {
-  /* An open Select or menu (Radix) puts pointer-events: none on the body and its layers, so a plain
-     elementFromPoint hits a backdrop or nothing. Make everything hittable for the measurement (never our
-     own host), then dig through any layer that covers the whole screen: a backdrop is not a target. */
+/* An open Select or menu (Radix) puts pointer-events: none on the body and its layers, so a plain elementFromPoint hits
+   a backdrop or nothing. Everything is made hittable for the measurement (never our own host). That restyles the
+   whole page, so it is done once for a whole round of points (withLift), never once per pin (Nirav, 2026-10-27:
+   with an open menu and 30 pins the page stuttered and blinked). */
+function withLift(fn) {
   const lift = document.createElement("style");
   lift.textContent = "* { pointer-events: auto !important } #__review-host { pointer-events: none !important }";
   document.head.appendChild(lift);
   host.setAttribute("data-hit", ""); // our own pins, tip and bar step aside too (a page stylesheet cannot reach them)
+  try {
+    return fn();
+  } finally {
+    lift.remove();
+    host.removeAttribute("data-hit");
+  }
+}
+function targetAt(x, y) {
+  return refineHit(withLift(() => hitAt(x, y)), x, y);
+}
+/* inside a lift: the element at a point, digging through any layer that covers the whole screen (a backdrop is not a
+   target) */
+function hitAt(x, y) {
   const hidden = [];
   let el = null;
   try {
@@ -1613,9 +1658,10 @@ function targetAt(x, y) {
     }
   } finally {
     for (const [e, v, pr] of hidden) (v ? e.style.setProperty("pointer-events", v, pr) : e.style.removeProperty("pointer-events"));
-    lift.remove();
-    host.removeAttribute("data-hit");
   }
+  return el;
+}
+function refineHit(el, x, y) {
   if (!el) return null;
   /* a web component: hit-testing stops at its boundary; the real element is inside its shadow root */
   for (let depth = 0; depth < 6 && el.shadowRoot && el !== host; depth++) {
@@ -2179,6 +2225,7 @@ async function save() {
     selector: selectorFor(el),
     textKey: txt(el).slice(0, 80),
     anchor: anchorsOf(el),
+    screen: screenOf(),
     source: sourceOf(el),
     rect,
     viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio },
@@ -2543,7 +2590,8 @@ function resolve(c, now, force) {
     const fitting = byAnchors(c.anchor).filter((e) => e !== host && fits(e));
     el = (c.anchor.heading && fitting.find((e) => anchorsOf(e)?.heading === c.anchor.heading)) || fitting[0] || null;
   }
-  if (!el && c.textKey) {
+  if (!el && c.textKey && /[a-z]{3}/i.test(c.textKey)) {
+    /* (only for real words: a "-" or a lone figure matches half the page; Nirav, 2026-10-27) */
     /* the address failed (an id that changed, a layer rebuilt): the same kind of element with the same words and
        about the same size, anywhere on the page, open shadow roots included */
     const tag = (c.selector.split(/[\s>]+/).pop() || "*").replace(/[:#.[].*$/, "") || "*";
@@ -2612,7 +2660,20 @@ function disjoint(rects) {
     }
   return out;
 }
+/* one cut-out per layer, while the layers stay as they were: every pin of a layer shares it (Nirav, 2026-10-27: an
+   open menu made the page stutter, the cut-out was rebuilt for each of 30 pins on every frame) */
+const clipMemo = new Map();
+let clipMemoAt = -1;
 function clipFor(portal) {
+  layersAbove(portal); // refreshes the layers when they are older than 120 ms
+  if (clipMemoAt !== layersAt) {
+    clipMemo.clear();
+    clipMemoAt = layersAt;
+  }
+  if (!clipMemo.has(portal)) clipMemo.set(portal, clipForNow(portal));
+  return clipMemo.get(portal);
+}
+function clipForNow(portal) {
   const holes = layersAbove(portal);
   if (!holes.length) return "";
   const W = window.innerWidth, H = window.innerHeight;
@@ -2624,7 +2685,7 @@ function clipFor(portal) {
 }
 function visible(c, el, r, now) {
   const seen = state.pinSeen.get(c.id);
-  if (seen && now - seen.at < 250) return seen.ok;
+  if (seen) return seen.ok; // measured read-only above, in renderPins
   const cx = Math.min(window.innerWidth - 1, Math.max(0, r.left + r.width / 2));
   const cy = Math.min(window.innerHeight - 1, Math.max(0, r.top + r.height / 2));
   const hit = targetAt(cx, cy);
@@ -2759,47 +2820,208 @@ function maybeTip(c) {
     : "This element is not on the page any more";
   return `${why}. Compare with the picture.`;
 }
+/* the screen a comment is made on, for pages that change without changing address: the breadcrumb's words, else the
+   main heading's */
+function screenOf() {
+  const crumb = document.querySelector('nav[aria-label*="readcrumb" i], [class*="breadcrumb" i], [data-testid*="breadcrumb" i]');
+  const words = (e) => (e ? txt(e).replace(/\s+/g, " ").trim().slice(0, 120) : "");
+  return words(crumb) || words(document.querySelector("main h1, h1")) || "";
+}
+/* PINS ONLY CHANGE WHEN THEY CHANGE (Nirav, 2026-10-27: on a page with many pins, opening a menu made them blink).
+   Each frame builds the pins off the page and compares them with the ones showing; the page is touched only when
+   something moved, appeared or went (a pin landing animates, so it updates every frame while it does). */
+let pinsShown = "";
+const moreRows = new Map(); // a "+3" pin's first comment id -> its row, for a tap on it
 function renderPins() {
-  pinsEl.innerHTML = "";
+  const frag = document.createDocumentFragment();
   const now = performance.now();
   const here = location.pathname;
   let over = null;
   /* pins hidden: only the one a go-to just landed on is drawn, until the next click on the app clears it */
   const only = state.showPins ? null : state.flash?.id;
   if (!state.showPins && !only) {
+    pinsEl.replaceChildren();
+    pinsEl.classList.remove("focus");
+    pinsShown = "";
+    state.fan = null;
     tip.classList.remove("on");
     return;
   }
   const rects = new Map(); // comment id -> its pin's anchor this frame, for the tip that stays open
-  for (const c of state.comments) {
-    if (only && c.id !== only) continue;
-    if ((c.route || "").split("?")[0] !== here) continue;
-    const el = resolve(c, now);
-    checkMaybe(c, el, now);
+  /* ANOTHER SCREEN ON THE SAME ADDRESS (Nirav, 2026-10-27: opening a customer in Agent Fleet keeps /agent-fleet, and
+     the list's comments ghosted over the customer's page). A comment knows the screen it was made on (its
+     breadcrumb or heading); older ones fall back on the page as a whole: when most of this address's comments are
+     not found, this is another screen. Either way: no ghost there, and no "Maybe fixed?" */
+  const onRoute = state.comments.filter((c) => (c.route || "").split("?")[0] === here && (!only || c.id === only));
+  const screenHere = screenOf();
+  /* a comment that knows its screen is not looked for on another one */
+  const found = new Map(onRoute.map((c) => [c.id, c.screen && c.screen !== screenHere ? null : resolve(c, now)]));
+  /* whether each pin's element is uncovered, READ ONLY (Nirav, 2026-10-27: an open menu made the page jerk and the
+     pins and the bar blink; measuring used to restyle the whole page and our own layer for each pin). What is under
+     the point, our layer and any whole-screen backdrop left out; nothing is restyled. While the app blocks the page
+     (an open menu sets pointer-events: none on the body) the page cannot be read: pins keep what they were, and the
+     layer cut-out (clipFor) still hides those under the menu. */
+  const blocked = getComputedStyle(document.body).pointerEvents === "none";
+  const area = window.innerWidth * window.innerHeight;
+  for (const c of onRoute) {
+    const el = found.get(c.id);
+    const seen = state.pinSeen.get(c.id);
+    if (!el || (seen && now - seen.at < 250)) continue;
+    if (blocked) {
+      state.pinSeen.set(c.id, { at: now, ok: seen ? seen.ok : true });
+      continue;
+    }
+    const r = el.getBoundingClientRect();
+    const x = Math.min(window.innerWidth - 1, Math.max(0, r.left + r.width / 2)), y = Math.min(window.innerHeight - 1, Math.max(0, r.top + r.height / 2));
+    const raw = document.elementsFromPoint(x, y).find((e) => e !== host && e !== document.documentElement && e !== document.body && (() => { const b = e.getBoundingClientRect(); return b.width * b.height < 0.85 * area; })()) || null;
+    const hit = refineHit(raw, x, y);
+    state.pinSeen.set(c.id, { at: now, ok: !!hit && (el === hit || el.contains(hit) || hit.contains(el)) });
+  }
+  const withAddress = onRoute.filter((c) => c.selector);
+  const sameScreenMostly = withAddress.length < 3 || withAddress.filter((c) => found.get(c.id)).length * 2 >= withAddress.length;
+  /* older comments also by their place: a ghost of 'Table, column "Status"' only where a Status column is */
+  let heads = null;
+  const placeFits = (c) => {
+    const col = /^Table, column "(.+)"/.exec(c.context || "");
+    const sec = /^Section: (.+)/.exec(c.context || "");
+    if (!col && !sec) return true;
+    heads ||= new Set([...document.querySelectorAll("th, [role=columnheader], h1, h2, h3, h4")].map((h) => txt(h).slice(0, 60)));
+    return col ? [...heads].some((h) => h.slice(0, 30) === col[1]) : heads.has(sec[1]);
+  };
+  const onItsScreen = (c) => (c.screen ? c.screen === screenHere : sameScreenMostly && placeFits(c));
+  /* ONE CUT-OUT LAYER, NOT ONE PER PIN (Nirav, 2026-10-27: with the app's menu open, Chrome drew the pin card
+     without its background and parts of the screen went missing, and stayed so). Every pin used to sit in its own
+     full-window layer with its own cut-out; now the pins that share a cut-out share one layer. */
+  const groups = new Map(); // cut-out -> its layer
+  const layerFor = (clip) => {
+    let g = groups.get(clip);
+    if (!g) {
+      g = document.createElement("div");
+      g.className = "pin-wrap";
+      if (clip) g.style.clipPath = clip;
+      groups.set(clip, g);
+      frag.appendChild(g);
+    }
+    return g;
+  };
+  /* SIDE BY SIDE, INSIDE ITS ELEMENT (Nirav, 2026-10-27): comments on one element sat on one spot, so the number
+     showing flipped between them. Now they sit in a row along the element's top, as many as fit in its width; the
+     rest fold into a "+3" pin that fans the whole row out on hover (a tap on touch). A row never runs over another's
+     pins. Hovering a pin lights its element's outline and fades the other pins; outlines show only then (and for a
+     go-to's flash), so they no longer cross each other. A pin that must be seen (a go-to, a pin landing, its pill,
+     its open card) goes first in its row, so it is never folded away. */
+  const hotId = state.flash && now < state.flash.until ? state.flash.id : null;
+  const keep = new Set([state.flash?.id, state.pinMoment?.id, state.dropPin?.id, tipHold, tip.classList.contains("on") ? tip.dataset.id : null].filter(Boolean));
+  const rows = new Map(); // its element (a ghost: its comment id) -> { key, el, er, ghost, list }
+  for (const c of onRoute) {
+    const el = found.get(c.id);
+    if (el || onItsScreen(c)) checkMaybe(c, el, now);
     /* the element is gone or changed (a chart redrawn, a figure that moved on): the pin where it was taken,
-       dimmed and dashed, so the place is still shown and the comment still reachable */
-    const ghost = !el && c.rect && ghostRect(c);
+       dimmed and dashed, so the place is still shown and the comment still reachable; only on its own screen */
+    const ghost = !el && c.rect && onItsScreen(c) && ghostRect(c);
     if (!el && !ghost) continue;
-    const r = el ? el.getBoundingClientRect() : ghost;
-    if (!r.width && !r.height) continue;
-    if (el && !visible(c, el, r, now)) continue;
-    rects.set(c.id, { c, r });
+    const er = el ? el.getBoundingClientRect() : ghost;
+    if (!er.width && !er.height) continue;
+    if (el && !visible(c, el, er, now)) continue;
+    const key = el || c.id;
+    if (!rows.has(key)) rows.set(key, { key, el, er, ghost, list: [] });
+    rows.get(key).list.push(c);
+  }
+  if (state.fan && !rows.has(state.fan.key)) state.fan = null;
+  const { x: mx, y: my } = state.mouse;
+  const onPin = (px, py) => mx >= px - 9 && mx <= px + 15 && my >= py - 9 && my <= py + 15;
+  const placed = []; // pins drawn so far this frame
+  const freeAt = (x0, y) => {
+    let x = x0;
+    while (placed.some((p) => Math.abs(p.x - x) < 24 && Math.abs(p.y - y) < 24)) x += 26;
+    return x;
+  };
+  const rowDiv = new Map(); // key -> its row's element
+  const rowOf = new Map(); // comment id -> its row's key
+  let overFan = null, litKey = null;
+  moreRows.clear();
+  for (const g of rows.values()) {
+    const { el, er, ghost } = g;
+    let list = g.list;
+    const fanned = state.fan?.key === g.key;
+    const clip = el ? clipFor(portalOf(el)) : ghost.clip ? `inset(${Math.max(0, ghost.clip.top)}px ${Math.max(0, window.innerWidth - ghost.clip.right)}px ${Math.max(0, window.innerHeight - ghost.clip.bottom)}px ${Math.max(0, ghost.clip.left)}px)` : "";
     const wrap = document.createElement("div");
-    wrap.className = "pin-wrap" + (ghost ? " ghost" : "");
-    if (el) wrap.style.clipPath = clipFor(portalOf(el));
-    else if (ghost.clip) wrap.style.clipPath = `inset(${Math.max(0, ghost.clip.top)}px ${Math.max(0, window.innerWidth - ghost.clip.right)}px ${Math.max(0, window.innerHeight - ghost.clip.bottom)}px ${Math.max(0, ghost.clip.left)}px)`;
-    pinsEl.appendChild(wrap);
+    wrap.className = "pin-one" + (ghost ? " ghost" : "") + (fanned ? " fan" : "");
+    layerFor(clip).appendChild(wrap);
+    rowDiv.set(g.key, wrap);
     const box = document.createElement("div");
-    box.className = "pin-box";
-    box.style.left = `${r.left - 2}px`;
-    box.style.top = `${r.top - 2}px`;
-    box.style.width = `${r.width + 4}px`;
-    box.style.height = `${r.height + 4}px`;
+    box.className = "pin-box" + (list.some((c) => c.id === hotId) ? " flash" : "");
+    box.style.left = `${er.left - 2}px`;
+    box.style.top = `${er.top - 2}px`;
+    box.style.width = `${er.width + 4}px`;
+    box.style.height = `${er.height + 4}px`;
     wrap.appendChild(box);
+    /* the row as it rests: what fits in the element's width (one pin and the count at least), the rest counted */
+    const xs = [];
+    for (let i = 0; i < list.length; i++) {
+      const x = freeAt(er.left, er.top);
+      if (i > 0 && i < list.length - 1 && x + 22 > er.right + 4) break; // the last one shows itself, not "+1"
+      placed.push({ x, y: er.top });
+      xs.push(x);
+    }
+    const more = list.length - xs.length;
+    /* one that must be seen but would be folded away takes the place of the last ones showing (only then: a pin
+       never moves because it is hovered) */
+    const folded = list.slice(xs.length).filter((c) => keep.has(c.id));
+    if (folded.length) {
+      const showing = list.slice(0, xs.length);
+      for (const c of folded) {
+        const j = showing.map((s) => keep.has(s.id)).lastIndexOf(false);
+        if (j >= 0) showing.splice(j, 1, c);
+      }
+      const order = new Map(g.list.map((c, i) => [c.id, i]));
+      showing.sort((a, b) => order.get(a.id) - order.get(b.id));
+      list = [...showing, ...g.list.filter((c) => !showing.includes(c))];
+    }
+    let moreX = null;
+    if (more) {
+      moreX = freeAt(er.left, er.top);
+      placed.push({ x: moreX, y: er.top });
+    }
+    /* fanned: every pin of the row, one after another from the element's corner, above the rest */
+    const shown = fanned ? g.list : list.slice(0, xs.length);
+    const at = fanned ? g.list.map((_, i) => er.left + i * 26) : xs;
+    if (fanned) {
+      const right = Math.max(at[at.length - 1], state.fan.from ?? 0);
+      state.fan.box = { left: er.left - 9, right: right + 15, top: er.top - 9, bottom: er.top + 15 };
+    }
+    shown.forEach((c, i) => {
+      const r = at[i] !== er.left ? { left: at[i], top: er.top, width: er.width, height: er.height, right: er.right, bottom: er.bottom } : er;
+      rowOf.set(c.id, g.key);
+      const hit = drawPin(c, r, wrap);
+      if (hit && fanned) overFan = hit;
+      else if (hit && (!over || hit.c.id !== hotId)) over = hit; // a hovered pin wins over a go-to's flash
+    });
+    if (more && !fanned) {
+      const d = document.createElement("div");
+      d.className = "pin ui faded more" + (list.slice(xs.length).some((c) => state.unread.has(c.id)) ? " unread" : "");
+      d.style.left = `${moreX}px`;
+      d.style.top = `${er.top}px`;
+      d.textContent = `+${more}`;
+      d.dataset.more = g.list[0].id;
+      d.title = list.slice(xs.length).map((c) => `#${c.n}`).join(", ");
+      wrap.appendChild(d);
+      moreRows.set(g.list[0].id, { key: g.key, from: moreX });
+      if (onPin(moreX, er.top)) {
+        state.fan = { key: g.key, from: moreX }; // opens on the next frame
+        litKey = g.key;
+      }
+    }
+  }
+  /* the fanned row on top of every other pin */
+  if (state.fan && rowDiv.has(state.fan.key)) rowDiv.get(state.fan.key).parentNode.appendChild(rowDiv.get(state.fan.key));
+  if (overFan) over = overFan;
+  function drawPin(c, r, wrap) {
+    let over = null;
+    rects.set(c.id, { c, r });
     const d = document.createElement("div");
-    const hot = state.flash && state.flash.id === c.id && now < state.flash.until;
+    const hot = c.id === hotId;
     d.className = "pin ui" + (hot ? " flash" : " faded") + (state.unread.has(c.id) ? " unread" : "");
-    if (hot) box.classList.add("flash");
     d.style.left = `${r.left}px`;
     d.style.top = `${r.top}px`;
     d.textContent = c.n;
@@ -2835,17 +3057,39 @@ function renderPins() {
       if (now - state.pinMoment.t0 > 2600) state.pinMoment = null;
     }
     /* the tip follows the mouse, not events: pins are redrawn every frame, so a "mouse left" would never fire */
-    const { x, y } = state.mouse;
-    if (x >= r.left - 9 && x <= r.left + 15 && y >= r.top - 9 && y <= r.top + 15) over = { c, r };
+    if (onPin(r.left, r.top)) over = { c, r };
     /* just arrived by go-to: the comment reads itself out for the flash's time, no hover needed */
     if (hot && !over) over = { c, r };
     if (state.pinMoment?.id === c.id && over?.c.id === c.id) over = null; // no pin card while its pill shows
+    return over;
   }
   /* the tip already up stays while something is pending on it (an edit, a "sure?") or the pointer is on it */
-  if (!over && tip.classList.contains("on") && rects.has(tip.dataset.id)) {
+  let onTip = false;
+  if (tip.classList.contains("on") && rects.has(tip.dataset.id)) {
     const t = tip.getBoundingClientRect();
-    const { x, y } = state.mouse;
-    if (tipHold === tip.dataset.id || (x >= t.left - 8 && x <= t.right + 8 && y >= t.top - 10 && y <= t.bottom + 8)) over = rects.get(tip.dataset.id);
+    onTip = tipHold === tip.dataset.id || (mx >= t.left - 8 && mx <= t.right + 8 && my >= t.top - 10 && my <= t.bottom + 8);
+    /* a card a go-to opened goes with its flash, unless the pointer has moved onto it since (the pointer still where
+       the drawer was clicked may sit right on it, and the card never closed) */
+    const f = state.flash;
+    if (onTip && tipHold !== tip.dataset.id && f?.id === tip.dataset.id && f.mouse && f.mouse.x === mx && f.mouse.y === my) onTip = false;
+    if (!over && onTip) over = rects.get(tip.dataset.id);
+  }
+  /* the fan closes once the pointer has left it, its count's spot and the card of one of its pins */
+  if (state.fan?.box) {
+    const b = state.fan.box;
+    const inFan = mx >= b.left - 6 && mx <= b.right + 6 && my >= b.top - 6 && my <= b.bottom + 6;
+    if (!inFan && !(onTip && rowOf.get(tip.dataset.id) === state.fan.key) && !state.fan.tapped) state.fan = null;
+  }
+  /* the hovered pin's element: its outline lit, the other pins faded */
+  if (over && (onPin(over.r.left, over.r.top) || onTip)) litKey = rowOf.get(over.c.id) ?? litKey;
+  if (state.fan) litKey = state.fan.key;
+  if (litKey != null && rowDiv.has(litKey)) rowDiv.get(litKey).classList.add("lit");
+  pinsEl.classList.toggle("focus", litKey != null && rowDiv.has(litKey));
+  /* onto the page only when different from what shows */
+  const drawn = Array.from(frag.children, (w) => w.outerHTML).join("");
+  if (drawn !== pinsShown) {
+    pinsEl.replaceChildren(frag);
+    pinsShown = drawn;
   }
   if (over && !state.pending && !$(".panel").classList.contains("on")) {
     if (tip.dataset.id !== over.c.id) buildTip(over.c);
@@ -2954,10 +3198,23 @@ tip.addEventListener("click", async (e) => {
 /* a click on a pin opens the list on that comment. Pins are redrawn every frame, so the pressed element may be
    gone by the release and no click would fire: the press is noted, the release on the same pin acts. */
 let pinDown = null;
+/* a tapped fan closes on a tap anywhere but its pins and their card */
+window.addEventListener("pointerdown", (e) => {
+  if (!state.fan?.tapped) return;
+  if (e.composedPath().some((n) => n === tip || n.classList?.contains("fan") || n.dataset?.more)) return;
+  state.fan = null;
+}, true);
 pinsEl.addEventListener("pointerdown", (e) => {
-  pinDown = e.target.closest(".pin")?.dataset.id || null;
+  pinDown = e.target.closest(".pin")?.dataset.id || e.target.closest(".pin")?.dataset.more || null;
 });
 pinsEl.addEventListener("pointerup", (e) => {
+  /* a "+3" pin, tapped (a touch screen has no hover): its row fans out until a tap elsewhere */
+  const more = e.target.closest(".pin")?.dataset.more;
+  if (more && pinDown === more && moreRows.has(more)) {
+    pinDown = null;
+    state.fan = { ...moreRows.get(more), tapped: true };
+    return;
+  }
   const up = e.target.closest(".pin")?.dataset.id;
   const c = pinDown && up === pinDown && state.comments.find((x) => x.id === pinDown);
   pinDown = null;
@@ -4184,6 +4441,102 @@ function draftSync(card, c) {
   const t = box.querySelector(".dr-text");
   if (t) t.textContent = c.draft.state === "reply" ? c.draft.thread[c.draft.thread.length - 1].a : c.draft.text;
 }
+/* NUMBERS (Nirav, 2026-10-27): how the review runs, on the full page, from the history the hub already keeps. Fixes
+   only for the approval figures (a question is answered, not approved). Raised to approved and picked-up times are
+   medians ("typical"), so one forgotten comment does not skew them; sent back is the share of fixes that came back
+   from For approval at least once (a take back is not a send back). Per page and per person; all time, 30 or 7 days. */
+let numWin = 0; // days, 0 = all time
+const median = (xs) => {
+  if (!xs.length) return null;
+  const a = [...xs].sort((x, y) => x - y), m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+};
+function span(ms) {
+  if (ms == null) return "–";
+  const m = ms / 60000;
+  if (m < 60) return `${Math.max(1, Math.round(m))} min`;
+  const h = m / 60;
+  if (h < 24) return `${h < 10 ? h.toFixed(1).replace(/\.0$/, "") : Math.round(h)} h`;
+  const d = h / 24;
+  return `${d < 10 ? d.toFixed(1).replace(/\.0$/, "") : Math.round(d)} day${d >= 1.05 ? "s" : ""}`;
+}
+const pct = (a, b) => (b ? `${Math.round((100 * a) / b)}%` : "–");
+function factsOf(c) {
+  const h = c.history || [];
+  const firstPick = h.find((s) => s.status === "progress");
+  const firstDone = h.find((s) => s.status === "approval");
+  const backs = h.filter((s) => s.from === "approval" && s.status === "progress" && s.kind !== "take").length;
+  const approvedAt = c.status === "approved" ? c.approvedAt || c.resolvedAt || h.filter((s) => s.status === "approved").pop()?.at : null;
+  return { pickMs: firstPick ? firstPick.at - c.ts : null, approveMs: approvedAt ? approvedAt - c.ts : null, finishMs: firstPick && firstDone && firstDone.at > firstPick.at ? firstDone.at - firstPick.at : null, reachedApproval: !!firstDone, backs, doer: c.doneBy || firstDone?.by || null, claude: h.some((s) => s.via === "claude") };
+}
+function numbersHtml() {
+  const since = numWin ? Date.now() - numWin * 86400000 : 0;
+  const all = [...state.comments, ...state.done].filter((c) => !c.pending && (c.ts || 0) >= since);
+  const fixes = all.filter((c) => !isQ(c)).map((c) => ({ c, f: factsOf(c) }));
+  const approved = fixes.filter((x) => x.f.approveMs != null);
+  const reached = fixes.filter((x) => x.f.reachedApproval);
+  const sentBack = reached.filter((x) => x.f.backs > 0);
+  const open = all.filter((c) => c.status !== "approved");
+  const oldest = open.reduce((m, c) => Math.min(m, c.ts || Date.now()), Date.now());
+  const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+  const tile = (label, value, sub) => `<div class="nm-tile"><div class="nm-label">${label}</div><div class="nm-value">${value}</div><div class="nm-sub">${sub}</div></div>`;
+  const cnt = (k) => open.filter((c) => c.status === k).length;
+  const tiles = [
+    tile("Raised to approved", span(median(approved.map((x) => x.f.approveMs))), approved.length ? `typical · average ${span(avg(approved.map((x) => x.f.approveMs)))} · ${approved.length} approved fix${approved.length === 1 ? "" : "es"}` : "no fix approved yet"),
+    tile("Picked up within", span(median(fixes.map((x) => x.f.pickMs).filter((v) => v != null))), "typical, from raised to In progress"),
+    tile("Sent back", pct(sentBack.length, reached.length), reached.length ? `${sentBack.length} of ${reached.length} fix${reached.length === 1 ? "" : "es"} that reached For approval` : "nothing reached For approval yet"),
+    tile("Open now", String(open.length), open.length ? `${cnt("open")} new · ${cnt("progress")} in progress · ${cnt("approval")} for approval · oldest ${span(Date.now() - oldest)}` : "all clear"),
+  ].join("");
+  /* per page */
+  const pages = new Map();
+  for (const c of all) {
+    const k = c.pageTitle || (c.route || "").split("?")[0] || "Page";
+    if (!pages.has(k)) pages.set(k, []);
+    pages.get(k).push(c);
+  }
+  const pageRows = [...pages.entries()]
+    .map(([name, cs]) => {
+      const fx = cs.filter((c) => !isQ(c)).map((c) => factsOf(c));
+      const r = fx.filter((f) => f.reachedApproval);
+      return { name, open: cs.filter((c) => c.status !== "approved").length, done: cs.filter((c) => c.status === "approved").length, typ: median(fx.map((f) => f.approveMs).filter((v) => v != null)), back: pct(r.filter((f) => f.backs).length, r.length) };
+    })
+    .sort((a, b) => b.open - a.open || b.done - a.done);
+  /* per person: what they raised, and what they finished */
+  const people = new Map();
+  const who = (name) => (people.has(name) ? people.get(name) : people.set(name, { name, raised: 0, finished: 0, finish: [], backs: 0, reached: 0, claude: 0 }).get(name));
+  for (const c of all) if (c.by) who(c.by).raised++;
+  for (const { c, f } of fixes) {
+    if (!f.reachedApproval || !f.doer) continue;
+    const p = who(f.doer);
+    p.reached++;
+    if (f.backs) p.backs++;
+    if (f.finishMs != null) p.finish.push(f.finishMs);
+    if (c.status === "approved") p.finished++;
+    if (f.claude) p.claude++;
+  }
+  const personRows = [...people.values()].sort((a, b) => b.reached - a.reached || b.raised - a.raised);
+  const face = (name) => {
+    const one = state.comments.find((c) => c.by === name || c.doneBy === name) || state.done.find((c) => c.by === name || c.doneBy === name) || {};
+    return `<span class="nm-who">${personHtml(one, name).replace(/>([^<>]*)$/, `>${isMe(name) ? "You" : "$1"}`)}</span>`;
+  };
+  const win = [[0, "All time"], [30, "30 days"], [7, "7 days"]].map(([d, l]) => `<button type="button" class="side" data-win="${d}" aria-pressed="${numWin === d}">${l}</button>`).join("");
+  const table = (head, rows) => `<table class="nm-table"><thead><tr>${head.map((h, i) => `<th${i ? ' class="r"' : ""}>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("") || `<tr><td colspan="${head.length}" class="nm-none">Nothing in this time yet</td></tr>`}</tbody></table>`;
+  return `<div class="nm">
+    <div class="nm-top"><h2>How the review runs</h2><div class="scope-switch nm-win" role="group" aria-label="Time">${win}</div></div>
+    <div class="nm-tiles">${tiles}</div>
+    <h3>Per page</h3>
+    ${table(["Page", "Open", "Approved", "Raised to approved", "Sent back"], pageRows.map((r) => `<tr><td>${esc(r.name)}</td><td class="r">${r.open}</td><td class="r">${r.done}</td><td class="r">${span(r.typ)}</td><td class="r">${r.back}</td></tr>`))}
+    <h3>Per person</h3>
+    ${table(["Person", "Raised", "Finished", "Pick up to done", "Sent back", "With Claude"], personRows.map((p) => `<tr><td>${face(p.name)}</td><td class="r">${p.raised}</td><td class="r">${p.finished}</td><td class="r">${span(median(p.finish))}</td><td class="r">${pct(p.backs, p.reached)}</td><td class="r">${p.claude || "–"}</td></tr>`))}
+    <p class="nm-foot">Typical is the middle value, so one forgotten comment does not skew it. Fixes only for approval and sent back; questions count as raised.</p>
+  </div>`;
+}
+panelBody.addEventListener("click", (e) => {
+  const b = e.target.closest(".nm-win button");
+  if (!b) return;
+  numWin = Number(b.dataset.win);
+  renderPanel();
+});
 /* READ MORE (Nirav, 2026-10-26): a long comment (often pasted), Claude's suggestion or a long note shows three lines,
    cut at a word's middle with "…" and "Read more" at the end of the third line; "Read less" sits after the last word
    when open. Only when it really runs over; what was opened stays open across refreshes; editing shows it whole. */
@@ -4247,10 +4600,13 @@ function renderPanel() {
   if (state.asking) state.asking.focused = !!root.activeElement?.classList?.contains("note-in"); // before the rebuild takes it
   const scrollWas = panelBody.scrollTop;
   const focusWas = root.activeElement?.classList?.contains("card") ? root.activeElement.dataset.id : null;
-  const view = PAGE_MODE ? window.__reviewView || "open" : "open";
+  let view = PAGE_MODE ? window.__reviewView || "open" : "open";
+  if (view === "numbers" && !isApprover()) view = window.__reviewView = "open"; // Numbers is the approver's (Nirav, 2026-10-27)
   for (const b of $(".panel-view").querySelectorAll("button")) {
+    if (b.dataset.v === "numbers") b.hidden = !isApprover();
     b.setAttribute("aria-pressed", b.dataset.v === view ? "true" : "false");
-    b.querySelector("b").textContent = b.dataset.v === "open" ? state.comments.length : state.doneCount ?? state.done.length;
+    const n = b.querySelector("b");
+    if (n) n.textContent = b.dataset.v === "open" ? state.comments.length : state.doneCount ?? state.done.length;
   }
   const pool = view === "resolved" ? state.done : state.comments;
   /* the status filter (Nirav, 2026-10-23), in the place and the look of the old tag pill: All, New, In progress, For
@@ -4530,8 +4886,10 @@ function renderPanel() {
     panelBody.insertAdjacentHTML("beforeend", state.loadError ? emptyHtml("error") : skeletonHtml());
     return;
   }
-  /* the Approved view asks for its list the first time it opens, placeholders meanwhile */
-  if (view === "resolved" && !state.doneLoaded) {
+  host.dataset.view = view;
+  /* the Approved view (and Numbers, which needs the approved ones too) asks for its list the first time it opens,
+     placeholders meanwhile */
+  if ((view === "resolved" || view === "numbers") && !state.doneLoaded) {
     if (!state.doneAsked) {
       state.doneAsked = true;
       loadDone().finally(() => {
@@ -4540,6 +4898,10 @@ function renderPanel() {
       });
     }
     panelBody.insertAdjacentHTML("beforeend", skeletonHtml());
+    return;
+  }
+  if (view === "numbers") {
+    panelBody.insertAdjacentHTML("beforeend", numbersHtml());
     return;
   }
   if (isApprover() && state.joiners.length && view === "open") panelBody.insertAdjacentHTML("beforeend", joinHtml());
@@ -5863,7 +6225,7 @@ window.addEventListener(
        At pointerdown, not click: Radix opens on pointerdown and then cuts pointer events on the body, so by
        the time the click arrives its target is the html element */
     if (e.composedPath().includes(host) || e.button !== 0 || state.alt || state.sticky) return;
-    if (!state.showPins) state.flash = null; // the go-to pin shown over hidden pins goes on the next click
+    state.flash = null; // the go-to pin (shown over hidden pins, or kept out of its row's "+3") goes on the next click
     if (location.pathname !== state.trailRoute) {
       state.trailRoute = location.pathname;
       state.trail = [];
@@ -6220,7 +6582,7 @@ async function goTo(c) {
     if (!el && c.rect && ghostRect(c)) {
       const win = (c.scrolls || []).find((x) => x.selector === "window");
       if (win) window.scrollTo({ left: win.left || 0, top: win.top || 0, behavior: "smooth" });
-      state.flash = { id: c.id, until: performance.now() + 3200 };
+      state.flash = { id: c.id, until: performance.now() + 3200, mouse: { ...state.mouse } };
       toast(`#${c.n}: the element has changed since; shown where it was`);
       return;
     }
@@ -6362,7 +6724,7 @@ async function goTo(c) {
       return;
     }
     el.scrollIntoView({ block: "center", behavior: "smooth" });
-    state.flash = { id: c.id, until: performance.now() + 3200 };
+    state.flash = { id: c.id, until: performance.now() + 3200, mouse: { ...state.mouse } };
     /* the surroundings: a different org view, theme or window size changes what the picture shows */
     const notes = [];
     const snap = appSnapshot();
