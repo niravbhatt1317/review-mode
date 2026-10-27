@@ -75,6 +75,32 @@ function rv(path, init = {}, viaExt = false) {
 }
 /* the modifier's name on this machine: ⌥ on a Mac, Alt elsewhere */
 const MOD = /Mac|iPhone|iPad/.test(navigator.platform || "") ? "⌥" : "Alt";
+/* THE HINT ON THE BAR (Nirav, 2026-10-27: a shorter bar): the key and a click, as a picture ("⌥ + 🖱"); shown until
+   you have made three comments, then only under the pointer (the pill is then just "Review"). A different hint (sticky
+   mode) always shows. */
+const CLICK_ICON = `<svg class="k-click" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9l11 4.5-4.6 1.4L14 19.5z"/><path d="M5 5l1.6 1.6M9.5 3v2.2M3 9.5h2.2"/></svg>`;
+const madeKey = "review.made";
+const madeCount = () => { try { return Number(localStorage.getItem(madeKey)) || 0; } catch { return 0; } };
+function barHint(text) {
+  const k = root.querySelector(".bar .k");
+  if (!k) return;
+  if (text) k.textContent = text;
+  else k.innerHTML = `<span class="k-key">${MOD}</span> + ${CLICK_ICON}`;
+  /* its words as the bar's own instant tooltip (Nirav, 2026-10-27), hung on the pill: the hint itself clips */
+  const pill = k.closest(".bar-main");
+  let tipEl = pill?.querySelector(".k-tip");
+  if (pill && !tipEl) {
+    tipEl = document.createElement("span");
+    tipEl.className = "scope-tip k-tip";
+    pill.appendChild(tipEl);
+  }
+  const learned = !text && madeCount() >= 3;
+  if (tipEl) {
+    tipEl.textContent = text || `${MOD === "⌥" ? "Option" : "Alt"} + click to comment`; // in words, whether the pill shows the hint or not
+  }
+  k.removeAttribute("title");
+  k.closest(".bar-main")?.classList.toggle("learned", learned);
+}
 const HIDE_KEY = MOD === "⌥" ? "⌥⇧H" : "Alt+Shift+H"; // shows or hides the whole review layer
 /* STATUS (2026-10-21): open -> progress (picked up) -> approval (done, for the reviewer) -> approved. Reopen and
    send back move it back. Approved comments leave the pins and the open list. */
@@ -388,6 +414,15 @@ root.innerHTML = `
   .bar .dot.live { background: #22c55e; cursor: default; }
   .bar b { font-weight: 600; font-size: 12px; }
   .bar .k { color: #9fb0c9; font-size: 12px; margin-left: 4px; }
+  .bar .k { display: inline-flex; align-items: center; gap: 3px; overflow: hidden; white-space: nowrap; max-width: 240px; transition: max-width .25s ease, opacity .2s ease, margin .25s ease; }
+  .bar .k .k-key { font-size: 13px; }
+  .bar .k .k-click { flex: 0 0 auto; }
+  .bar .bar-main.learned { padding-right: 18px; } /* the hint gone: 18 px after the words (Nirav, 2026-10-27) */
+  .bar .bar-main.learned .k { display: none; }
+  .bar .bar-main { position: relative; }
+  .bar .k-tip { top: auto; bottom: calc(100% + 8px); left: auto; right: 10px; transform: none; }
+  .bar .bar-main:has(.k:hover) .k-tip { opacity: 1; }
+  .bar .bar-main.learned:hover .k-tip { opacity: 1; } /* the hint hidden: the shortcut in the tooltip, the pill stays as it is */
   /* Pins and List as their own discs beside the bar (Nirav, 2026-10-23), in the satellites' look but always shown:
      the bar itself is only the transparent row; its dark pill is .bar-main */
   .bar { background: transparent; box-shadow: none; padding: 0; gap: 8px; }
@@ -427,6 +462,33 @@ root.innerHTML = `
   .bar button.share.live::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #22c55e; margin-right: 6px; vertical-align: 1px; }
   .toast { position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%); pointer-events: none; background: #1d2b3e; color: #fff; border-radius: 8px; padding: 6px 12px; opacity: 0; transition: opacity .15s; }
   .toast.on { opacity: 1; }
+  /* THE ISLAND (Nirav, 2026-10-27): what others did, live; a pill of its own that comes out of the review bar (above it,
+     or below when the bar is near the top), grows to show the face and the words, then shrinks back into the bar */
+  .island { --is-bg: #1d2b3e; --is-ink: #fff; position: fixed; left: 0; top: 0; height: 30px; display: none; align-items: center; overflow: hidden; padding: 0; border-radius: 999px; background: var(--is-bg); color: var(--is-ink); box-shadow: 0 0 0 1.5px var(--tone-lit), 0 0 12px color-mix(in srgb, var(--tone-lit) 33%, transparent), 0 6px 18px rgba(0,0,0,.24); pointer-events: auto; cursor: pointer; white-space: nowrap; font: 500 12px/1 -apple-system, system-ui, sans-serif; }
+  .island.on { display: flex; }
+  .island.in-drawer { z-index: 3; }
+  :host([data-island]) .panel-sync { opacity: 0; pointer-events: none; }
+  :host([data-newquiet]) .panel-sync.new { opacity: 0; pointer-events: none; } /* back with the next new comment, or a scroll of the list */
+  .island .is-in { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px 0 5px; min-width: 0; max-width: 100%; } /* inside the island's width, so a long line ends in … */
+  .island .is-faces { display: inline-flex; flex: 0 0 auto; }
+  .island .av { width: 20px; height: 20px; margin: 0; border-radius: 50%; box-shadow: 0 0 0 2px var(--is-bg); }
+  /* dark like the bar, with a thin ring and a soft glow in the colour of what happened (Nirav, 2026-10-27, picked from
+     four tried: plain white, filled with the colour, white with the glow, and this); the colours are the drawer's
+     status ones: blue handed or answered, orange picked up or sent back, teal finished or approved, purple new */
+  .island[data-tone="blue"] { --tone: hsl(214 98% 44%); --tone-lit: #3d8bff; }
+  .island[data-tone="prog"] { --tone: #D45F00; --tone-lit: #FF7A1A; }
+  .island[data-tone="appr"] { --tone: #1E8C81; --tone-lit: #31BFB0; }
+  .island[data-tone="new"] { --tone: #8B3FD9; --tone-lit: #A64DFF; }
+  .island .av + .av { margin-left: -6px; }
+  .island .is-more { display: inline-flex; overflow: hidden; padding-left: 2px; margin-left: -8px; } /* tucked 6 px under the first face, with room for its ring */
+  .island .is-more .av:first-child { margin-left: 0; }
+  .island .is-sub { color: #9fb0c9; font-weight: 400; } /* what the comment is, after what happened */
+  .island .av-i { font-size: 9px; line-height: 20px; background: hsl(216 32% 86%); color: #1d2b3e; } /* light in both themes: on the dark island a dark letter face disappeared (Nirav, 2026-10-27) */
+  /* what happened, then what the comment is; the second gives way first, and each ends in its own colour's …
+     (Nirav, 2026-10-27: a white … after the grey words) */
+  .island .is-txt { display: flex; align-items: baseline; gap: 4px; flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+  .island .is-main { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .island .is-sub { flex: 1 1 0%; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .toast.busy::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; margin-right: 10px; vertical-align: -1px; animation: rv-spin .8s linear infinite; }
   @keyframes rv-spin { to { transform: rotate(360deg); } }
   /* the product's drawer: a veil over the page, the sheet sliding in from the right */
@@ -901,6 +963,46 @@ root.innerHTML = `
   .join-no:hover { color: var(--rv-ink); background: hsl(var(--rv-n10)); }
   .join-no { opacity: 0; pointer-events: none; transition: opacity .15s ease; } /* Refuse only under the pointer (Nirav, 2026-10-24); its place is kept, so Let in does not move */
   .join-row:is(:hover, :focus-within) .join-no { opacity: 1; pointer-events: auto; }
+  /* the notices: faces and a count in the header, the list dropping down over the cards */
+  /* the faces and the count, nothing around them at rest: a background only under the pointer or while the list is
+     open (Nirav, 2026-10-27); looked at, the count stays a pill, grey instead of blue */
+  .note-faces { --nf-hover: color-mix(in srgb, hsl(var(--rv-n20)) 55%, var(--rv-surface)); position: relative; display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 2px 3px 2px 3px; border: 0; border-radius: 999px; background: transparent; color: var(--rv-ink-2); font: 600 10px/1 -apple-system, system-ui, sans-serif; cursor: pointer; transition: background-color .15s ease; }
+  .note-faces[hidden] { display: none; }
+  .note-faces:hover, .note-faces.open { background: var(--nf-hover); box-shadow: inset 0 0 0 1px hsl(var(--rv-n30)); }
+  :host([data-theme="dark"]) .note-faces:hover, :host([data-theme="dark"]) .note-faces.open { box-shadow: inset 0 0 0 1px hsl(var(--rv-n50) / .45); } /* n30 is darker than the ground in dark */
+  .nf-faces { display: inline-flex; }
+  .nf-faces .av { width: 18px; height: 18px; margin: 0; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--rv-surface); transition: box-shadow .15s ease; }
+  .note-faces:is(:hover, .open) .nf-faces .av { box-shadow: 0 0 0 1.5px var(--nf-hover); }
+  .nf-faces .av + .av { margin-left: -6px; }
+  .nf-faces .av-i { font-size: 9px; line-height: 18px; }
+  .nf-n { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: hsl(var(--rv-n20)); color: var(--rv-ink-2); line-height: 18px; text-align: center; transition: background-color .2s ease, color .2s ease; }
+  .note-faces:is(:hover, .open) .nf-n { background: var(--rv-surface); }
+  .note-faces.fresh .nf-n { background: hsl(214 98% 44%); color: #fff; }
+  /* about six lines, then they scroll inside; the heading and Clear all stay put (Nirav, 2026-10-27) */
+  .note-drop { position: absolute; top: calc(100% + 2px); right: 16px; width: min(360px, calc(100% - 32px)); z-index: 8; padding: 0; overflow: hidden; border-radius: 10px; background: var(--rv-surface); box-shadow: 0 12px 32px rgba(29,43,62,.18), 0 0 0 1px hsl(var(--rv-n30)); }
+  .note-drop-list { max-height: min(340px, 55vh); overflow-y: auto; padding: 0 14px 6px; overscroll-behavior: contain; }
+  .note-drop[hidden] { display: none; }
+  .note-drop-head { display: flex; align-items: center; padding: 12px 14px 8px; font: 600 11px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink); }
+  .note-drop-list.scrolled { box-shadow: inset 0 1px 0 hsl(var(--rv-n20)); } /* a hairline under the heading once the lines scroll under it */
+  .note-clear { margin-left: auto; padding: 0; border: 0; background: none; font: 500 11px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); cursor: pointer; }
+  .note-clear:hover { color: var(--rv-ink); }
+  /* a line: the face beside its first line (not the middle of two), the time on that line too; under the pointer the
+     time slides left for the × (no empty space kept for it at rest), and the words get a dotted underline */
+  .note-row { align-items: flex-start; }
+  .note-row .av { margin-top: -1px; }
+  .note-row .join-who { white-space: normal; display: flex; flex-direction: column; gap: 1px; }
+  .note-txt { line-height: 18px; text-decoration: underline dotted transparent; text-underline-offset: 3px; transition: text-decoration-color .15s ease, color .15s ease; }
+  .note-row.go { cursor: pointer; }
+  .note-row.go:hover .note-txt { color: var(--rv-ink); text-decoration-color: currentColor; }
+  .note-why { font-size: 11px; color: var(--rv-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* under the pointer nothing moves (Nirav, 2026-10-27: no dancing, on short lines or full ones): the time's end fades
+     out and the × sits over it */
+  .note-when { position: relative; flex: 0 0 auto; font-size: 11px; line-height: 18px; color: var(--rv-ink-3); }
+  .note-when::after { content: ""; position: absolute; top: 0; bottom: 0; right: -4px; width: 34px; background: linear-gradient(to right, transparent, var(--rv-surface) 10px); opacity: 0; transition: opacity .2s ease; }
+  .note-row:is(:hover, :focus-within) .note-when::after { opacity: 1; }
+  .note-x { position: absolute; z-index: 1; right: -4px; top: 5px; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--rv-ink-3); font-size: 15px; line-height: 20px; cursor: pointer; opacity: 0; transition: opacity .2s ease; }
+  .note-row:is(:hover, :focus-within) .note-x { opacity: 1; }
+  .note-x:hover { color: var(--rv-ink); background: hsl(var(--rv-n10)); }
   .wait-screen { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 56px 24px; text-align: center; color: var(--rv-ink-3); }
   .wait-screen b { font: 600 14px/1.3 -apple-system, system-ui, sans-serif; color: var(--rv-ink); }
   .wait-screen span { font-size: 12px; line-height: 1.5; max-width: 260px; }
@@ -1251,10 +1353,10 @@ root.innerHTML = `
   <div class="twin" hidden></div>
   <div class="actions"><button class="btn cancel">Cancel</button><button class="btn primary save">Save</button></div>
 </div>
-<div class="bar ui"><button class="sat dock" aria-label="Minimise to the edge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><rect x="12" y="12" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Minimise to the edge</span></button><button class="sat off" aria-label="Turn off review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg><span class="scope-tip">Turn off review · ${HIDE_KEY} turns it on</span></button><span class="bar-main"><span class="brand"><button class="dot" title="Pictures: off. Click to share this tab (or load the review extension for silent pictures)"></button><b>Review${window.__reviewSession ? ` · ${window.__reviewSession}` : ""}</b></span><span class="k"></span></span><button class="pins-toggle on disc" aria-label="Pins"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4.5l-4 4-4 1.5-1.5 1.5 7 7 1.5-1.5 1.5-4 4-4"/><path d="M9 15l-4.5 4.5"/><path d="M14.5 4l5.5 5.5"/></svg><span class="scope-tip">Show or hide the pins</span></button><button class="list disc" aria-label="Comments"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14.5 4v16"/></svg><span class="count"></span><span class="scope-tip">Comments, in a side panel</span></button></div>
+<div class="island ui" role="status" aria-live="polite"><span class="is-in"></span></div><div class="bar ui"><button class="sat dock" aria-label="Minimise to the edge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><rect x="12" y="12" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Minimise to the edge</span></button><button class="sat off" aria-label="Turn off review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg><span class="scope-tip">Turn off review · ${HIDE_KEY} turns it on</span></button><span class="bar-main"><span class="brand"><button class="dot" title="Pictures: off. Click to share this tab (or load the review extension for silent pictures)"></button><b>Review${window.__reviewSession ? ` · ${window.__reviewSession}` : ""}</b></span><span class="k"></span></span><button class="pins-toggle on disc" aria-label="Pins"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4.5l-4 4-4 1.5-1.5 1.5 7 7 1.5-1.5 1.5-4 4-4"/><path d="M9 15l-4.5 4.5"/><path d="M14.5 4l5.5 5.5"/></svg><span class="scope-tip">Show or hide the pins</span></button><button class="list disc" aria-label="Comments"><svg class="bi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14.5 4v16"/></svg><span class="count"></span><span class="scope-tip">Comments, in a side panel</span></button></div>
 <div class="panel-veil"></div>
 <aside class="panel ui" aria-label="Review comments" role="dialog" aria-modal="true">
-  <div class="panel-head"><a class="panel-back" href="/" aria-label="Back to the console"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="scope-tip">Back to the console</span></a><a class="panel-title" href="/__review/" target="_blank" aria-label="Open as a page"><span class="txt">Comments</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="scope-tip">Open as a page</span></a><div class="scope-switch panel-view" role="group"><button type="button" class="side" data-v="open">Open<b></b></button><button type="button" class="side" data-v="resolved">Approved<b></b></button><button type="button" class="side" data-v="numbers">Numbers</button></div><div class="scope-switch theme-switch" role="group" aria-label="Theme"><button type="button" class="side" data-t="auto" aria-pressed="false" aria-label="Auto, follows your computer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Auto, follows your computer</span></button><button type="button" class="side" data-t="light" aria-pressed="false" aria-label="Light"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg><span class="scope-tip">Light</span></button><button type="button" class="side" data-t="dark" aria-pressed="false" aria-label="Dark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span class="scope-tip">Dark</span></button></div><button class="panel-copy" data-kind="prompt" aria-label="Copy a brief for Claude"><svg class="logo-claude" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a brief for Claude</span></button><button class="panel-copy" data-kind="loop" aria-label="Copy a checklist for Loop"><svg class="logo-loop-rest" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z"/></svg><svg class="logo-loop" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"> <path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z" fill="url(#rv-loop-a)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-b)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-c)" fill-opacity=".56"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-d)" fill-opacity=".15"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-e)"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-f)"/> <defs> <radialGradient id="rv-loop-c" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(4 2.75 -4.83318 7.0301 5.5 17.75)"> <stop/> <stop offset=".7" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-d" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.4 4.6 -8.08463 13.0057 4.3 17)"> <stop offset=".33"/> <stop offset=".6" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-f" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(13.40004 -2.3 6.04701 35.2304 .3 8.2)"> <stop stop-color="#6D05E8"/> <stop offset="1" stop-color="#6D05E8" stop-opacity="0"/> </radialGradient> <linearGradient id="rv-loop-a" x1="14.2" y1="9.1" x2="10.9" y2="22.6" gradientUnits="userSpaceOnUse"> <stop stop-color="#9237E3"/> <stop offset="1" stop-color="#48E6F3"/> </linearGradient> <linearGradient id="rv-loop-b" x1="8.5" y1="20.5" x2="17.3" y2="18.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#51E6FF"/> <stop offset="1" stop-color="#71D4FF" stop-opacity="0"/> </linearGradient> <linearGradient id="rv-loop-e" x1="6.1" y1="12.7" x2="11.2" y2="5.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#6E06E9"/> <stop offset="1" stop-color="#AB5ADD" stop-opacity="0"/> </linearGradient> </defs> </svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a checklist for Loop</span><i class="more"></i></button></div>
+  <div class="panel-head"><a class="panel-back" href="/" aria-label="Back to the console"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="scope-tip">Back to the console</span></a><a class="panel-title" href="/__review/" target="_blank" aria-label="Open as a page"><span class="txt">Comments</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="scope-tip">Open as a page</span></a><div class="scope-switch panel-view" role="group"><button type="button" class="side" data-v="open">Open<b></b></button><button type="button" class="side" data-v="resolved">Approved<b></b></button><button type="button" class="side" data-v="numbers">Numbers</button></div><div class="scope-switch theme-switch" role="group" aria-label="Theme"><button type="button" class="side" data-t="auto" aria-pressed="false" aria-label="Auto, follows your computer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg><span class="scope-tip">Auto, follows your computer</span></button><button type="button" class="side" data-t="light" aria-pressed="false" aria-label="Light"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg><span class="scope-tip">Light</span></button><button type="button" class="side" data-t="dark" aria-pressed="false" aria-label="Dark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span class="scope-tip">Dark</span></button></div><button type="button" class="note-faces" hidden aria-expanded="false" aria-label="What others did since you were here"></button><div class="note-drop" hidden></div><button class="panel-copy" data-kind="prompt" aria-label="Copy a brief for Claude"><svg class="logo-claude" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a brief for Claude</span></button><button class="panel-copy" data-kind="loop" aria-label="Copy a checklist for Loop"><svg class="logo-loop-rest" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z"/></svg><svg class="logo-loop" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"> <path d="M12 2A10 10 0 0 0 2 12v10h10a10 10 0 0 0 0-20Zm0 6.5a3.5 3.5 0 1 1 0 7H8.5V12A3.5 3.5 0 0 1 12 8.5Z" fill="url(#rv-loop-a)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-b)"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-c)" fill-opacity=".56"/> <path d="M22 12a10 10 0 0 1-10 10H2a6.5 6.5 0 0 1 6.5-6.5H12a3.5 3.5 0 0 0 3.5-3.5H22Z" fill="url(#rv-loop-d)" fill-opacity=".15"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-e)"/> <path d="M12 2A10 10 0 0 0 2 12v10a6.5 6.5 0 0 0 6.5-6.48l.02-.02H8.5V12a3.5 3.5 0 0 1 6-2.46l4.6-4.58A9.97 9.97 0 0 0 12 2Z" fill="url(#rv-loop-f)"/> <defs> <radialGradient id="rv-loop-c" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(4 2.75 -4.83318 7.0301 5.5 17.75)"> <stop/> <stop offset=".7" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-d" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.4 4.6 -8.08463 13.0057 4.3 17)"> <stop offset=".33"/> <stop offset=".6" stop-opacity="0"/> </radialGradient> <radialGradient id="rv-loop-f" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(13.40004 -2.3 6.04701 35.2304 .3 8.2)"> <stop stop-color="#6D05E8"/> <stop offset="1" stop-color="#6D05E8" stop-opacity="0"/> </radialGradient> <linearGradient id="rv-loop-a" x1="14.2" y1="9.1" x2="10.9" y2="22.6" gradientUnits="userSpaceOnUse"> <stop stop-color="#9237E3"/> <stop offset="1" stop-color="#48E6F3"/> </linearGradient> <linearGradient id="rv-loop-b" x1="8.5" y1="20.5" x2="17.3" y2="18.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#51E6FF"/> <stop offset="1" stop-color="#71D4FF" stop-opacity="0"/> </linearGradient> <linearGradient id="rv-loop-e" x1="6.1" y1="12.7" x2="11.2" y2="5.5" gradientUnits="userSpaceOnUse"> <stop stop-color="#6E06E9"/> <stop offset="1" stop-color="#AB5ADD" stop-opacity="0"/> </linearGradient> </defs> </svg><svg class="ring" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" pathLength="100"/></svg><span class="scope-tip">Copy a checklist for Loop</span><i class="more"></i></button></div>
   <div class="panel-bar"><div class="panel-scope"></div><div class="panel-filter"></div></div>
   <div class="panel-sync" hidden><span class="ring"></span><span class="txt"></span></div>
   <div class="panel-body"></div>
@@ -1728,6 +1830,13 @@ window.addEventListener(
       }
       return;
     }
+    /* the notices' list open: Esc shuts it, the drawer stays */
+    if (e.key === "Escape" && !$(".note-drop").hidden) {
+      e.stopPropagation();
+      e.preventDefault();
+      noticeDrop(false);
+      return;
+    }
     /* "/" opens the list's search while the drawer is open (Nirav, 2026-10-23), unless a field anywhere has the keys */
     if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && panel.classList.contains("on") && !state.pending && !state.asking) {
       const inField = e.composedPath().some((n) => n instanceof HTMLElement && (n.matches("input, textarea, select") || n.isContentEditable));
@@ -1852,7 +1961,7 @@ async function beginComment(el) {
   /* the number first (from the server, so it matches whatever was removed meanwhile), then the picture:
      taken NOW, before the box appears, so it is exactly what was pointed at (a hover card, an open menu) */
   await loadComments();
-$(".bar .k").textContent = `${MOD} + click to comment`;
+barHint();
   const n = state.lastN + 1;
   try {
     state.capturing = true;
@@ -2241,6 +2350,8 @@ async function save() {
   const how = state.pending.how;
   /* the comment is on the page the moment Save is pressed: a pin with its number and a card with the picture
      already on screen, shimmering while the picture goes up; the hub's record replaces it when it arrives */
+  try { localStorage.setItem(madeKey, String(madeCount() + 1)); } catch {}
+  if (madeCount() === 3) barHint(); // the third: the hint goes
   const tmp = { id: `tmp-${Date.now().toString(36)}`, n: state.lastN + 1, ts: Date.now(), by: state.me, ...meta, shotHow: how, status: "open", shot: png ? "pending" : null, thumb: null, localShot: png, pending: true, resolved: false };
   state.comments.push(tmp);
   state.dropPin = { id: tmp.id, t0: performance.now() }; // its landing (renderPins)
@@ -2319,12 +2430,24 @@ function syncNote(kind, text) {
   if (kind === "fresh") syncTimer = setTimeout(() => el.classList.remove("on"), 1400);
 }
 function updateUnread() {
-  const n = state.unread.size;
-  if (n) syncNote("new", `${n} new`);
-  else if ($(".panel-sync").classList.contains("new")) syncNote(null);
   for (const card of panelBody.querySelectorAll(".card")) card.classList.toggle("unread", state.unread.has(card.dataset.id));
   watchUnread();
+  newPill();
 }
+/* "N new" ONLY WHEN IT HELPS (Nirav, 2026-10-27): while some new card is out of view (scrolled away, or not drawn
+   in this view); with them all on screen, still blue, the pill stays away. It follows the list's scrolling. */
+function newPill() {
+  const n = state.unread.size;
+  const pill = $(".panel-sync");
+  const body = panelBody.getBoundingClientRect();
+  const cards = [...panelBody.querySelectorAll(".card.unread")];
+  const away = cards.length < n || cards.some((c) => { const r = c.getBoundingClientRect(); return r.bottom < body.top + 48 || r.top > body.bottom - 16; });
+  if (n && away) {
+    if (!(pill.classList.contains("new") && pill.classList.contains("on") && pill.querySelector(".txt").textContent === `${n} new`)) syncNote("new", `${n} new`);
+  } else if (pill.classList.contains("new")) syncNote(null);
+}
+let newPillTick = 0;
+$(".panel-body").addEventListener("scroll", () => { host.removeAttribute("data-newquiet"); if (!newPillTick) newPillTick = requestAnimationFrame(() => ((newPillTick = 0), newPill())); }, { passive: true });
 /* a card that has been in view for a moment is seen */
 const seenTimers = new Map();
 const unreadWatch = new IntersectionObserver((entries) => {
@@ -2368,7 +2491,10 @@ window.__reviewWhy = (id, fresh) => { /* read-only, for drives: why a pin is or 
 window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: lastCheck, persona: state.persona, approver: isApprover(), sign: canSign() }); // read-only, for drives
 $(".panel-sync").addEventListener("click", () => {
   const first = panelBody.querySelector(".card.unread");
-  if (first) first.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (first) return first.scrollIntoView({ block: "center", behavior: "smooth" });
+  /* not drawn in this view (a filter or the scope hides it): widened, the way a notice goes to its comment */
+  const c = state.comments.find((x) => state.unread.has(x.id));
+  if (c) showInList(c);
 });
 let loadComments = async function () {
   try {
@@ -2384,13 +2510,19 @@ let loadComments = async function () {
     listSeen = text;
     for (const c of all) c.severity = kindOf(c.severity);
     if (state.known) {
-      for (const c of all) if (!state.known.has(c.id) && !state.mine.has(c.id) && c.status !== "approved") state.unread.add(c.id);
+      for (const c of all) if (!state.known.has(c.id) && !state.mine.has(c.id) && !(c.by && isMe(c.by)) && c.status !== "approved") state.unread.add(c.id); // yours from another tab or machine are not new (Nirav, 2026-10-27)
     }
     state.known = new Set(all.map((c) => c.id));
     for (const id of [...state.unread]) if (!state.known.has(id)) state.unread.delete(id);
     const light = !Array.isArray(reply) && typeof reply.doneCount === "number";
     if (reply.faces) state.faces = { ...(state.faces || {}), ...reply.faces }; // the people's pictures, once
-    if (light) state.doneCount = reply.doneCount; // approved: counted here, the list only when its view opens
+    if (light) {
+      /* approved: counted here, the list only when its view opens, or when the count moves (a notice may say "approved
+         yours"; the approved list is asked for then, light and only if changed) */
+      const moved = reply.doneCount !== state.doneCount;
+      state.doneCount = reply.doneCount;
+      if (state.me && (moved || !state.doneAsked) && (state.doneAsked = true)) loadDone().then((got) => got && panel.classList.contains("on") && !panelBusy() && renderPanel());
+    }
     else {
       state.done = all.filter((c) => c.status === "approved"); // an older server: everything came
       state.doneCount = state.done.length;
@@ -2423,14 +2555,17 @@ state.lastActive = Date.now();
 let quickUntil = 0;
 for (const ev of ["pointermove", "pointerdown", "keydown", "wheel", "scroll"]) window.addEventListener(ev, () => (state.lastActive = Date.now()), { passive: true, capture: true });
 async function checkNow() {
-  const before = state.unread.size;
+  const before = new Set(state.unread);
   const changed = await loadComments(); // redraws only when the list changed and nobody is mid-edit
   if (changed) quickUntil = Date.now() + 30_000;
   if (PAGE_MODE && window.__reviewView === "resolved" && state.doneLoaded && (await loadDone()) && !panelBusy()) renderPanel(); // the Approved view keeps up too
-  if (state.unread.size !== before) {
-    if (panel.classList.contains("on")) updateUnread();
-    else toast(`${state.unread.size} new comment${state.unread.size > 1 ? "s" : ""}`);
-  }
+  const added = [...state.unread].filter((id) => !before.has(id)).map((id) => state.comments.find((c) => c.id === id)).filter(Boolean);
+  if (state.unread.size !== before.size && panel.classList.contains("on")) updateUnread();
+  /* what others did and added: the island (the notices' faces in the drawer's header follow too) */
+  if (state.hub && state.me) {
+    updateNotices();
+    islandPush(islandNews(added));
+  } else if (added.length && !panel.classList.contains("on")) toast(`${added.length} new comment${added.length > 1 ? "s" : ""}`);
 }
 function nextCheckIn() {
   const watching = panel.classList.contains("on") || state.showPins || PAGE_MODE;
@@ -2508,6 +2643,371 @@ function joinHtml() {
   });
   const more = !folded && many ? `<button type="button" class="join-more">${state.joinAll ? "Show fewer" : `Show ${state.joiners.length - 3} more`}</button>` : "";
   return `<div class="join-box${folded ? " folded" : ""}"><button type="button" class="join-title" aria-expanded="${!folded}">Waiting to join · ${state.joiners.length}<svg class="lg-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>${rows.join("")}${more}</div>`;
+}
+/* SINCE YOU WERE HERE (Nirav, 2026-10-27, "more in-drawer notices, with avatars"): what others did that concerns you,
+   since you last cleared them, read from the comments' own history (nothing new is stored on the hub). One line per
+   person and kind, with their face: picked up yours, handed you, finished for your approval (approvers), approved
+   yours, sent back to you, answered your question. Your own moves never show. The first visit starts from now, so
+   nobody opens to a wall of old news. What was cleared or crossed out is kept in this browser only. */
+const noticeKey = () => `review.notices.${state.hub?.project || "project"}${window.__reviewSession || ""}`;
+function noticeMemo() {
+  try {
+    const m = JSON.parse(localStorage.getItem(noticeKey()) || "null");
+    if (m && typeof m.seen === "number") return { seen: m.seen, looked: m.looked || 0, gone: new Set(m.gone || []), seenAt: m.seenAt || {} };
+  } catch {}
+  const fresh = { seen: Date.now(), gone: new Set(), seenAt: {} };
+  noticeSave(fresh);
+  return fresh;
+}
+function noticeSave(m) {
+  /* seenAt: when each line was first in the list as you opened it; kept for the newest 400 */
+  const seenAt = Object.fromEntries(Object.entries(m.seenAt || {}).sort((x, y) => y[1] - x[1]).slice(0, 400));
+  try { localStorage.setItem(noticeKey(), JSON.stringify({ seen: m.seen, looked: m.looked || 0, gone: [...m.gone].slice(-400), seenAt })); } catch {}
+}
+/* SMART WORDING (Nirav, 2026-10-27): who, what, which. One to three comments by number, more as a count ("20 of your
+   comments", never a long list); Claude credited when the move was made with it; several kinds by one person in one
+   sentence ("Pranjal picked up 2 and sent back #9"), the most pressing first. */
+const NOTICE_RANK = { back: 0, hand: 1, done: 2, answer: 3, approved: 4, pick: 5, new: 6 };
+const NOTICE_TONE = { back: "prog", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new" };
+const numsOf = (ns) => (ns.length === 1 ? `#${ns[0]}` : ns.length <= 3 ? `${ns.slice(0, -1).map((n) => `#${n}`).join(", ")} and #${ns[ns.length - 1]}` : `${ns.length} comments`);
+function noticePhrase(kind, ns) {
+  const n = ns.length, nums = numsOf(ns), many = n > 3;
+  switch (kind) {
+    case "pick": return many ? `picked up ${n} of your comments` : `picked up your ${nums}`; // "your 20 comments" read as all of them
+    case "hand": return `handed you ${nums}`;
+    case "done": return `finished ${nums}, ${n > 1 ? "they wait" : "it waits"} for your approval`;
+    case "approved": return many ? `approved ${n} of your comments` : `approved your ${nums}`;
+    case "back": return `sent back ${nums} to you`;
+    case "answer": return n === 1 ? `answered your question ${nums}` : many ? `answered ${n} of your questions` : `answered your questions ${nums}`;
+    case "new": return `added ${nums}`;
+  }
+  return "";
+}
+/* the short form, for several kinds in one sentence: "picked up 2", "sent back #9" */
+function noticeShort(kind, ns) {
+  const x = ns.length === 1 ? `#${ns[0]}` : String(ns.length);
+  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments` }[kind]; // "added 2" alone read oddly
+}
+function noticeSentence(who, parts, claude) {
+  const name = String(who).split(/\s+/)[0] + (claude ? ", with Claude," : "");
+  const ps = [...parts].sort((a, b) => NOTICE_RANK[a.kind] - NOTICE_RANK[b.kind]);
+  if (ps.length === 1) return `${name} ${noticePhrase(ps[0].kind, ps[0].ns)}`;
+  const bits = ps.map((p) => noticeShort(p.kind, p.ns));
+  return `${name} ${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}`;
+}
+/* one comment: its first words, so you know what it is without opening it */
+const noticeSnippet = (c) => { const t = String(c?.text || "").replace(/\s+/g, " ").trim(); return t.length > 48 ? `${t.slice(0, 46).trimEnd()}…` : t; };
+function noticesNow() {
+  if (!state.me || !state.hub) return [];
+  const m = noticeMemo();
+  const mine = (c) => !!c.by && isMe(c.by);
+  const groups = new Map();
+  for (const c of [...state.comments, ...(state.done || [])]) {
+    if (c.pending) continue;
+    for (const s of c.history || []) {
+      if (!(s.at > m.seen) || !s.by || isMe(s.by) || m.gone.has(`${c.id}:${s.at}`)) continue;
+      const seenAt = m.seenAt?.[`${c.id}:${s.at}`];
+      if (seenAt && Date.now() - seenAt > 864e5) continue; // seen in the list a day ago: it leaves by itself (Nirav, 2026-10-27)
+      const kind =
+        s.kind === "reply" ? (isQ(c) && mine(c) ? "answer" : null)
+        : s.kind === "hand" ? (isMe(s.toWho) ? "hand" : null)
+        : s.status === "approved" ? (mine(c) || isMe(c.assignee) || isMe(c.doneBy) ? "approved" : null)
+        : s.from === "open" && s.status === "progress" ? (mine(c) ? "pick" : null)
+        : s.from === "progress" && s.status === "approval" ? (!isQ(c) && isApprover() ? "done" : null)
+        : s.from === "approval" && s.status === "progress" && s.kind !== "take" ? (isMe(c.assignee) ? "back" : null) // taking your own back is not a send-back
+        : null;
+      if (!kind) continue;
+      const k = `${kind}|${s.by}`;
+      if (!groups.has(k)) groups.set(k, { kind, who: s.by, steps: [], at: 0 });
+      const g = groups.get(k);
+      g.steps.push({ c, s });
+      g.at = Math.max(g.at, s.at);
+    }
+  }
+  return [...groups.values()].sort((a, b) => b.at - a.at);
+}
+function noticeText(g) {
+  const ns = [...new Set(g.steps.map((x) => x.c.n))].sort((a, b) => a - b);
+  return noticeSentence(g.who, [{ kind: g.kind, ns }], g.steps.every((x) => x.s.via === "claude"));
+}
+/* PROGRESSIVE (Nirav, 2026-10-27: the box took too much room for news nobody must read): the people's faces and a
+   count in the drawer's header, nothing else; a click drops the list down over the cards. Once the list has been
+   opened the count goes quiet; Clear (or crossing every line out) takes the faces away. */
+const noteFace = (name) => {
+  const url = state.faces?.[name];
+  const i = esc(String(name).trim()[0].toUpperCase());
+  return url ? `<img class="av" src="${esc(url)}" alt="" data-i="${i}">` : `<span class="av av-i">${i}</span>`;
+};
+function noticeRowsHtml(list) {
+  return list.map((g, i) => {
+    const one = new Set(g.steps.map((x) => x.c.id)).size === 1 ? g.steps.reduce((x, y) => (y.s.at > x.s.at ? y : x)) : null; // one comment: its latest step's reason
+    const why = !one ? "" : one.s.note && (g.kind === "back" || g.kind === "hand" || g.kind === "answer") ? `<span class="note-why">"${esc(one.s.note.slice(0, 80))}"</span>` : `<span class="note-why">${esc(noticeSnippet(one.c))}</span>`; // the reason when there is one, else what the comment is
+    const go = g.steps.some((x) => x.c.status !== "approved"); // approved ones are not in this list to go to
+    return `<div class="join-row note-row${go ? " go" : ""}" data-i="${i}">${noteFace(g.who)}<span class="join-who"><span class="note-txt">${esc(noticeText(g))}</span>${why}</span><span class="note-when">${esc(agoText(g.at))}</span><button type="button" class="note-x" aria-label="Clear this">×</button></div>`;
+  }).join("");
+}
+function updateNotices() {
+  const btn = $(".note-faces"), drop = $(".note-drop");
+  if (!btn) return;
+  /* "approved yours" needs the approved list: asked for once your name is known (the list may never change after) */
+  if (state.me && !state.doneAsked) {
+    state.doneAsked = true;
+    loadDone().then((got) => got && updateNotices());
+  }
+  const list = noticesNow();
+  state.noticeList = list;
+  if (!list.length) {
+    btn.hidden = true;
+    drop.hidden = true;
+    btn.classList.remove("open");
+    return;
+  }
+  const people = [...new Set(list.map((g) => g.who))];
+  const looked = noticeMemo().looked || 0;
+  const fresh = list.some((g) => g.at > looked);
+  const html = `<span class="nf-faces">${people.slice(0, 3).map(noteFace).join("")}</span><span class="nf-n">${list.length}</span><span class="scope-tip">What others did since you were here</span>`;
+  if (btn.innerHTML !== html) btn.innerHTML = html;
+  btn.classList.toggle("fresh", fresh);
+  btn.hidden = false;
+  if (!drop.hidden) {
+    const inner = `<div class="note-drop-head">Since you were here<button type="button" class="note-clear">Clear all</button></div><div class="note-drop-list">${noticeRowsHtml(list)}</div>`;
+    if (drop.innerHTML !== inner) drop.innerHTML = inner;
+  }
+}
+function noticeDrop(open) {
+  const btn = $(".note-faces"), drop = $(".note-drop");
+  drop.hidden = !open;
+  btn.classList.toggle("open", open);
+  btn.setAttribute("aria-expanded", String(open));
+  if (open) {
+    const m = noticeMemo();
+    m.looked = Date.now();
+    for (const g of state.noticeList || noticesNow()) for (const { c, s } of g.steps) m.seenAt[`${c.id}:${s.at}`] ||= Date.now(); // seen now, the first time
+    noticeSave(m);
+  }
+  updateNotices();
+}
+/* the faces open and shut the list; Clear forgets them all, × one line, a line goes to its first comment still open
+   (the list shuts) and is cleared */
+$(".note-faces").addEventListener("click", () => noticeDrop($(".note-drop").hidden));
+$(".note-drop").addEventListener("scroll", (e) => e.target.classList?.toggle("scrolled", e.target.scrollTop > 0), true);
+$(".note-drop").addEventListener("click", (e) => {
+  if (e.target.closest(".note-clear")) {
+    noticeSave({ seen: Date.now(), looked: Date.now(), gone: new Set(), seenAt: {} });
+    noticeDrop(false);
+    return;
+  }
+  const row = e.target.closest(".note-row");
+  const g = row && state.noticeList?.[Number(row.dataset.i)];
+  if (!g) return;
+  const m = noticeMemo();
+  for (const { c, s } of g.steps) m.gone.add(`${c.id}:${s.at}`);
+  noticeSave(m);
+  const to = !e.target.closest(".note-x") && g.steps.map((x) => state.comments.find((c) => c.id === x.c.id)).find(Boolean);
+  if (to) {
+    noticeDrop(false);
+    showInList(to);
+  } else updateNotices();
+});
+window.addEventListener("pointerdown", (e) => {
+  if ($(".note-drop").hidden) return;
+  const path = e.composedPath();
+  if (!path.includes($(".note-drop")) && !path.includes($(".note-faces"))) noticeDrop(false);
+}, true);
+/* THE ISLAND: one event at a time, out of the review bar and back in. Only what others did (your own actions keep the
+   plain toast). Held while you write a comment, while the tab is hidden or review is off; more than three waiting
+   become one line ("5 updates"). A click opens the drawer on them. */
+const island = $(".island");
+const islandQ = [];
+let islandBusy = false;
+/* CALM WHEN BUSY: news waits a moment (4 s after the last, 10 s at most) so a run of small moves by one person
+   becomes one line; then one island per person (their kinds in one sentence), the most pressing first; more than
+   three people's news at once becomes one "N updates" */
+const islandHeld = [];
+let islandHeldSince = 0, islandHeldTimer = 0;
+function islandPush(evs) {
+  if (!evs.length || state.off) return;
+  islandHeld.push(...evs);
+  islandHeldSince ||= Date.now();
+  clearTimeout(islandHeldTimer);
+  islandHeldTimer = setTimeout(islandFlush, Math.max(0, Math.min(4000, islandHeldSince + 10000 - Date.now()))); // longer than a check (2.5 s), so the next one can join
+}
+function islandFlush() {
+  islandHeldSince = 0;
+  const byWho = new Map();
+  for (const e of islandHeld.splice(0)) {
+    const w = byWho.get(e.who) || new Map();
+    for (const p of e.parts) {
+      const had = w.get(p.kind) || { kind: p.kind, cs: [], claude: true };
+      for (const c of p.cs) if (!had.cs.some((x) => x.id === c.id)) had.cs.push(c);
+      had.claude = had.claude && p.claude;
+      w.set(p.kind, had);
+    }
+    byWho.set(e.who, w);
+  }
+  const made = [...byWho].map(([who, kinds]) => {
+    const parts = [...kinds.values()].sort((a, b) => NOTICE_RANK[a.kind] - NOTICE_RANK[b.kind]);
+    const all = parts.flatMap((p) => p.cs);
+    const claude = parts.every((p) => p.claude);
+    return {
+      who: [who],
+      text: noticeSentence(who, parts.map((p) => ({ kind: p.kind, ns: p.cs.map((c) => c.n).sort((a, b) => a - b) })), claude),
+      sub: all.length === 1 ? noticeSnippet(all[0]) : "",
+      kind: parts.every((p) => p.kind === "new") ? "new" : "notice",
+      tone: NOTICE_TONE[parts[0].kind] || "blue",
+      rank: NOTICE_RANK[parts[0].kind],
+      count: all.length,
+    };
+  }).sort((a, b) => a.rank - b.rank);
+  const queued = [...islandQ, ...made];
+  islandQ.length = 0;
+  if (queued.length > 3) islandQ.push({ who: [...new Set(queued.flatMap((e) => e.who))], text: `${queued.reduce((n, e) => n + (e.count || 1), 0)} updates`, sub: "", kind: "notice", tone: "blue" });
+  else islandQ.push(...queued);
+  islandPlay();
+}
+async function islandPlay() {
+  if (islandBusy) return;
+  islandBusy = true;
+  while (islandQ.length) {
+    while (state.pending || document.hidden || state.off) await sleep(800);
+    await islandShow(islandQ.shift()).catch(() => {});
+    await sleep(250);
+  }
+  islandBusy = false;
+}
+/* WHERE IT SHOWS AND WHERE IT GOES (Nirav, 2026-10-27, like YouTube's "Saved to playlist" or Instagram's send): it
+   shows over the middle of the whole bar, and when it is done it shrinks to the face and flies into the list button,
+   where the news is. Docked, the round button is both. No bar: the bottom middle. */
+function islandPlaces(ev) {
+  const H = 30, gap = 8;
+  const rect = (el) => { const r = el?.getBoundingClientRect(); return r && r.width && !el.hidden ? r : null; };
+  /* THE DRAWER OPEN, OR THE LIST AS A PAGE (Nirav, 2026-10-27): it shows at the top of the list, centred on it, and goes into the
+     faces in the header (the notices); new comments go into the "N new" pill when it shows */
+  if (panel.classList.contains("on")) { // the list as a page too (Nirav, 2026-10-27): the same as the open drawer
+    const pr = rect(panel), body = rect(panelBody);
+    if (pr && body) {
+      /* new comments: into the "N new" pill when it will show (it appears as the island lands), else into the first
+         new card's number, on screen */
+      let target = $(".note-faces");
+      if (ev?.kind === "new") {
+        const pill = $(".panel-sync");
+        target = pill.classList.contains("new") && pill.classList.contains("on") ? pill : panelBody.querySelector(".card.unread .card-n") || target;
+      }
+      const into = rect(target);
+      return { cx: pr.left + pr.width / 2, top: body.top + gap, into, intoEl: into ? target : null, inDrawer: true, minX: pr.left + 8, maxX: pr.right - 8 };
+    }
+  }
+  const m = $(".bar-mini");
+  const docked = m.classList.contains("on");
+  const bar = !docked && !$(".bar").classList.contains("hidden") ? $(".bar") : null;
+  const over = (docked ? rect(m) : bar ? rect(bar) : null) || { left: innerWidth / 2 - 20, right: innerWidth / 2 + 20, top: innerHeight - 20, bottom: innerHeight - 20, width: 40, height: 0 };
+  const intoEl = docked ? m : bar ? $(".bar .list") : null;
+  const into = rect(intoEl);
+  const above = over.top > 96; // below the bar when it sits near the top of the window
+  return { cx: over.left + over.width / 2, top: above ? over.top - gap - H : over.bottom + gap, into, intoEl: into ? intoEl : null, inDrawer: false, minX: 8, maxX: innerWidth - 8 };
+}
+const ISLAND_EXIT = "together"; // how it leaves: "together" (shrinks while it moves over the list button) or "glide" (shrinks in the middle, then glides over)
+let islandEv = null;
+async function islandShow(ev) {
+  islandEv = ev;
+  island.dataset.tone = ev.tone || "blue";
+  const inner = island.querySelector(".is-in");
+  /* the first face alone in the circle; the others come in and go out with the words (Nirav, 2026-10-27: a summary
+     shrank to a circle with a second face cut in half) */
+  const faces = ev.who.slice(0, 3).map(noteFace);
+  inner.innerHTML = `<span class="is-faces">${faces[0]}${faces.length > 1 ? `<span class="is-more">${faces.slice(1).join("")}</span>` : ""}</span><span class="is-txt"><span class="is-main">${esc(ev.text)}</span>${ev.sub ? `<span class="is-sub">· ${esc(ev.sub)}</span>` : ""}</span>`;
+  island.style.width = "auto";
+  island.style.visibility = "hidden";
+  island.classList.add("on");
+  const H = 30, gap = 8;
+  inner.style.maxWidth = "none"; // its full width first, then capped: the words end in … only when they must
+  const natural = Math.ceil(inner.getBoundingClientRect().width) + 1;
+  inner.style.maxWidth = "";
+  const place = islandPlaces(ev);
+  const W = Math.min(natural, 440, place.maxX - place.minX); // in the drawer, never wider than the drawer
+  island.classList.toggle("in-drawer", place.inDrawer); // above the drawer there; behind the bar otherwise
+  host.toggleAttribute("data-island", place.inDrawer); // the "N new" pill steps aside meanwhile
+  const { top, minX, maxX } = place;
+  const cx = Math.min(maxX - H / 2, Math.max(minX + H / 2, place.cx));
+  const L = Math.min(maxX - W, Math.max(minX, cx - W / 2));
+  Object.assign(island.style, { top: `${top}px`, left: `${L}px`, width: `${W}px`, visibility: "visible" });
+  const shut = { left: `${cx - H / 2}px`, width: `${H}px` };
+  const open = { left: `${L}px`, width: `${W}px` };
+  const more = island.querySelector(".is-more");
+  const moreW = more ? more.scrollWidth : 0;
+  const words = island.querySelector(".is-txt");
+  /* in: the face pops up over the middle of the bar, then widens with the words */
+  if (calm()) await island.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, fill: "both" }).finished;
+  else {
+    words.animate([{ opacity: 0 }, { opacity: 0, offset: 0.6 }, { opacity: 1 }], { duration: 760, fill: "both" });
+    more?.animate([{ maxWidth: "0px", opacity: 0 }, { maxWidth: "0px", opacity: 0, offset: 0.4 }, { maxWidth: `${moreW}px`, opacity: 1 }], { duration: 760, easing: "ease-out", fill: "both" });
+    await island.animate([
+      { ...shut, opacity: 0, transform: "translateY(6px) scale(.5)", easing: "cubic-bezier(.3,1.4,.5,1)" },
+      { ...shut, opacity: 1, transform: "none", offset: 0.4, easing: "cubic-bezier(.2,.9,.25,1.04)" },
+      { ...open, opacity: 1, transform: "none" },
+    ], { duration: 760, fill: "both" }).finished;
+  }
+  /* stays while the pointer is on it */
+  const until = Date.now() + 3000;
+  while (Date.now() < until || island.matches(":hover")) await sleep(150);
+  /* out: the words go, it shrinks to the face, and the face flies into the list button (where it is then, if the bar
+     was moved meanwhile); the button gives a small pulse as it lands */
+  const { into, intoEl, inDrawer } = islandPlaces(ev);
+  if (calm() || !into) await island.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: "both" }).finished;
+  else {
+    more?.animate([{ maxWidth: `${moreW}px`, opacity: 1 }, { maxWidth: "0px", opacity: 0 }], { duration: 200, easing: "ease-in", fill: "both" });
+    await words.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, fill: "both" }).finished;
+    if (more) await sleep(60);
+    const dy = into.top + into.height / 2 - (top + H / 2);
+    if (ISLAND_EXIT === "together") {
+      /* shrinking and moving at once: the pill closes onto the face right over the button's centre, rests a beat,
+         then goes down into it (Nirav, 2026-10-27) */
+      const over = { left: `${Math.min(innerWidth - 8 - H, Math.max(8, into.left + into.width / 2 - H / 2))}px`, width: `${H}px` }; // over the target's centre
+      await island.animate([{ ...open }, over], { duration: 440, easing: "cubic-bezier(.4,0,.2,1)", fill: "both" }).finished;
+      await sleep(90);
+      /* in the drawer it sits on top of what it goes into, so it fades as it lands */
+      await island.animate([{ ...over, transform: "none", opacity: 1 }, { ...over, transform: `translateY(${dy}px) scale(.6)`, opacity: inDrawer ? 0 : 1 }], { duration: 240, easing: "cubic-bezier(.5,0,.85,.4)", fill: "both" }).finished;
+    } else {
+      /* "glide": shrinks in the middle, then the face glides over the button's centre at its own height, then goes
+         straight down into it */
+      const dx = into.left + into.width / 2 - cx;
+      await island.animate([{ ...open, easing: "cubic-bezier(.4,0,.6,1)" }, shut], { duration: 300, fill: "both" }).finished;
+      await island.animate([{ ...shut, transform: "none" }, { ...shut, transform: `translateX(${dx}px)` }], { duration: 340, easing: "cubic-bezier(.45,0,.3,1)", fill: "both" }).finished;
+      await island.animate([{ ...shut, transform: `translateX(${dx}px)` }, { ...shut, transform: `translate(${dx}px, ${dy}px) scale(.6)` }], { duration: 240, easing: "cubic-bezier(.5,0,.85,.4)", fill: "both" }).finished;
+    }
+    host.removeAttribute("data-island"); // the "N new" pill shows as the island lands in it
+    if (inDrawer) host.toggleAttribute("data-newquiet", islandEv?.kind !== "new"); // after anything else it stays away (Nirav, 2026-10-27: it seemed to count every notice)
+    intoEl?.animate([{ scale: "1" }, { scale: "1.12" }, { scale: "1" }], { duration: 320, easing: "ease-out" }); // scale, not transform: the pill keeps its own centring
+  }
+  host.removeAttribute("data-island"); // the pill back, as the island lands (into it, for new comments)
+  island.getAnimations().forEach((x) => x.cancel());
+  island.classList.remove("on");
+  islandEv = null;
+}
+island.addEventListener("click", () => {
+  const ev = islandEv;
+  openPanel(true);
+  if (ev?.kind === "new") setTimeout(() => panelBody.querySelector(".card.unread")?.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+  else setTimeout(() => state.noticeList?.length && noticeDrop(true), 300);
+});
+/* what is new since the last check: the notices' steps not met before, and comments others added */
+let islandKnown = null; // step keys already met
+const islandSince = Date.now(); // what happened before the page opened is news for the list, not live
+function islandNews(added) {
+  const evs = [];
+  const groups = noticesNow();
+  const keys = new Set(groups.flatMap((g) => g.steps.map(({ c, s }) => `${c.id}:${s.at}`)));
+  if (islandKnown) {
+    for (const g of groups) {
+      const fresh = g.steps.filter(({ c, s }) => s.at > islandSince && !islandKnown.has(`${c.id}:${s.at}`));
+      if (fresh.length) evs.push({ who: g.who, parts: [{ kind: g.kind, cs: fresh.map((x) => x.c), claude: fresh.every((x) => x.s.via === "claude") }], at: Date.now() });
+    }
+  }
+  islandKnown = new Set([...(islandKnown || []), ...keys]);
+  const byWho = new Map();
+  for (const c of added) if (c.by && !isMe(c.by)) byWho.set(c.by, [...(byWho.get(c.by) || []), c]); // yours, from another tab or machine, are not news
+  for (const [who, cs] of byWho) evs.push({ who, parts: [{ kind: "new", cs, claude: false }], at: Date.now() });
+  return evs;
 }
 /* ?as=team / ?as=approver, read at load: the app may redirect and drop the query before the hub answers */
 {
@@ -3297,7 +3797,7 @@ setPins(state.showPins);
 
 function setSticky(on) {
   state.sticky = on;
-  $(".bar .k").textContent = on ? "every click comments · Esc stops" : `${MOD} + click to comment`;
+  barHint(on ? "every click comments · Esc stops" : null);
   if (!on) showHover(null);
   else showHover(targetAt(state.mouse.x, state.mouse.y));
 }
@@ -3352,7 +3852,7 @@ function toast(msg, hold) {
 }
 
 loadComments();
-$(".bar .k").textContent = `${MOD} + click to comment`;
+barHint();
 
 /* where the number sits on a picture, as fractions of the picture: drawMarker's badge geometry. New comments carry
    the box in picture pixels (mark); older ones are placed from the picture's own size, the way they were baked. */
@@ -4595,6 +5095,7 @@ function clampCard(card) {
   }
 }
 function renderPanel() {
+  updateNotices(); // the faces in the header
   if (!panel.classList.contains("on")) return;
   if (renderPanel.skipWhileMenu && $(".scope-menu")) return; // a background refresh never rebuilds an open menu
   if (state.asking) state.asking.focused = !!root.activeElement?.classList?.contains("note-in"); // before the rebuild takes it
@@ -5545,7 +6046,7 @@ panelBody.addEventListener("click", async (e) => {
     if (!done?.ok) return toast(done?.error || "Could not remove it", true);
     await removeFx(card).catch((e) => console.warn("[review] removal effect:", e)); // its goodbye, then the list closes the gap; a failing effect never stops it
     await loadComments();
-$(".bar .k").textContent = `${MOD} + click to comment`;
+barHint();
     renderPanel();
     toast(`Removed #${c.n}`);
     return;
@@ -6912,7 +7413,7 @@ if (!PAGE_MODE && pendingGoto) {
   const id = pendingGoto;
   const tryOpen = async (n) => {
     await loadComments();
-$(".bar .k").textContent = `${MOD} + click to comment`;
+barHint();
     const c = state.comments.find((x) => x.id === id);
     if (c) goTo(c);
     else if (n > 0) setTimeout(() => tryOpen(n - 1), 500);

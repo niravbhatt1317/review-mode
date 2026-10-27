@@ -93,11 +93,26 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
 
 ## Notifications
 
-- [ ] **More in-drawer notices, with avatars**: today "2 new" exists; add "Your comment was approved", "Nirav picked
-  up 3", "Sent back to you", and so on.
-- [ ] **Dynamic-island notices** (Nirav, 2026-10-24): an iPhone-style island that grows out of the review bar, and one
-  at the top of the drawer, for live events ("Pranjal picked up #12", "3 new comments", "Your comment was approved"),
-  with faces; it expands, shows the event, shrinks back. Ties in with the in-drawer notices above.
+- [x] **More in-drawer notices, with avatars** (done 2026-10-27): the faces and a count in the drawer's header; a click
+  drops the list down ("Since you were here"): picked up yours, handed you, finished for your approval (approvers),
+  approved yours, sent back to you, answered your question. One line per person and kind; a line goes to its comment.
+- [x] **Dynamic-island notices** (done 2026-10-27): what others did, live, in an island over the middle of the review
+  bar: the face pops up, widens with the words, then shrinks while it moves over the list button and drops into it
+  (like YouTube's "Saved to playlist"). Dark like the bar, with a ring and a soft glow in the kind's colour (blue
+  handed or answered, orange picked up or sent back, teal finished or approved, purple new); more than three at once
+  become one "5 updates". Held while writing a comment, in a hidden tab, or with review off.
+
+  **Kept as backups, in case the team does not like it** (tried with Nirav the same day):
+  - Exit "glide": shrinks in the middle, then the face glides over the list button and drops in. In the code:
+    `ISLAND_EXIT = "glide"`.
+  - Where it shows: out of the middle of the review pill (rising from behind it, and back into it the same way); or
+    out of the list button, right-aligned with it (`L = a.right - W`) or centred on it.
+  - Looks: plain white (`--is-bg: #fff; --is-ink: #1d2b3e`, shadow `0 8px 24px rgba(29,43,62,.22)`); filled with the
+    kind's colour, white words (`--is-bg: var(--tone)`: #0262DF blue, #D45F00 orange, #1E8C81 teal, #8B3FD9 purple);
+    white with the ring and glow (the chosen look on #fff). The coloured strip at the start was tried and dropped.
+  - Glow: chosen 12px at 33% (`0 0 12px color-mix(in srgb, var(--tone-lit) 33%, transparent)`); tried 16px at 45%
+    and 10px at 28%.
+  - Size: chosen 30 px tall, 20 px faces; first tried 36 px and 22 px.
 - [ ] **Nirav gets told when work waits for his approval** (outside the browser): email, Teams or a push. Pick the
   channel.
 - [ ] **Microsoft Teams integration** for the notifications above (an incoming webhook into a channel is the simplest
