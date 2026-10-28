@@ -328,23 +328,84 @@ root.innerHTML = `
   .pin-tip .tip-sev button[data-k="must"] .dot { background: var(--tag-must-dot); } .pin-tip .tip-sev button[data-k="should"] .dot { background: var(--tag-should-dot); } .pin-tip .tip-sev button[data-k="idea"] .dot { background: var(--tag-idea-dot); } .pin-tip .tip-sev button[data-k="question"] .dot { background: var(--tag-question-dot); }
   .pin-tip .tip-sev button[data-k="fix"] .dot { background: var(--tag-fix-dot); }
   /* the list arrow keeps its slot at rest and fades in */
-  .pin-tip .tip-open { width: 24px; height: 24px; padding: 0; margin-right: -4px; border: 0; border-radius: 6px; background: transparent; color: hsl(216 30% 80%); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .18s ease; }
-  .pin-tip:hover .tip-open, .pin-tip.held .tip-open { opacity: 1; }
-  .pin-tip .tip-open:hover { background: rgba(255,255,255,.1); color: #fff; }
   /* the text in the composer's well */
   .pin-tip .tip-text { white-space: pre-wrap; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 6px 10px; background: hsl(218 61% 7% / .45); cursor: text; outline: none; transition: border-color .12s, box-shadow .12s; }
   .pin-tip .tip-text:hover { border-color: rgba(255,255,255,.18); }
-  .pin-tip .tip-note { margin-top: 6px; padding: 4px 10px; border-left: 2px solid hsl(36 95% 32% / .8); font-size: 12px; line-height: 1.4; color: hsl(216 30% 88%); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .pin-tip .tip-text[contenteditable="true"] { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 1px hsl(214 98% 44%); }
-  /* the actions row unfolds under the text */
-  .pin-tip .tip-acts { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .18s ease; }
-  .pin-tip:hover .tip-acts, .pin-tip.held .tip-acts { grid-template-rows: 1fr; }
-  .pin-tip .tip-acts-in { min-height: 0; overflow: hidden; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
-  .pin-tip .tip-acts button { height: 28px; margin-top: 10px; border: 0; border-radius: 8px; padding: 0 12px; background: transparent; color: hsl(216 30% 80%); font: 500 12px/28px -apple-system, system-ui, sans-serif; cursor: pointer; }
-  .pin-tip .tip-acts button:hover { color: #fff; }
-  .pin-tip .tip-acts .tip-ok { background: hsl(214 98% 44%); color: #fff; padding: 0 14px; border-radius: 999px; }
-  .pin-tip .tip-acts .tip-ok:hover { filter: brightness(1.08); }
-  .pin-tip .tip-acts .tip-rm.sure { background: #e11d48; color: #fff; border-radius: 999px; }
+  /* the pin card, short at rest, the rest under the pointer (Nirav, 2026-10-28): the status line as on the drawer's card,
+     then the note and Claude's suggestion styled as there (in the dark), then ⋯, the second move, the main move */
+  .pin-tip .tip-stat { display: flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 11px; font-weight: 500; line-height: 1.35; color: hsl(216 30% 78%); } /* as on the drawer's card: 11 px, a 6 px shape, 16 px faces */
+  .pin-tip .tip-stat:empty { display: none; }
+  .pin-tip .tip-stat .st-s { display: inline; }
+  .pin-tip .tip-stat .av { width: 16px; height: 16px; margin: 0 6px 0 0; vertical-align: middle; position: relative; top: -1px; box-shadow: none; }
+  .pin-tip .tip-stat .av + .st-claude { width: 16px; height: 16px; margin: 0 6px 0 -8px; vertical-align: middle; box-shadow: 0 0 0 1.5px hsl(216 36% 18%); position: relative; top: -1px; } /* the pair: the same size, a light overlap (4 px), ringed in the card's colour, on one line */
+  .pin-tip .tip-stat .st-who { color: #fff; font-weight: 500; }
+  .pin-tip .tip-stat .st-k { font-weight: 500; }
+  .pin-tip[data-s="open"] .tip-stat .st-k { color: #CC99FF; }
+  .pin-tip[data-s="progress"] .tip-stat .st-k { color: #FF9A4D; }
+  .pin-tip[data-s="approval"] .tip-stat .st-k { color: #64CEC3; }
+  .pin-tip .tip-stat::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; margin-right: 4px; border-radius: 1.5px; background: currentColor; }
+  .pin-tip[data-s="open"] .tip-stat::before { background: #A64DFF; border-radius: 50%; }
+  .pin-tip[data-s="progress"] .tip-stat::before { background: #FF6F00; transform: rotate(45deg) scale(.91); border-radius: 1.5px; }
+  .pin-tip[data-s="approval"] .tip-stat::before { background: #31BFB0; }
+  .pin-tip .tip-note { margin-top: 10px; padding: 6px 10px; border-radius: 0 8px 8px 0; border-left: 2px solid hsl(36 85% 55% / .8); background: hsl(36 80% 50% / .12); font-size: 12px; line-height: 1.4; color: hsl(216 30% 90%); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pin-tip .tip-note b { color: #fff; font-weight: 600; }
+  .pin-tip .tip-note .av { display: none; } /* the Note chip above it shows who */
+  .pin-tip .tip-acts-in > .tip-fold { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .26s cubic-bezier(.32,.72,0,1), opacity .18s ease; }
+  .pin-tip .tip-acts-in > .tip-fold.open { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows .26s cubic-bezier(.32,.72,0,1), opacity .2s ease .06s; }
+  .pin-tip .tip-fold-in { min-height: 0; overflow: hidden; }
+  .pin-tip .tip-draft { display: flex; align-items: flex-start; gap: 7px; margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: rgba(217,119,87,.14); box-shadow: inset 0 0 0 1px rgba(217,119,87,.28); font-size: 12px; line-height: 1.45; color: hsl(18 70% 86%); }
+  .pin-tip .tip-draft .av-claude { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; }
+  .pin-tip .tip-draft-t { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .pin-tip .tip-acts { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s cubic-bezier(.32,.72,0,1); }
+  .pin-tip:hover .tip-acts, .pin-tip.held .tip-acts, .pin-tip.kept .tip-acts, .pin-tip.menu-open .tip-acts { grid-template-rows: 1fr; }
+  .pin-tip .tip-acts-in { min-height: 0; overflow: hidden; }
+  .pin-tip:not(:hover):not(.held):not(.kept):not(.menu-open) .tip-acts-in > * { opacity: 0; }
+  .pin-tip .tip-acts-in > * { transition: opacity .18s ease .05s; }
+  .pin-tip .tip-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding-top: 11px; }
+  .pin-tip .tip-row > button, .pin-tip .tip-row .tip-more { flex: 0 0 auto; white-space: nowrap; height: 28px; border: 0; border-radius: 999px; padding: 0 12px; background: transparent; color: hsl(216 30% 82%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); font: 500 12px/28px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .pin-tip .tip-row > button:hover { color: #fff; background: rgba(255,255,255,.08); }
+  .pin-tip .tip-gap { flex: 1; }
+  /* the first line: the type's dot, the comment, the list icon under the pointer */
+  .pin-tip .tip-line { display: flex; align-items: flex-start; gap: 8px; }
+  .pin-tip .tip-line .tip-text { flex: 1; min-width: 0; margin: -3px -6px; padding: 3px 6px; border: 0 !important; border-radius: 6px; background: transparent; box-shadow: none !important; outline: none; font: 500 13px/1.45 -apple-system, system-ui, sans-serif; color: #fff; transition: background-color .15s ease; }
+  /* a long comment (Nirav, 2026-10-28): 3 lines at rest with a fade, up to 10 on hover and while editing (more scrolls
+     inside) */
+  .pin-tip .tip-line .tip-text { max-height: calc(13px * 1.45 * 3 + 6px); overflow: hidden; transition: background-color .15s ease, max-height .26s cubic-bezier(.32,.72,0,1); }
+  .pin-tip .tip-line .tip-text.long { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); }
+  .pin-tip:is(:hover, .held, .kept, .menu-open) .tip-line .tip-text { max-height: calc(13px * 1.45 * 10 + 6px); -webkit-mask-image: none; mask-image: none; }
+  .pin-tip:is(:hover, .held, .kept, .menu-open) .tip-line .tip-text.scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+  .pin-tip:is(:hover, .held, .kept, .menu-open) .tip-line .tip-text.scroll:not(.at-end) { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); } /* more below: the fade says so */
+  /* editing: the same 10 lines as on hover, so the card does not jump on the click; longer scrolls inside, with a thin bar
+     and no fade (a fade would hide the line being typed) (Nirav, 2026-10-28) */
+  .pin-tip .tip-line .tip-text[contenteditable="true"] { max-height: calc(13px * 1.45 * 10 + 6px); overflow-y: auto; padding-right: 14px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.3) transparent; -webkit-mask-image: none !important; mask-image: none !important; }
+  .pin-tip .tip-line .tip-text:hover { background: rgba(255,255,255,.06); } /* editable: a soft well, the words stay where they are */
+  .pin-tip .tip-line .tip-text[contenteditable="true"] { background: hsl(218 61% 7% / .55); box-shadow: inset 0 0 0 1px hsl(214 98% 60% / .8) !important; } /* editing: the same well, a thin blue edge */
+  .pin-tip .tip-chip .scope-tip, .pin-tip .tip-open .scope-tip { top: auto; bottom: calc(100% + 6px); }
+  .pin-tip .tip-chip:hover .scope-tip, .pin-tip .tip-open:hover .scope-tip { opacity: 1; }
+  .pin-tip .tip-open { position: relative; flex: 0 0 auto; width: 22px; height: 22px; margin: -2px -4px 0 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: hsl(216 30% 80%); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .18s ease; }
+  .pin-tip:hover .tip-open, .pin-tip.held .tip-open, .pin-tip.kept .tip-open { opacity: 1; }
+  .pin-tip .tip-open:hover { background: rgba(255,255,255,.1); color: #fff; }
+  .pin-tip .tip-open .scope-tip { left: auto; right: 0; transform: none; }
+  /* the two icons on the row's left: the note's writer, Claude; a ring when its words are open */
+  .pin-tip .tip-row .tip-chip { position: relative; flex: 0 0 auto; width: 26px; height: 26px; padding: 0; border-radius: 50%; box-shadow: none; background: transparent; display: inline-flex; align-items: center; justify-content: center; }
+  .pin-tip .tip-row .tip-chip:hover { background: rgba(255,255,255,.08); }
+  .pin-tip .tip-row .tip-chip.on { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
+  .pin-tip .tip-chip .av, .pin-tip .tip-chip .av-claude { width: 20px; height: 20px; margin: 0; box-shadow: none; }
+  .pin-tip .tip-chip .av-i { font-size: 9px; }
+  .pin-tip .tip-chip .scope-tip { left: 0; transform: none; }
+  /* ⋯ and its menu: the drawer card's popover, as it is (Nirav, 2026-10-28), opening upward */
+  .pin-tip .tip-dots { position: relative; }
+  /* ⋯ without a ring (Nirav, 2026-10-28: the ring and the small dots looked odd): drawn dots, a soft fill on hover and while open */
+  .pin-tip .tip-row .tip-more { width: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; box-shadow: none; color: hsl(216 30% 78%); }
+  .pin-tip .tip-row .tip-more:hover, .pin-tip.menu-open .tip-row .tip-more { background: rgba(255,255,255,.1); color: #fff; }
+  .pin-tip.menu-open .tip-acts-in { overflow: visible; }
+  /* dark, like the card it opens from (Nirav, 2026-10-28): the drawer's popover with the pin card's colours, a step lighter
+     than the card */
+  .pin-tip .card-menu { --rv-surface: hsl(216 36% 23%); --rv-ink: hsl(216 30% 92%); --rv-line: rgba(255,255,255,.1); --rv-hover: rgba(255,255,255,.08); --rv-danger-bg: 353 60% 32% / .45; box-shadow: 0 14px 32px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25); }
+  .pin-tip .card-menu .card-rm.card-mi, .pin-tip .card-menu .card-rm.card-mi .mi-ico { color: #ff8fa6; }
+  .pin-tip .card-menu .card-rm.card-mi.sure, .pin-tip .card-menu .card-rm.card-mi.sure .mi-ico { color: #fff; }
+  .pin-tip .tip-row .tip-ok { background: hsl(214 98% 44%); color: #fff; box-shadow: none; padding: 0 14px; font-weight: 600; }
+  .pin-tip .tip-row .tip-ok:hover { background: hsl(214 98% 50%); }
   .pin { cursor: pointer; }
   /* the card the pin pointed at, once the list opens on it */
   .card.spot { animation: rv-spot 1.1s ease-out 2; }
@@ -3806,7 +3867,14 @@ function renderPins() {
   }
   /* the tip already up stays while something is pending on it (an edit, a "sure?") or the pointer is on it */
   let onTip = false;
-  if (tip.classList.contains("on") && rects.has(tip.dataset.id)) {
+  if (tipKeep && !(tipKeep.id === tip.dataset.id && mx >= tipKeep.left && mx <= tipKeep.right && my >= tipKeep.top && my <= tipKeep.bottom)) tipKeep = null;
+  tip.classList.toggle("kept", !!tipKeep); // the card keeps its open look while it stays for the pointer
+  /* the card open and the pointer on it: it stays, over any pin beneath it, at its place even if its pin's row moved
+     (Nirav, 2026-10-28: growing on hover it covered other pins, and one of them took over) */
+  if (tip.classList.contains("on") && tip.dataset.id && (tip.matches(":hover") || tipHold === tip.dataset.id || tipKeep) && tipLast?.c.id === tip.dataset.id) {
+    over = rects.get(tip.dataset.id) || tipLast;
+    onTip = true;
+  } else if (tip.classList.contains("on") && rects.has(tip.dataset.id)) {
     const t = tip.getBoundingClientRect();
     onTip = tipHold === tip.dataset.id || (mx >= t.left - 8 && mx <= t.right + 8 && my >= t.top - 10 && my <= t.bottom + 8);
     /* a card a go-to opened goes with its flash, unless the pointer has moved onto it since (the pointer still where
@@ -3834,35 +3902,148 @@ function renderPins() {
   }
   if (over && !state.pending && !$(".panel").classList.contains("on")) {
     if (tip.dataset.id !== over.c.id) buildTip(over.c);
+    tipLast = over;
     if (tipHold === over.c.id) tip.classList.add("held");
     tip.style.left = `${Math.min(over.r.left, window.innerWidth - 310)}px`;
     /* below the pin when it fits, else above it, so a pin near the bottom never opens a card cut off by the window
        (Nirav, 2026-10-25) */
-    const th = tip.offsetHeight || 140;
-    tip.style.top = `${over.r.top + 18 + th <= window.innerHeight - 8 ? over.r.top + 18 : Math.max(8, over.r.top - th - 6)}px`;
+    /* the side is chosen once per card: above, it hangs from its bottom edge, so growing and folding move its top and
+       never its row of buttons under the pointer */
+    if (tip.dataset.sideFor !== over.c.id) {
+      const th = Math.max(tip.offsetHeight, tip.scrollHeight) || 140;
+      tip.dataset.side = over.r.top + 18 + th + 60 <= window.innerHeight - 8 || over.r.top - th - 6 < 8 ? "below" : "above";
+      tip.dataset.sideFor = over.c.id;
+    }
+    if (tip.dataset.side === "below") {
+      tip.style.top = `${over.r.top + 18}px`;
+      tip.style.bottom = "";
+    } else {
+      tip.style.top = "auto";
+      tip.style.bottom = `${window.innerHeight - over.r.top + 6}px`;
+    }
     tip.classList.add("on");
+    /* how long the comment is: past 3 lines it fades at rest, past 10 it scrolls on hover */
+    const tt = tip.querySelector(".tip-text");
+    if (tt && tt.dataset.measured !== tt.textContent) {
+      const lines = (tt.scrollHeight - 6) / (13 * 1.45);
+      tt.classList.toggle("long", lines > 3.2);
+      tt.classList.toggle("scroll", lines > 10.2);
+      tt.dataset.measured = tt.textContent;
+    }
   } else {
-    tip.classList.remove("on", "held");
+    tip.classList.remove("on", "held", "menu-open");
     delete tip.dataset.id;
+    delete tip.dataset.sideFor;
     tipHold = null;
+    tipKeep = null;
+    tip.classList.remove("kept");
   }
 }
 let tipHold = null; // the comment id whose tip must stay up whatever the pointer does
+/* the card's box before a fold shrank it: the card stays while the pointer is inside it, so folding the note or the
+   suggestion never closes the card from under the pointer (Nirav, 2026-10-28) */
+var tipKeep = null;
+function keepTipBox(id) {
+  const r = tip.getBoundingClientRect();
+  tipKeep = { id, left: r.left, right: r.right, top: r.top, bottom: Math.max(r.bottom, r.top + tip.scrollHeight) };
+}
+function closeTipMenu() {
+  tip.querySelector(".card-more-wrap")?.classList.remove("open");
+  tip.classList.remove("menu-open");
+  if (tipHold === tip.dataset.id) tipHold = null;
+}
+var tipLast = null; // var: renderPins (above) reads it; the card's comment and pin as last placed, kept while the pointer is on it
+/* THE PIN CARD (Nirav, 2026-10-28): dark, short first, the rest on hover. At rest: the tag switch, the comment and the
+   status line (faces, as on the drawer's card). Under the pointer it grows to the note and Claude's suggestion, styled
+   as on the drawer's card behind two chips (Nirav, 2026-10-28: the note with its writer's face, "Claude suggests"; a click
+   opens one under them), then the actions: Remove at the left, the second move (send back, put back) and the main
+   move at the right; the list icon at the top right, as before (Nirav, 2026-10-28: no ⋯ for what the card had) */
 function buildTip(c) {
   tip.dataset.id = c.id;
-  const sev = SEVERITIES.map(([k, label]) => `<button type="button" data-k="${k}" class="${k === c.severity ? "on" : ""}" aria-label="${label}"><span class="dot"></span><span class="lbl">${label}</span><span class="scope-tip">${label}</span></button>`).join("");
-  tip.innerHTML = `<div class="tip-head"><span class="tip-sev">${sev}</span><button class="tip-open" title="Show it in the list" aria-label="Show it in the list"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 15l3 3 3-3M18 11v7"/></svg></button></div><div class="tip-text" aria-label="Comment, click to edit"></div>${hasNote(c) ? '<div class="tip-note"></div>' : ""}<div class="tip-acts"><div class="tip-acts-in">${canRemove(c) ? '<button class="tip-rm">Remove</button>' : ""}${(() => { if (isQ(c)) return ""; /* a question is answered in the list */ const to = c.status === "progress" ? "approval" : c.status === "approval" ? "approved" : "progress"; return can(moveOf(c, to), c) ? `<button class="tip-ok" data-to="${to}">${c.status === "progress" ? "Done" : c.status === "approval" ? "Approve" : "Pick up"}</button>` : ""; })()}</div></div>`;
+  tip.dataset.s = isQ(c) ? "open" : c.status;
+  const moves = isQ(c) ? [] : (statusActions(c).match(/<button[^>]*>[^<]*<\/button>/g) || []).map((b) => ({ to: (b.match(/data-to="(\w+)"/) || [])[1], label: b.replace(/<[^>]+>/g, ""), alt: / alt"/.test(b) })).filter((m) => m.to && can(moveOf(c, m.to), c));
+  const main = moves.find((m) => !m.alt);
+  const sug = draftShown(c) && (c.draft.state === "new" || c.draft.state === "accepted") && c.draft.text;
+  /* FEWER THINGS (Nirav, 2026-10-28): the comment and the list icon on hover; the status line; on hover one row: the
+     note's writer and Claude as two small icons (a click opens the words), then ⋯ (the drawer's menu) and the main move */
+  const noteBy = hasNote(c) ? c.note.by : null;
+  const icons = `${noteBy ? `<button type="button" class="tip-chip" data-open="note" aria-label="Note from ${esc(noteBy)}">${noteFace(noteBy)}<span class="scope-tip">Note from ${esc(isMe(noteBy) ? "you" : noteBy.split(/\\s+/)[0])}</span></button>` : ""}${sug ? `<button type="button" class="tip-chip" data-open="draft" aria-label="Claude suggests">${CLAUDE_AV()}<span class="scope-tip">Claude suggests</span></button>` : ""}`;
+  /* ⋯ is the drawer card's own popover (Nirav, 2026-10-28: the same menu, icons and groups, the type change and Hand
+     over in it): its items as the drawer builds them */
+  const tpl = document.createElement("template");
+  tpl.innerHTML = actsHtml(c);
+  const items = tpl.content.querySelector(".card-menu")?.innerHTML || "";
+  const menu = items ? `<span class="card-more-wrap tip-dots"><button type="button" class="tip-more" aria-label="More" aria-haspopup="menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="12.5" cy="8" r="1.4"/></svg></button><span class="card-menu tip-menu" role="menu">${items}</span></span>` : "";
+  /* the note and the suggestion fold open and shut (a grid row from 0 to its height), never a jump */
+  const fold = (cls, inner) => `<div class="tip-fold" data-for="${cls}"><div class="tip-fold-in"><div class="${cls}">${inner}</div></div></div>`;
+  tip.innerHTML = `<div class="tip-line"><div class="tip-text" aria-label="Comment, click to edit"></div><button class="tip-open" aria-label="Show it in the list"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 15l3 3 3-3M18 11v7"/></svg><span class="scope-tip">Show in the list</span></button></div><div class="tip-stat">${statusHtml(c)}</div><div class="tip-acts"><div class="tip-acts-in">${hasNote(c) ? fold("tip-note", "") : ""}${sug ? fold("tip-draft", `${CLAUDE_AV()}<span class="tip-draft-t"></span>`) : ""}<div class="tip-row">${icons}<span class="tip-gap"></span>${menu}${main ? `<button type="button" class="tip-ok" data-to="${main.to}">${esc(main.label)}</button>` : ""}</div></div></div>`;
   tip.querySelector(".tip-text").textContent = c.text;
   if (hasNote(c)) tip.querySelector(".tip-note").innerHTML = noteHtml(c);
+  if (sug) tip.querySelector(".tip-draft-t").textContent = c.draft.text;
 }
+tip.addEventListener("scroll", (e) => {
+  const t = e.target;
+  if (t.classList?.contains("tip-text")) t.classList.toggle("at-end", t.scrollTop + t.clientHeight >= t.scrollHeight - 2);
+}, true);
 tip.addEventListener("click", async (e) => {
   const c = state.comments.find((x) => x.id === tip.dataset.id);
   if (!c) return;
+  /* ⋯ open: a click anywhere else on the card shuts it, and does only that (Nirav, 2026-10-28) */
+  if (tip.classList.contains("menu-open") && !e.target.closest(".tip-menu, .tip-more")) return closeTipMenu();
   const t = e.target.closest("button, .tip-text");
   if (!t) return;
   if (c.pending && !t.classList.contains("tip-open")) return; // still on its way to the hub: nothing to act on yet
   tip.classList.add("held"); // keep the hover state through the reload the action causes
   setTimeout(() => tip.classList.remove("held"), 800);
+  if (t.classList.contains("tip-more")) {
+    const wrap = t.closest(".card-more-wrap");
+    const open = !wrap.classList.contains("open");
+    wrap.classList.toggle("open", open);
+    tipHold = open ? c.id : null;
+    tip.classList.toggle("menu-open", open);
+    return;
+  }
+  /* the drawer's menu, on the pin card: the type, Take back and Remove act here; the rest (send back, put back, hand
+     over, answer, ask Claude) go to the drawer's card, the way they always work there */
+  if (t.classList.contains("card-type")) {
+    const k = t.dataset.k;
+    closeTipMenu();
+    c.severity = k;
+    await applyUpdate({ id: c.id, severity: k });
+    const fresh = state.comments.find((x) => x.id === c.id);
+    if (fresh) buildTip(fresh);
+    return;
+  }
+  if (t.classList.contains("card-take")) {
+    closeTipMenu();
+    await applyUpdate({ id: c.id, status: "progress", take: true }, t);
+    const fresh = state.comments.find((x) => x.id === c.id);
+    if (fresh) buildTip(fresh);
+    toast(`#${c.n} taken back`);
+    return;
+  }
+  if (t.classList.contains("card-mi") && !t.classList.contains("card-rm")) {
+    const sel = t.classList.contains("card-st") ? `.card-st[data-to="${t.dataset.to}"]` : `.${["card-hand", "card-reply", "card-resolve", "card-claude"].find((k) => t.classList.contains(k))}`;
+    closeTipMenu();
+    tipHold = null;
+    showInList(c);
+    setTimeout(() => {
+      const card = panelBody.querySelector(`.card[data-id="${c.id}"]`);
+      if (!card) return;
+      if (t.classList.contains("card-hand")) card.querySelector(".card-more")?.click(); // its team list opens in the menu
+      card.querySelector(sel)?.click();
+    }, 450);
+    return;
+  }
+  if (t.classList.contains("tip-chip")) {
+    /* one at a time: the chip clicked opens its words under the chips, a second click folds them */
+    const show = !t.classList.contains("on");
+    keepTipBox(c.id);
+    tip.classList.add("kept"); // folding shrinks the card: it stays until the pointer leaves where it was
+    for (const ch of tip.querySelectorAll(".tip-chip")) ch.classList.toggle("on", show && ch === t);
+    for (const f of tip.querySelectorAll(".tip-fold")) f.classList.toggle("open", show && f.dataset.for === `tip-${t.dataset.open}`);
+    return;
+  }
   if (t.classList.contains("tip-open")) return showInList(c);
   if (t.closest(".tip-sev")) {
     const k = t.dataset.k;
@@ -3899,14 +4080,15 @@ tip.addEventListener("click", async (e) => {
     toast(`#${c.n} ${statusToast[to]}`);
     return;
   }
-  if (t.classList.contains("tip-rm")) {
+  if (t.classList.contains("card-rm")) {
+    const lbl = t.querySelector(".mi-l") || t;
     if (!t.classList.contains("sure")) {
       t.classList.add("sure");
-      t.textContent = "Remove, sure?";
+      lbl.textContent = "Remove, sure?"; // as in the drawer's menu
       tipHold = c.id;
       setTimeout(() => {
         t.classList.remove("sure");
-        t.textContent = "Remove";
+        lbl.textContent = "Remove";
         if (tipHold === c.id && t.isConnected) tipHold = null;
       }, 2500);
       return;
@@ -3928,7 +4110,7 @@ tip.addEventListener("click", async (e) => {
   }
   if (t.classList.contains("tip-text") && t.contentEditable !== "true" && canEdit(c)) {
     tipHold = c.id;
-    editInPlace(t, c, () => {
+    editInPlace(t, c, { x: e.clientX, y: e.clientY }, () => {
       tipHold = null;
       const fresh = state.comments.find((x) => x.id === c.id);
       if (fresh) buildTip(fresh); // the saved text, the tip still up under the pointer
@@ -4010,15 +4192,32 @@ async function showInList(c) {
   openPanel(true);
 }
 /* edit a comment's text where it stands: Enter or a click elsewhere keeps it, Escape puts the old text back */
-function editInPlace(el, c, after) {
+function editInPlace(el, c, at, after) {
+  if (typeof at === "function") [at, after] = [null, at];
+  const top = el.scrollTop;
   el.textContent = c.text; // the whole words, not the folded three lines
   el.contentEditable = "true";
   el.focus();
-  /* a caret at the end: inside a shadow root, focus() alone leaves the editable without one */
+  /* the caret where the click was, the text staying where it was (Nirav, 2026-10-28: on a long comment, a jump to the
+     last line loses the line being read); no point, or none found: at the end, scrolled to it. Inside a shadow root,
+     focus() alone leaves the editable without a caret */
   try {
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    range.collapse(false);
+    let range = null;
+    if (at && document.caretPositionFromPoint) {
+      el.scrollTop = top;
+      const p = document.caretPositionFromPoint(at.x, at.y, { shadowRoots: [root] });
+      if (p && el.contains(p.offsetNode)) {
+        range = document.createRange();
+        range.setStart(p.offsetNode, p.offset);
+        range.collapse(true);
+      }
+    }
+    if (!range) {
+      range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      el.scrollTop = el.scrollHeight;
+    }
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
