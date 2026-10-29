@@ -1,0 +1,199 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Thread card mocks</title>
+<link rel="stylesheet" href="thread.css"></head><body>
+
+<!-- 1. NEW FIX -->
+<div class="frame" id="f1">
+  <div class="cap">1 · A new fix</div>
+  <div class="sub">No thread yet: the comment, its status, Pick up. Claude's suggestion is its first message, with Let Claude do it.</div>
+  <div class="card">
+    <div class="c-top">
+      <div class="c-text"><span class="n">23</span><p>The percentage reads as a health score. Label it "Reporting now" and show the count next to it.</p></div>
+      <div class="c-stat"><span class="shape"></span><span class="k-new">New</span>, waiting for someone to pick it up<span class="gap"></span><span class="btn pri">Pick up</span><span class="more">•••</span></div>
+    </div>
+    <div class="thread">
+      <div class="msg claude"><span class="av a-c">✳</span><div class="body"><div class="who"><b>Claude</b><span>suggests · 2m</span></div>
+        <div class="sug"><div class="words">Rename the column header in <b>AgentsTable.tsx:42</b> to "Reporting now", show "2,102 of 2,134" and move the % into the tooltip.</div>
+        <div class="acts"><span class="btn claude">Let Claude do it</span><span class="btn ghost">Ignore</span></div></div></div></div>
+      <div class="reply"><span class="ph">Reply, @ to mention…</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. IN PROGRESS WITH CLAUDE -->
+<div class="frame" id="f2">
+  <div class="cap">2 · In progress, with Claude</div>
+  <div class="sub">Moves are quiet lines; people and Claude talk in between. Claude asks when unsure, a reply reaches it.</div>
+  <div class="card">
+    <div class="c-top">
+      <div class="c-text"><span class="n">23</span><p>The percentage reads as a health score. Label it "Reporting now" and show the count next to it.</p></div>
+      <div class="c-stat"><span class="shape prog"></span><span class="pair"><span class="av sm a-n">N</span><span class="av sm a-c">✳</span></span><b>You and Claude</b> are <span class="k-prog">working on it</span><span class="gap"></span><span class="btn pri">Done</span><span class="more">•••</span></div>
+    </div>
+    <div class="thread">
+      <div class="sys s-prog"><span><b>You</b> let Claude do it · 40m</span></div>
+      <div class="msg claude"><span class="av a-c">✳</span><div class="body"><div class="who"><b>Claude</b><span>35m</span></div><div class="words">Renamed the header and added the count. Should "Reporting now" count paused agents too?</div></div></div>
+      <div class="msg"><span class="av a-n">N</span><div class="body"><div class="who"><b>You</b><span>30m</span></div><div class="words"><span class="tag c">@Claude</span> no, active ones only. <span class="tag">@Zeni</span> fyi for the tooltip copy</div></div></div>
+      <div class="msg"><span class="av a-z">Z</span><div class="body"><div class="who"><b>Zeni</b><span>12m</span></div><div class="words">Tooltip: "98.5% of agents sent data in the last 15 minutes"</div></div></div>
+      <div class="reply"><span class="ph">Reply, @ to mention…</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 3. HAND OVER / PUT BACK FROM THE REPLY BOX -->
+<div class="frame" id="f3">
+  <div class="cap">3 · Hand over or put back, with a reason</div>
+  <div class="sub">The reason is a message. Typing in the box shows the moves you can make with it, next to Reply.</div>
+  <div class="card">
+    <div class="c-top">
+      <div class="c-text"><span class="n">31</span><p>Row height in the Agents table jumps when a tag wraps to two lines.</p></div>
+      <div class="c-stat"><span class="shape prog"></span><span class="av sm a-p">P</span><b>Pranjal</b> is <span class="k-prog">working on it</span><span class="gap"></span><span class="btn pri">Done</span><span class="more">•••</span></div>
+    </div>
+    <div class="thread">
+      <div class="sys s-prog"><span><b>Pranjal</b> picked it up · 3h</span></div>
+      <div class="msg"><span class="av a-p">P</span><div class="body"><div class="who"><b>Pranjal</b><span>1h</span></div><div class="words">This is in the shared Tag component, not the table.</div></div></div>
+      <div class="reply focus"><span class="typed"><span class="tag">@Kishan</span> you own Tag, can you take this?</span><span class="btn">Hand over</span><span class="btn ghost">Reply</span></div>
+      <div class="note-hint">A mention while it is yours offers Hand over to that person. Put back sits in ⋯, and asks for its reason here.</div>
+    </div>
+  </div>
+</div>
+
+<!-- 4. FOR APPROVAL WITH A PR -->
+<div class="frame" id="f4">
+  <div class="cap">4 · For approval, Claude's pull request</div>
+  <div class="sub">Claude's last message carries the PR and its preview. Approve merges it; the reason box offers Send back.</div>
+  <div class="card">
+    <div class="c-top">
+      <div class="c-text"><span class="n">23</span><p>The percentage reads as a health score. Label it "Reporting now" and show the count next to it.</p></div>
+      <div class="c-stat"><span class="shape appr"></span><span class="pair"><span class="av sm a-n">N</span><span class="av sm a-c">✳</span></span><b>You and Claude</b> sent it <span class="k-appr">for approval</span><span class="gap"></span><span class="btn pri">Approve</span><span class="more">•••</span></div>
+    </div>
+    <div class="thread">
+      <div class="more-msgs">Show 4 earlier</div>
+      <div class="msg claude"><span class="av a-c">✳</span><div class="body"><div class="who"><b>Claude</b><span>8m</span></div><div class="words">Done: active agents only, tooltip as Zeni wrote it.</div>
+        <div class="pr"><span class="ic">⑂</span><div class="t"><b>#42 Reporting column: label and count</b><span>2 files · <span class="ok">checks passed</span></span></div><span class="go">Preview ↗</span></div></div></div>
+      <div class="sys s-appr"><span><b>You</b> sent it for approval, with Claude · 8m</span></div>
+      <div class="reply"><span class="ph">Reply, @ to mention…</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 5. SENT BACK -->
+<div class="frame" id="f5">
+  <div class="cap">5 · Sent back</div>
+  <div class="sub">The approver writes why, then Send back instead of Reply. The reason is a message; Claude pushes again on the same PR.</div>
+  <div class="card">
+    <div class="c-top">
+      <div class="c-text"><span class="n">23</span><p>The percentage reads as a health score. Label it "Reporting now" and show the count next to it.</p></div>
+      <div class="c-stat"><span class="shape prog"></span><span class="pair"><span class="av sm a-n">N</span><span class="av sm a-c">✳</span></span><b>You and Claude</b> are <span class="k-prog">working on it</span><span class="gap"></span><span class="btn pri">Done</span><span class="more">•••</span></div>
+    </div>
+    <div class="thread">
+      <div class="more-msgs">Show 6 earlier</div>
+      <div class="msg"><span class="av a-n">N</span><div class="body"><div class="who"><b>You</b><span>5m</span></div><div class="words">The tooltip still says 98.5% on narrow screens.</div></div></div>
+      <div class="sys s-back"><span><b>You</b> sent it back · 5m</span></div>
+      <div class="msg claude"><span class="av a-c">✳</span><div class="body"><div class="who"><b>Claude</b><span>1m</span></div><div class="words">On it: the narrow layout uses its own tooltip. Updating PR #42.</div></div></div>
+      <div class="reply"><span class="ph">Reply, @ to mention…</span></div>
+    </div>
+  </div>
+  <div style="height:16px"></div>
+  <div class="cap">The approver, writing the reason</div>
+  <div class="card"><div class="thread" style="border-top:0;padding-top:4px">
+    <div class="reply focus"><span class="typed">The tooltip still says 98.5% on narrow screens.</span><span class="btn red">Send back</span><span class="btn ghost">Reply</span></div>
+  </div></div>
+</div>
+
+<!-- 6. APPROVED -->
+<div class="frame" id="f6">
+  <div class="cap">6 · Approved</div>
+  <div class="sub">The thread folds away under one line; it opens again to read, and Reopen sits in ⋯.</div>
+  <div class="card">
+    <div class="c-top">
+      <div class="c-text"><span class="n">23</span><p>The percentage reads as a health score. Label it "Reporting now" and show the count next to it.</p></div>
+      <div class="c-stat"><span class="shape done"></span><span class="av sm a-n">N</span><b>You</b> approved it · <span>PR #42 merged</span><span class="gap"></span><span class="more">•••</span></div>
+    </div>
+    <div class="closed"><span class="lock">✓ Approved 2m ago</span><span class="gap"></span><a>8 messages</a></div>
+  </div>
+</div>
+
+<!-- 7. A QUESTION -->
+<div class="frame" id="f7">
+  <div class="cap">7 · A question</div>
+  <div class="sub">Already a conversation: the asker's Got it closes it. Anyone, or @Claude, answers.</div>
+  <div class="card">
+    <div class="c-top">
+      <div class="c-text"><span class="n q">40</span><p>Is "Last activity" the agent's last heartbeat or its last job?</p></div>
+      <div class="c-stat"><span class="shape" style="background:#2f6fe4"></span><b>Claude</b> answered<span class="gap"></span><span class="btn pri">Got it</span><span class="more">•••</span></div>
+    </div>
+    <div class="thread">
+      <div class="msg claude"><span class="av a-c">✳</span><div class="body"><div class="who"><b>Claude</b><span>20m</span></div><div class="words">The last heartbeat: <b>agent.lastSeenAt</b> in useAgents.ts. Jobs are not part of it.</div></div></div>
+      <div class="msg"><span class="av a-n">N</span><div class="body"><div class="who"><b>You</b><span>15m</span></div><div class="words">Then the label should say "Last seen". <span class="tag">@all</span> any objection?</div></div></div>
+      <div class="msg"><span class="av a-p">P</span><div class="body"><div class="who"><b>Pranjal</b><span>9m</span></div><div class="words">Fine by me.</div></div></div>
+      <div class="reply"><span class="ph">Reply, @ to mention…</span><span class="btn ghost">Make it a fix</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 8. PIN CARD AT REST -->
+<div class="frame page" id="f8">
+  <div class="cap">8 · Pin card, at rest</div>
+  <div class="sub">Short: the comment, the status, the latest message on one line.</div>
+  <div class="rel">
+    <span class="pin" style="left:0;top:0">23</span>
+    <div class="pc">
+      <div class="t">The percentage reads as a health score. Label it "Reporting now" and show the count next to it.</div>
+      <div class="st"><span class="shape prog"></span><span class="pair"><span class="av sm a-n">N</span><span class="av sm a-c">✳</span></span><b>You and Claude</b> are <span style="color:#FF9A4D">working on it</span></div>
+      <div class="last"><span class="av sm a-c">✳</span><span class="w">Should "Reporting now" count paused agents too?</span><span class="cnt">4 replies</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 9. PIN CARD ON HOVER -->
+<div class="frame page" id="f9">
+  <div class="cap">9 · Pin card, on hover</div>
+  <div class="sub">The actions come in: Reply, ⋯ (the drawer's menu) and the main move.</div>
+  <div class="rel">
+    <span class="pin" style="left:0;top:0">23</span>
+    <div class="pc">
+      <div class="t">The percentage reads as a health score. Label it "Reporting now" and show the count next to it.</div>
+      <div class="st"><span class="shape prog"></span><span class="pair"><span class="av sm a-n">N</span><span class="av sm a-c">✳</span></span><b>You and Claude</b> are <span style="color:#FF9A4D">working on it</span></div>
+      <div class="last"><span class="av sm a-c">✳</span><span class="w">Should "Reporting now" count paused agents too?</span><span class="cnt">4 replies</span></div>
+      <div class="row"><span class="btn">Reply</span><span class="gap"></span><span class="more">•••</span><span class="btn pri">Done</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 10. PIN CARD THREAD OPEN -->
+<div class="frame page" id="f10">
+  <div class="cap">10 · Pin card, the thread open</div>
+  <div class="sub">"4 replies" or Reply opens the thread in the card itself, like Tack; the reply box at its foot.</div>
+  <div class="rel">
+    <span class="pin" style="left:0;top:0">23</span>
+    <div class="pc">
+      <div class="t">The percentage reads as a health score. Label it "Reporting now"…</div>
+      <div class="st"><span class="shape prog"></span><span class="pair"><span class="av sm a-n">N</span><span class="av sm a-c">✳</span></span><b>You and Claude</b> are <span style="color:#FF9A4D">working on it</span></div>
+      <div class="thread">
+        <div class="sys s-prog"><span><b>You</b> let Claude do it · 40m</span></div>
+        <div class="msg claude"><span class="av a-c">✳</span><div class="body"><div class="who"><b>Claude</b><span>35m</span></div><div class="words">Should "Reporting now" count paused agents too?</div></div></div>
+        <div class="msg"><span class="av a-n">N</span><div class="body"><div class="who"><b>You</b><span>30m</span></div><div class="words"><span class="tag c">@Claude</span> no, active ones only</div></div></div>
+        <div class="msg"><span class="av a-z">Z</span><div class="body"><div class="who"><b>Zeni</b><span>12m</span></div><div class="words">Tooltip: "98.5% sent data in the last 15 minutes"</div></div></div>
+      </div>
+      <div class="reply focus" style="margin-top:8px"><span class="ph">Reply, @ to mention…</span></div>
+      <div class="row"><span class="gap"></span><span class="more">•••</span><span class="btn pri">Done</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 11. PIN CARD, FOR APPROVAL -->
+<div class="frame page" id="f11">
+  <div class="cap">11 · Pin card, for approval</div>
+  <div class="sub">The PR and its preview right on the pin: check, then Approve. Send back asks why in the box.</div>
+  <div class="rel">
+    <span class="pin" style="left:0;top:0">23</span>
+    <div class="pc">
+      <div class="t">The percentage reads as a health score. Label it "Reporting now" and show the count next to it.</div>
+      <div class="st"><span class="shape appr"></span><span class="pair"><span class="av sm a-n">N</span><span class="av sm a-c">✳</span></span><b>You and Claude</b> sent it <span style="color:#64CEC3">for approval</span></div>
+      <div class="pr"><span class="ic">⑂</span><div class="t"><b style="color:#fff">#42 Reporting column</b><span><span class="ok">checks passed</span></span></div><span class="go">Preview ↗</span></div>
+      <div class="row"><span class="btn">Send back</span><span class="gap"></span><span class="more">•••</span><span class="btn pri">Approve</span></div>
+    </div>
+  </div>
+</div>
+
+</body></html>

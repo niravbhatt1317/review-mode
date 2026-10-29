@@ -403,6 +403,27 @@ root.innerHTML = `
      than the card */
   .pin-tip .card-menu { --rv-surface: hsl(216 36% 23%); --rv-ink: hsl(216 30% 92%); --rv-line: rgba(255,255,255,.1); --rv-hover: rgba(255,255,255,.08); --rv-danger-bg: 353 60% 32% / .45; box-shadow: 0 14px 32px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25); }
   .pin-tip .card-menu .card-rm.card-mi, .pin-tip .card-menu .card-rm.card-mi .mi-ico { color: #ff8fa6; }
+  /* @mentions: a soft blue chip in the words; the team list while @ is typed */
+  /* slim tags (Nirav, 2026-10-29: they nearly touched the line above): their own short line box, so they never reach
+     the next line */
+  .mention { display: inline-block; padding: 1px 4px; margin: 0 -1px; line-height: 1.15; border-radius: 4px; background: hsl(214 98% 50% / .12); color: hsl(214 90% 42%); font-weight: 500; white-space: nowrap; }
+  :host([data-theme="dark"]) .mention, .pin-tip .mention { background: hsl(214 98% 60% / .2); color: hsl(214 100% 80%); }
+  .mention-pop { position: fixed; z-index: 2147483000; display: flex; flex-direction: column; min-width: 200px; max-width: 280px; padding: 4px; border: 1px solid var(--rv-line); border-radius: 10px; background: var(--rv-surface); box-shadow: 0 12px 32px rgba(29,43,62,.16), 0 2px 6px rgba(29,43,62,.06); }
+  .mention-pop[hidden] { display: none; }
+  .mention-pop .mp-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--rv-ink); font: 400 13px/1.3 -apple-system, system-ui, sans-serif; text-align: left; cursor: pointer; }
+  .mention-pop .mp-row.on, .mention-pop .mp-row:hover { background: var(--rv-hover); }
+  .mention-pop .mp-row .av, .mention-pop .mp-row .av-claude { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
+  .mention-pop .mp-all { font-size: 11px; font-weight: 600; }
+  .mention-pop.dark .av-i { background: hsl(216 28% 36%); color: #fff; } /* the initial, readable on the dark list */
+  .mention-hl { position: absolute; z-index: 0; pointer-events: none; overflow: hidden; margin: 0; border-style: solid; border-color: transparent; background: transparent; color: transparent; }
+  .mention-hl > div { will-change: transform; }
+  .mention-hl .mention { display: inline; padding: 0; margin: 0; line-height: inherit; color: transparent; background: hsl(214 98% 55% / .3); box-shadow: 0 0 0 1.5px hsl(214 98% 55% / .3); border-radius: 3px; font-weight: inherit; }
+  .mention-hl .mention.m-claude { background: rgba(217,119,87,.4); box-shadow: 0 0 0 1.5px rgba(217,119,87,.4); }
+  .mention-pop .mp-sub { margin-left: auto; padding-left: 10px; font-size: 11px; color: var(--rv-ink-3); white-space: nowrap; }
+  .mention-pop { max-width: 340px; }
+  .mention-pop.dark { --rv-surface: hsl(216 36% 23%); --rv-ink: hsl(216 30% 92%); --rv-ink-3: hsl(216 25% 65%); --rv-line: rgba(255,255,255,.1); --rv-hover: rgba(255,255,255,.08); box-shadow: 0 14px 32px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25); }
+  .mention.m-claude { background: rgba(217,119,87,.16); color: hsl(15 65% 42%); }
+  :host([data-theme="dark"]) .mention.m-claude, .pin-tip .mention.m-claude { background: rgba(217,119,87,.22); color: hsl(20 95% 78%); }
   .pin-tip .card-menu .card-rm.card-mi.sure, .pin-tip .card-menu .card-rm.card-mi.sure .mi-ico { color: #fff; }
   .pin-tip .tip-row .tip-ok { background: hsl(214 98% 44%); color: #fff; box-shadow: none; padding: 0 14px; font-weight: 600; }
   .pin-tip .tip-row .tip-ok:hover { background: hsl(214 98% 50%); }
@@ -2107,6 +2128,13 @@ window.addEventListener(
       return;
     }
     if (state.off) return;
+    /* the @ list open: Esc closes it and nothing else (Nirav, 2026-10-29: it shut the whole comment) */
+    if (e.key === "Escape" && !mentionPop.hidden) {
+      e.stopPropagation();
+      e.preventDefault();
+      mentionClose();
+      return;
+    }
     if (lightbox.classList.contains("on")) {
       if (e.key === "Escape" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.stopPropagation();
@@ -2337,6 +2365,7 @@ $(".composer .twin").addEventListener("click", (e) => {
   if (c) showInList(c);
 });
 function closeComposer() {
+  mentionClose();
   state.pending = null;
   composer.classList.remove("on");
   host.removeAttribute("data-composing");
@@ -2344,6 +2373,7 @@ function closeComposer() {
 }
 $(".cancel").addEventListener("click", closeComposer);
 $(".save").addEventListener("click", save);
+attachMentions(ta);
 ta.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -2627,6 +2657,7 @@ async function save() {
     viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio },
     severity,
     text,
+    mentions: mentionsIn(text),
     trail: state.trail.slice(-20),
     overlay: host.parentNode !== document.body || !!closestDeep(el, "dialog[open],:popover-open,[popover],[role=dialog],[role=alertdialog],[role=menu],[role=listbox],[role=tooltip],[data-radix-popper-content-wrapper]"),
     mark: state.pending.mark || null,
@@ -2670,6 +2701,7 @@ async function sendComment(tmp, el) {
     listSig = ""; // ask for the whole list again
     await loadComments();
     toast(`Saved #${j.entry.n}${localShot ? "" : " (no picture)"}`);
+    if (j.entry.mentions?.includes("Claude")) mentionClaude(state.comments.find((c) => c.id === j.entry.id) || j.entry);
     const card = panelBody.querySelector(`.card[data-id="${id}"]`);
     if (card) renderPanel();
   } catch (e) {
@@ -2954,8 +2986,8 @@ function noticeSave(m) {
 /* SMART WORDING (Nirav, 2026-10-27): who, what, which. One to three comments by number, more as a count ("20 of your
    comments", never a long list); Claude credited when the move was made with it; several kinds by one person in one
    sentence ("Pranjal picked up 2 and sent back #9"), the most pressing first. */
-const NOTICE_RANK = { back: 0, hand: 1, done: 2, answer: 3, approved: 4, pick: 5, new: 6 };
-const NOTICE_TONE = { back: "prog", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new" };
+const NOTICE_RANK = { mention: 0, all: 1, back: 2, hand: 3, done: 4, answer: 5, approved: 6, pick: 7, new: 8 };
+const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new" };
 const numsOf = (ns) => (ns.length === 1 ? `#${ns[0]}` : ns.length <= 3 ? `${ns.slice(0, -1).map((n) => `#${n}`).join(", ")} and #${ns[ns.length - 1]}` : `${ns.length} comments`);
 function noticePhrase(kind, ns) {
   const n = ns.length, nums = numsOf(ns), many = n > 3;
@@ -2967,13 +2999,15 @@ function noticePhrase(kind, ns) {
     case "back": return `sent back ${nums} to you`;
     case "answer": return n === 1 ? `answered your question ${nums}` : many ? `answered ${n} of your questions` : `answered your questions ${nums}`;
     case "new": return `added ${nums}`;
+    case "mention": return `mentioned you on ${nums}`;
+    case "all": return `mentioned everyone on ${nums}`;
   }
   return "";
 }
 /* the short form, for several kinds in one sentence: "picked up 2", "sent back #9" */
 function noticeShort(kind, ns) {
   const x = ns.length === 1 ? `#${ns[0]}` : String(ns.length);
-  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments` }[kind]; // "added 2" alone read oddly
+  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}` }[kind]; // "added 2" alone read oddly
 }
 function noticeSentence(who, parts, claude) {
   const name = String(who).split(/\s+/)[0] + (claude ? ", with Claude," : "");
@@ -2991,12 +3025,16 @@ function noticesNow() {
   const groups = new Map();
   for (const c of [...state.comments, ...(state.done || [])]) {
     if (c.pending) continue;
-    for (const s of c.history || []) {
+    /* mentioned in the comment itself: a step of its own, at its creation */
+    const made = c.ts && c.mentions?.some((x) => isMe(x) || x === "all") ? [{ at: c.ts, by: c.by, mentions: c.mentions }] : [];
+    for (const s of [...made, ...(c.history || [])]) {
       if (!(s.at > m.seen) || !s.by || isMe(s.by) || m.gone.has(`${c.id}:${s.at}`)) continue;
       const seenAt = m.seenAt?.[`${c.id}:${s.at}`];
       if (seenAt && Date.now() - seenAt > 864e5) continue; // seen in the list a day ago: it leaves by itself (Nirav, 2026-10-27)
       const kind =
-        s.kind === "reply" ? (isQ(c) && mine(c) ? "answer" : null)
+        s.mentions?.some(isMe) ? "mention" // a mention outranks what the step also did
+        : s.mentions?.includes("all") ? "all"
+        : s.kind === "reply" ? (isQ(c) && mine(c) ? "answer" : null)
         : s.kind === "hand" ? (isMe(s.toWho) ? "hand" : null)
         : s.status === "approved" ? (mine(c) || isMe(c.assignee) || isMe(c.doneBy) ? "approved" : null)
         : s.from === "open" && s.status === "progress" ? (mine(c) ? "pick" : null)
@@ -3028,7 +3066,7 @@ const noteFace = (name) => {
 function noticeRowsHtml(list) {
   return list.map((g, i) => {
     const one = new Set(g.steps.map((x) => x.c.id)).size === 1 ? g.steps.reduce((x, y) => (y.s.at > x.s.at ? y : x)) : null; // one comment: its latest step's reason
-    const why = !one ? "" : one.s.note && (g.kind === "back" || g.kind === "hand" || g.kind === "answer") ? `<span class="note-why">"${esc(one.s.note.slice(0, 80))}"</span>` : `<span class="note-why">${esc(noticeSnippet(one.c))}</span>`; // the reason when there is one, else what the comment is
+    const why = !one ? "" : one.s.note && (g.kind === "back" || g.kind === "hand" || g.kind === "answer" || g.kind === "mention" || g.kind === "all") ? `<span class="note-why">"${esc(one.s.note.slice(0, 80))}"</span>` : `<span class="note-why">${esc(noticeSnippet(one.c))}</span>`; // the reason when there is one, else what the comment is
     const go = g.steps.some((x) => x.c.status !== "approved"); // approved ones are not in this list to go to
     return `<div class="join-row note-row${go ? " go" : ""}" data-i="${i}">${noteFace(g.who)}<span class="join-who"><span class="note-txt">${esc(noticeText(g))}</span>${why}</span><span class="note-when">${esc(agoText(g.at))}</span><button type="button" class="note-x" aria-label="Clear this">×</button></div>`;
   }).join("");
@@ -3307,7 +3345,7 @@ function islandNews(added) {
   }
   islandKnown = new Set([...(islandKnown || []), ...keys]);
   const byWho = new Map();
-  for (const c of added) if (c.by && !isMe(c.by)) byWho.set(c.by, [...(byWho.get(c.by) || []), c]); // yours, from another tab or machine, are not news
+  for (const c of added) if (c.by && !isMe(c.by) && !c.mentions?.some((x) => isMe(x) || x === "all")) byWho.set(c.by, [...(byWho.get(c.by) || []), c]); // yours, from another tab or machine, are not news
   for (const [who, cs] of byWho) evs.push({ who, parts: [{ kind: "new", cs, claude: false }], at: Date.now() });
   return evs;
 }
@@ -3977,7 +4015,7 @@ function buildTip(c) {
   /* the note and the suggestion fold open and shut (a grid row from 0 to its height), never a jump */
   const fold = (cls, inner) => `<div class="tip-fold" data-for="${cls}"><div class="tip-fold-in"><div class="${cls}">${inner}</div></div></div>`;
   tip.innerHTML = `<div class="tip-line"><div class="tip-text" aria-label="Comment, click to edit"></div><button class="tip-open" aria-label="Show it in the list"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 15l3 3 3-3M18 11v7"/></svg><span class="scope-tip">Show in the list</span></button></div><div class="tip-stat">${statusHtml(c)}</div><div class="tip-acts"><div class="tip-acts-in">${hasNote(c) ? fold("tip-note", "") : ""}${sug ? fold("tip-draft", `${CLAUDE_AV()}<span class="tip-draft-t"></span>`) : ""}<div class="tip-row">${icons}<span class="tip-gap"></span>${menu}${main ? `<button type="button" class="tip-ok" data-to="${main.to}">${esc(main.label)}</button>` : ""}</div></div></div>`;
-  tip.querySelector(".tip-text").textContent = c.text;
+  tip.querySelector(".tip-text").innerHTML = mentionHtml(c.text);
   if (hasNote(c)) tip.querySelector(".tip-note").innerHTML = noteHtml(c);
   if (sug) tip.querySelector(".tip-draft-t").textContent = c.draft.text;
 }
@@ -4195,8 +4233,9 @@ async function showInList(c) {
 function editInPlace(el, c, at, after) {
   if (typeof at === "function") [at, after] = [null, at];
   const top = el.scrollTop;
-  el.textContent = c.text; // the whole words, not the folded three lines
+  el.innerHTML = mentionHtml(c.text, teamCache.list, true); // the whole words, not the folded three lines; tags stay tags (Nirav, 2026-10-29)
   el.contentEditable = "true";
+  attachMentions(el);
   el.focus();
   /* the caret where the click was, the text staying where it was (Nirav, 2026-10-28: on a long comment, a jump to the
      last line loses the line being read); no point, or none found: at the end, scrolled to it. Inside a shadow root,
@@ -4228,16 +4267,21 @@ function editInPlace(el, c, at, after) {
     finished = true;
     window.removeEventListener("pointerdown", outside, true);
     el.contentEditable = "false";
-    const text = el.textContent.trim();
+    mentionClose();
+    const text = el.textContent.replace(/ /g, " ").trim();
     if (keep && text && text !== c.text) {
-      await applyUpdate({ id: c.id, text });
+      const mentions = mentionsIn(text);
+      const had = c.mentions || [];
+      await applyUpdate({ id: c.id, text, mentions });
       toast(`#${c.n} updated`);
-    } else el.textContent = c.text; // dropped or unchanged: the saved words back
+      if (mentions.includes("Claude") && !had.includes("Claude")) mentionClaude(state.comments.find((x) => x.id === c.id) || c);
+    } else el.innerHTML = mentionHtml(c.text); // dropped or unchanged: the saved words back
     after();
   };
   /* a click anywhere else ends the edit (the focus guard above keeps blur from reaching us) */
   const outside = (ev) => {
-    if (!ev.composedPath().includes(el)) done(true);
+    const path = ev.composedPath();
+    if (!path.includes(el) && !path.includes(mentionPop)) done(true); // a pick in the @ list is part of the edit
   };
   window.addEventListener("pointerdown", outside, true);
   el.addEventListener("blur", () => done(true), { once: true });
@@ -4248,7 +4292,7 @@ function editInPlace(el, c, at, after) {
     }
     if (ev.key === "Escape") {
       ev.stopPropagation();
-      el.textContent = c.text;
+      el.innerHTML = mentionHtml(c.text);
       done(false);
     }
   });
@@ -4590,7 +4634,7 @@ function applyEntry(entry) {
 function refreshCard(c, animate = false) {
   const card = panelBody.querySelector(`.card[data-id="${c.id}"]`);
   if (!card) return false;
-  card.querySelector(".card-text").textContent = c.text;
+  card.querySelector(".card-text").innerHTML = mentionHtml(c.text);
   const sev = card.querySelector(".card-sev");
   const sevLabel = SEVERITIES.find(([k]) => k === c.severity)?.[1] || c.severity;
   if (sev) {
@@ -4926,6 +4970,190 @@ async function teamList() {
   teamCache = { at: Date.now(), list: Array.isArray(list) ? list : [] };
   return teamCache.list;
 }
+/* @MENTIONS (Nirav, 2026-10-29, seen in Tack's launch film): @ in a comment, a reply or a note opens the team with
+   faces; the name goes into the words ("@Pranjal", the full name when two share a first name) and the comment or the
+   step keeps the names it mentions (`mentions`), so the person gets a notice; in the words a mention shows as a chip */
+const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function mentionWord(name, list = teamCache.list) {
+  const first = String(name).split(/\s+/)[0];
+  return list.filter((p) => String(p.name).split(/\s+/)[0].toLowerCase() === first.toLowerCase()).length > 1 ? name : first;
+}
+/* @all and @Claude (Nirav, 2026-10-29): everyone on the team, and Claude (the comment goes to the connected Claude
+   session); kept in `mentions` as "all" and "Claude" */
+const MENTION_SPECIAL = [
+  { name: "Claude", word: "Claude", kind: "claude", sub: "Sends it to your Claude session" },
+  { name: "all", word: "all", kind: "all", sub: "Everyone on the team" },
+];
+const hasWord = (text, w) => new RegExp(`(^|[^\\p{L}\\d@])@${reEsc(w)}(?![\\p{L}\\d])`, "iu").test(text);
+/* the team members a text mentions: "@Full Name", or "@First" when nobody else shares it; then "Claude", "all" */
+function mentionsIn(text, list = teamCache.list) {
+  const found = MENTION_SPECIAL.filter((x) => hasWord(text, x.word)).map((x) => x.name);
+  for (const p of list) {
+    if (!p?.name) continue;
+    const words = [p.name, mentionWord(p.name, list)];
+    if (words.some((w) => hasWord(text, w))) found.push(p.name);
+  }
+  return [...new Set(found)];
+}
+/* the words, escaped, with each mention as a chip */
+function mentionHtml(text, list = teamCache.list, editing = false) {
+  const html = esc(String(text ?? ""));
+  if (!html.includes("@")) return html;
+  const words = [...new Set([...MENTION_SPECIAL.map((x) => x.word), ...list.flatMap((p) => (p?.name ? [p.name, mentionWord(p.name, list)] : []))])].sort((a, b) => b.length - a.length);
+  const re = new RegExp(`(^|[^\\p{L}\\d@])@(${words.map((w) => reEsc(esc(w))).join("|")})(?![\\p{L}\\d])`, "giu");
+  return html.replace(re, (m, pre, w) => `${pre}<span class="mention${w.toLowerCase() === "claude" ? " m-claude" : ""}"${editing ? ' contenteditable="false"' : ""}>@${w}</span>`);
+}
+/* the list under a box while @ is being typed: arrows move, Enter or Tab picks, Esc closes it (and only it) */
+const mentionPop = document.createElement("div");
+mentionPop.className = "mention-pop ui";
+mentionPop.hidden = true;
+root.appendChild(mentionPop);
+let mentionFor = null; // { input, at (where the @ is), items, i }
+function mentionClose() {
+  mentionPop.hidden = true;
+  mentionFor = null;
+}
+function mentionPick(p) {
+  const m = mentionFor;
+  if (!m || !p) return;
+  const el = m.input;
+  if (!isField(el)) {
+    /* in an edit: "@ki" before the caret becomes the tag, then a space, the caret after it */
+    const r = caretRange(), node = r?.endContainer, off = r?.endOffset ?? 0;
+    mentionClose();
+    if (!node || node.nodeType !== 3 || off < m.q + 1) return;
+    const cut = document.createRange();
+    cut.setStart(node, off - m.q - 1);
+    cut.setEnd(node, off);
+    cut.deleteContents();
+    const tpl = document.createElement("template");
+    tpl.innerHTML = mentionHtml(`@${p.word || mentionWord(p.name)}`, teamCache.list, true);
+    const chip = tpl.content.firstElementChild || document.createTextNode(`@${p.word || mentionWord(p.name)}`);
+    const space = document.createTextNode(" ");
+    cut.insertNode(space);
+    cut.insertNode(chip);
+    const after = document.createRange();
+    after.setStart(space, 1);
+    after.collapse(true);
+    const sel = root.getSelection ? root.getSelection() : getSelection();
+    sel.removeAllRanges();
+    sel.addRange(after);
+    el.focus();
+    return;
+  }
+  const caret = el.selectionStart;
+  const word = `@${p.word || mentionWord(p.name)} `;
+  el.value = el.value.slice(0, m.at) + word + el.value.slice(caret);
+  const to = m.at + word.length;
+  el.setSelectionRange(to, to);
+  mentionClose();
+  el.dispatchEvent(new Event("input", { bubbles: true })); // the box's own listeners keep its words, the tags follow
+  el.focus();
+}
+function mentionDraw() {
+  const m = mentionFor;
+  if (!m?.items.length) return mentionClose();
+  const face = (p) => (p.kind === "claude" ? CLAUDE_AV() : p.kind === "all" ? '<span class="av av-i mp-all">@</span>' : noteFace(p.name));
+  mentionPop.innerHTML = m.items.map((p, i) => `<button type="button" class="mp-row${i === m.i ? " on" : ""}" data-i="${i}">${face(p)}<span class="mp-name">${esc(p.kind === "all" ? "@all" : p.name)}</span>${p.sub ? `<span class="mp-sub">${esc(p.sub)}</span>` : ""}</button>`).join("");
+  mentionPop.classList.toggle("dark", !!m.input.closest(".composer, .pin-tip") || host.getAttribute("data-theme") === "dark"); // dark on a dark box (Nirav, 2026-10-29)
+  mentionPop.hidden = false;
+  const r = m.input.getBoundingClientRect();
+  const w = mentionPop.offsetWidth || 220;
+  /* the side is chosen once, for the whole list, and kept while it narrows (Nirav, 2026-10-29: it opened above, then
+     jumped below as the name was typed); above, it hangs from the box so it shrinks towards it */
+  m.side ||= r.bottom + 6 + m.full <= innerHeight - 8 ? "below" : "above";
+  mentionPop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+  if (m.side === "below") Object.assign(mentionPop.style, { top: `${r.bottom + 6}px`, bottom: "auto" });
+  else Object.assign(mentionPop.style, { top: "auto", bottom: `${innerHeight - r.top + 6}px` });
+}
+function isField(el) {
+  return el.tagName === "TEXTAREA" || el.tagName === "INPUT";
+} // a declaration: the composer uses it before this line runs
+const caretRange = () => {
+  const sel = root.getSelection ? root.getSelection() : getSelection();
+  return sel?.rangeCount ? sel.getRangeAt(0) : null;
+};
+/* the words before the caret, in a box or in words being edited in place */
+function textBefore(el) {
+  if (isField(el)) return el.value.slice(0, el.selectionStart);
+  const r = caretRange();
+  if (!r || !el.contains(r.endContainer)) return "";
+  const pre = document.createRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(r.endContainer, r.endOffset);
+  return pre.toString();
+}
+async function mentionCheck(el) {
+  const before = textBefore(el);
+  const hit = before.match(/(^|[^\p{L}\d@])@([\p{L}\d]*(?: [\p{L}\d]*)?)$/u);
+  if (!hit) return mentionClose();
+  const q = hit[2].toLowerCase();
+  const list = await teamList();
+  const people = list.filter((p) => p?.name && !isMe(p.name));
+  const all = [...MENTION_SPECIAL.slice(0, 1), ...people, ...MENTION_SPECIAL.slice(1)]; // Claude first, everyone last
+  const items = all.filter((p) => !q || p.name.toLowerCase().startsWith(q) || p.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) || String(p.handle || "").toLowerCase().startsWith(q)).slice(0, 7);
+  if (!items.length) return mentionClose(); // nobody by that name: just words
+  const same = mentionFor?.input === el && mentionFor.at === before.length - hit[2].length - 1;
+  mentionFor = { input: el, at: before.length - hit[2].length - 1, q: hit[2].length, items, i: Math.min(same ? mentionFor.i : 0, items.length - 1), side: same ? mentionFor.side : null, full: Math.min(all.length, 7) * 36 + 10 };
+  mentionDraw();
+}
+/* TAGS WHILE TYPING (Nirav, 2026-10-29: "@Kishan" read as plain words): a layer laid over the box with the same
+   font and padding, its words see-through, each mention drawn as a soft tag over the real words; it follows the box's
+   scroll and size */
+function mentionLayer(el) {
+  const box = el.parentElement;
+  if (getComputedStyle(box).position === "static") box.style.position = "relative";
+  const layer = document.createElement("div");
+  layer.className = "mention-hl";
+  layer.setAttribute("aria-hidden", "true");
+  const inner = document.createElement("div");
+  layer.appendChild(inner);
+  box.appendChild(layer);
+  const multi = el.tagName === "TEXTAREA";
+  if (getComputedStyle(el).position === "static") el.style.position = "relative";
+  el.style.zIndex = "1";
+  const sync = () => {
+    /* the box's own colour (it may change on focus) moves to the layer, the box goes see-through over it */
+    el.style.backgroundColor = "";
+    const cs = getComputedStyle(el);
+    layer.style.backgroundColor = cs.backgroundColor;
+    el.style.backgroundColor = "transparent";
+    Object.assign(layer.style, { left: `${el.offsetLeft}px`, top: `${el.offsetTop}px`, width: `${el.offsetWidth}px`, height: `${el.offsetHeight}px`, borderRadius: cs.borderRadius });
+    for (const k of ["font", "letterSpacing", "wordSpacing", "textIndent", "textTransform", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "lineHeight", "textAlign", "boxSizing"]) layer.style[k] = cs[k];
+    layer.style.whiteSpace = multi ? "pre-wrap" : "pre";
+    layer.style.overflowWrap = multi ? "break-word" : "normal";
+    inner.innerHTML = el.value.includes("@") ? `${mentionHtml(el.value)}${multi ? "<br>" : ""}` : "";
+    inner.style.transform = `translate(${-el.scrollLeft}px, ${-el.scrollTop}px)`;
+    if (multi) inner.style.width = `${el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)}px`;
+  };
+  for (const ev of ["input", "scroll", "focus", "blur", "keyup", "select"]) el.addEventListener(ev, sync);
+  new ResizeObserver(sync).observe(el);
+  sync();
+}
+function attachMentions(el) {
+  if (el.dataset.mentions) return;
+  el.dataset.mentions = "1";
+  if (isField(el)) mentionLayer(el); // words edited in place carry real tags instead
+  el.addEventListener("focus", () => teamList(), { once: true }); // ready by the time @ is typed
+  el.addEventListener("input", () => mentionCheck(el));
+  el.addEventListener("keydown", (e) => {
+    if (mentionFor?.input !== el || mentionPop.hidden) return;
+    const m = mentionFor;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") m.i = (m.i + (e.key === "ArrowDown" ? 1 : m.items.length - 1)) % m.items.length;
+    else if (e.key === "Enter" || e.key === "Tab") mentionPick(m.items[m.i]);
+    else if (e.key === "Escape") mentionClose();
+    else return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (!mentionPop.hidden) mentionDraw();
+  }, true);
+  el.addEventListener("blur", () => setTimeout(() => mentionFor?.input === el && root.activeElement !== el && mentionClose(), 150));
+}
+mentionPop.addEventListener("mousedown", (e) => e.preventDefault()); // the box keeps its focus and caret
+mentionPop.addEventListener("click", (e) => {
+  const b = e.target.closest(".mp-row");
+  if (b && mentionFor) mentionPick(mentionFor.items[Number(b.dataset.i)]);
+});
 /* WHO MAY DO WHAT comes from the hub's rules table (hub/roles.sql, review_rules; Nirav, 2026-10-24): change a row in
    Supabase and every drawer follows within a minute, no new extension. These defaults are the same rows, used until
    the table answers (or where it does not exist). An approver may always do everything; a signed rule also needs the
@@ -5176,17 +5404,17 @@ function noteHtml(c) {
     const claude = c.note.via === "claude";
     const ask = !claude && c.note.by === c.by;
     const head = claude ? `${CLAUDE_AV()}<b>Claude</b> answered` : `${who}${ask ? "followed up" : "answered"}`;
-    return `<span class="nt-head nt-reply" data-ask="${ask}">${head}:</span> <span class="nt-text">“${esc(c.note.text)}”</span>`;
+    return `<span class="nt-head nt-reply" data-ask="${ask}">${head}:</span> <span class="nt-text">“${mentionHtml(c.note.text)}”</span>`;
   }
   if (c.note.kind === "hand") {
     /* "Pranjal handed it to Kishan", and the reason when there is one */
     const to = c.note.toWho;
     const toTxt = to ? (isMe(to) ? "you" : esc(to)) : "someone";
     const line = `${by ? who : ""}${by ? "handed it to" : "Handed to"} <b>${toTxt}</b>`;
-    return c.note.text ? `<span class="nt-head">${line}:</span> <span class="nt-text">“${esc(c.note.text)}”</span>` : `<span class="nt-head">${line}</span>`;
+    return c.note.text ? `<span class="nt-head">${line}:</span> <span class="nt-text">“${mentionHtml(c.note.text)}”</span>` : `<span class="nt-head">${line}</span>`;
   }
   const head = by ? `${who}${esc(verb)}` : esc(verb[0].toUpperCase() + verb.slice(1));
-  return `<span class="nt-head">${head}:</span> <span class="nt-text">“${esc(c.note.text)}”</span>`; // one line; long words wrap under
+  return `<span class="nt-head">${head}:</span> <span class="nt-text">“${mentionHtml(c.note.text)}”</span>`; // one line; long words wrap under
 }
 /* HISTORY ON THE CARD (Nirav, 2026-10-24, backlog 6): every round, not only the last note. "History · 4" in the hover
    strip opens the comment's story above it, latest first (Nirav, 2026-10-24): each move as a sentence with its face,
@@ -5204,7 +5432,7 @@ function histHtml(c) {
     return full.slice(0, full.length - named.length);
   };
   const row = (st, by, line, at, words, withClaude) =>
-    `<li class="hs-step"><span class="gh-shape" data-s="${st}"></span>${by ? `<span class="hs-face">${face(by)}${withClaude ? CLAUDE_AV("hs-claude") : ""}</span>` : ""}<span class="hs-body"><span class="hs-line">${by ? `<b>${isMe(by) ? "You" : esc(by)}</b> ` : ""}${line}</span>${words ? `<span class="hs-words">“${esc(words)}”</span>` : ""}</span><span class="hs-when"${at ? ` title="${esc(new Date(at).toLocaleString())}"` : ""}>${esc(agoText(at))}</span></li>`;
+    `<li class="hs-step"><span class="gh-shape" data-s="${st}"></span>${by ? `<span class="hs-face">${face(by)}${withClaude ? CLAUDE_AV("hs-claude") : ""}</span>` : ""}<span class="hs-body"><span class="hs-line">${by ? `<b>${isMe(by) ? "You" : esc(by)}</b> ` : ""}${line}</span>${words ? `<span class="hs-words">“${mentionHtml(words)}”</span>` : ""}</span><span class="hs-when"${at ? ` title="${esc(new Date(at).toLocaleString())}"` : ""}>${esc(agoText(at))}</span></li>`;
   const cap = (h, name) => (name ? h : h[0].toUpperCase() + h.slice(1)); // "Picked it up" when nobody is named
   const out = []; // who added it is the strip's own line, where the thread starts
   let was = "open";
@@ -5217,6 +5445,7 @@ function histHtml(c) {
     } else if (s.kind === "take") verb = "took it back";
     else if (s.kind === "reply") verb = s.via !== "claude" && s.by === c.by ? "followed up" : "answered";
     else if (s.kind === "to_fix") verb = "made it a fix";
+    else if (s.kind === "mention") verb = `mentioned ${(s.mentions || []).map((x) => (x === "all" ? "everyone" : isMe(x) ? "you" : esc(x))).join(", ")}`;
     else if (isQ(c) && s.status === "approved") verb = "marked it resolved";
     else if (s.status === "progress") verb = from === "approval" ? "sent it back" : from === "approved" ? "reopened it" : "picked it up";
     else if (s.status === "approval") verb = "sent it for approval";
@@ -5339,13 +5568,15 @@ function mountAsk(card, c) {
   a.shown = true;
   input.value = a.text;
   input.addEventListener("input", () => (a.text = input.value));
+  attachMentions(input);
   const go = async () => {
     if (state.asking !== a) return;
     const note = input.value.trim();
     if (a.reply && !note) return input.focus(); // an answer needs words
     input.disabled = true;
     btn.classList.add("loading");
-    const r = await api("update", a.reply ? { id: c.id, reply: note } : a.assignTo ? { id: c.id, assignTo: a.assignTo, note } : { id: c.id, status: a.to, note }).catch(() => null);
+    const mentions = mentionsIn(note);
+    const r = await api("update", { ...(a.reply ? { id: c.id, reply: note } : a.assignTo ? { id: c.id, assignTo: a.assignTo, note } : { id: c.id, status: a.to, note }), ...(mentions.length ? { mentions } : {}) }).catch(() => null);
     if (state.asking === a) state.asking = null;
     if (!r?.entry) {
       input.disabled = false;
@@ -5355,6 +5586,7 @@ function mountAsk(card, c) {
       return;
     }
     const crossed = applyEntry(r.entry);
+    if (mentions.includes("Claude")) mentionClaude(state.comments.find((x) => x.id === c.id) || r.entry);
     if (crossed) renderPanel();
     else
       closeBox(foot, () => {
@@ -5562,7 +5794,7 @@ function unclamp(target) {
   const kept = clampKept.get(target);
   const now = ownText(target);
   const full = kept && now === kept.shown ? kept.full : now;
-  target.textContent = full;
+  target.innerHTML = mentionHtml(full); // plain words back, the mentions kept as chips
   clampKept.delete(target);
   return full;
 }
@@ -5587,7 +5819,7 @@ function clampCard(card) {
     const gap = Object.assign(document.createElement("span"), { textContent: " " });
     gap.dataset.rmGap = "1";
     const show = (words) => {
-      target.textContent = words;
+      target.innerHTML = mentionHtml(words);
       el.append(gap, btn);
     };
     if (open) {
@@ -5998,7 +6230,7 @@ function renderPanel() {
       ${c.shot ? `<div class="card-pic"${c.viewport?.w && c.viewport?.h ? ` style="--ar:${c.viewport.w} / ${c.viewport.h}"` : ""}><img class="card-shot" data-id="${c.id}" ${onPage ? "src" : "data-src"}="${thumbUrl(c)}" alt=""></div>` /* TRY 2026-10-23: byPicHtml(c) was here */ : ""}
       <div class="card-foot">${footHtml(c)}</div>${hasNote(c) ? `<div class="card-note"></div>` : ""}
       <div class="card-meta"><div class="card-meta-in"><span class="cm-by">${byHtml(c)}</span><span class="cm-where"></span></div></div>`;
-    card.querySelector(".card-text").textContent = c.text;
+    card.querySelector(".card-text").innerHTML = mentionHtml(c.text);
     /* quiet on the right (Nirav, 2026-10-24): the kind and the page only; the place on the page and "no picture" in the
        tooltip */
     const where = card.querySelector(".cm-where");
@@ -7459,6 +7691,20 @@ function noteSent(list) {
   try {
     localStorage.setItem(sentKey(), JSON.stringify(all));
   } catch {}
+}
+/* @Claude (Nirav, 2026-10-29): a comment or a note that mentions Claude goes straight to the connected Claude
+   session, the same brief as Send to Claude; no session: a toast says how to connect one */
+async function mentionClaude(c) {
+  if (!c?.id) return;
+  const q = window.__reviewSession ? `?session=${window.__reviewSession}` : "";
+  const sessions = await rv(`/__review/claude/sessions${q}`).then((r) => r.json()).catch(() => []);
+  if (!Array.isArray(sessions) || !sessions.length) return toast(`@Claude: no Claude session is connected. Run "npx --no review-mode claude" in the project, then Send to Claude`, true);
+  const pick = sessions[0];
+  const md = await buildPrompt([c]);
+  const r = await rv(`/__review/claude/send${q}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ port: pick.port, text: md, count: 1 }) }).then((x) => x.json()).catch(() => null);
+  if (!r?.ok) return toast(`@Claude: could not reach Claude${r?.error ? `: ${r.error}` : ""}`, true);
+  noteSent([c]);
+  toast(`#${c.n} sent to Claude${sessions.length > 1 ? ` (${pick.label})` : ""}`);
 }
 let sendAsk = null; // what waits on the "Already with Claude" card
 let sendSeq = 0; // each send watches for Claude's yes only while it is the latest: an older one never covers a newer card

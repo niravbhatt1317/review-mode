@@ -77,6 +77,29 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   for approval), a small happy moment for them: a smiling face, a word of praise ("Nice one, Pranjal"), something light
   that makes the work feel good. In the same family as the approval and removal effects.
 
+- [ ] **@mentions** (Nirav, 2026-10-29, seen in Tack's launch film): typing @ in a comment, a reply or a note opens the
+  team list with faces; the person mentioned gets a notice (island and "Since you were here"), and their name shows
+  in the words as a chip. @Claude is part of the "Claude fixes it" discussion below.
+- [ ] **Pins as faces** (Nirav, 2026-10-29, from Tack): a pin shows its writer, as initials (or their face) in their own
+  colour, instead of the number; the number stays in the pin card and the drawer, so "#164" still works in a chat.
+  Decide: initials or the photo, and what a pile of pins on one element shows.
+- [ ] **A thread on every comment** (Nirav, 2026-10-29; shape agreed the same day, mocks in
+  `discussions/2026-10-29-thread-mocks/`): the card's talk becomes one thread, like a pull request's timeline. The
+  comment is the root; under it one flat list in time order: people's and Claude's messages, and each status move as
+  a quiet line ("Pranjal picked it up"). No nested replies (rails): a reply to a message carries a one-line quote of
+  it (hover a message: Reply; "Replying to Tomás" over the box, × drops it; a click on a quote scrolls to it and it
+  glows). Quoting Claude reaches Claude, like @Claude. The note box, "Claude suggests", the pin card's two face chips
+  and the history strip all become this thread. Moves keep their statuses; a reason is a message: typing in the box
+  offers Send back (approver), Hand over (a mention while it is yours), Put back (from ⋯), next to Reply.
+  **One card, two places** (Nirav, 2026-10-29): the drawer card and the pin card are the same card, built by the same
+  code, behaving the same way; the only difference is the picture, which the drawer card shows (the pin card sits on
+  the element itself). Both: short first (the comment, the status, the latest message on one line, "4 replies"); on
+  hover the actions; Reply or the count opens the thread in the card. Approved: the thread folds to "Approved · 8
+  messages". The pin card stays dark; the drawer card follows the drawer's theme. Steps:
+  1. the one card: the thread, a reply box on fixes too, quoted replies, in the drawer and on the pin;
+  2. Send back, Put back and Hand over reasons through the reply box;
+  3. Claude's suggestion and questions as messages (ready for the PR and preview later).
+
 ## Data and sync
 
 - [x] **Lean data** (done 2026-10-25): batches of 40 cards (this page first), pictures as they near the screen, a
@@ -150,6 +173,27 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   cannot talk to a Claude Code session directly); research the options first.
 - [x] **Claude's own ideas for the extension** (written 2026-10-26: the list below, for Nirav to pick from).
 
+- [ ] **Claude fixes it on its own** (Nirav, 2026-10-29, to discuss first): assigning a comment to Claude, or
+  mentioning @Claude on it, starts the work without anyone sending it; Claude fixes it on a branch, opens a pull
+  request, and posts the PR and a preview link on the comment for Nirav to check and approve. The project goes on
+  GitHub for this, instead of Azure DevOps (Nirav, 2026-10-29): GitHub has the Claude part (Anthropic's Claude Code
+  GitHub Action), PRs and preview builds ready-made, so only the hub side is ours to build. Steps, each one usable:
+  1. **Claude as a teammate** (S): Claude in the Assign to / Hand over list and as @Claude; such a comment goes to a
+     connected Claude session (today's Send to Claude), with "Claude is working on it" on the card.
+  2. **Claude on GitHub** (M): giving a comment to Claude starts a GitHub workflow with the Claude Code action and
+     the comment (words, picture, element, source file); Claude fixes it on its own branch and opens the PR. No
+     laptop needed.
+  3. **The PR on the card** (S): Claude writes back on the comment ("Opened PR #42"); the card shows the PR's state
+     (open, checks passing, merged) from the GitHub API.
+  4. **A preview link** (S): every PR built by Vercel, Netlify or Cloudflare Pages, with Review mode on the preview,
+     so Nirav checks the fix on the pin itself.
+  5. **Approve merges** (M): approving the comment merges the PR; Send back gives Claude the reason and it pushes
+     again on the same PR.
+  To settle: who may give work to Claude (one more row in the rules table), the cost (an API key or a Claude
+  subscription token as a repository secret, with a daily cap), and Claude asking on the card when a comment is big
+  or unclear.
+  The whole discussion: `discussions/2026-10-29-claude-fixes-it.md`.
+
 ## Ideas from Claude (2026-10-26, to pick from)
 
 Effort: S a day or less, M a few days, L a week or more.
@@ -207,7 +251,7 @@ the approver surer, which is where most of the time goes.
   drawer.
 - [x] **The title hides on scroll** (done 2026-10-27): scrolling the list hides the drawer's title row (nothing
   sits under it); scrolling back up shows it again.
-- [ ] **The pin card like the drawer card** (Nirav, 2026-10-27): the card that opens on a pin shows much less than the
+- [x] **The pin card like the drawer card** (done 2026-10-28: dark, short first, the rest on hover; the status line, the note and Claude's suggestion behind two faces, the drawer's ⋯ menu) (Nirav, 2026-10-27): the card that opens on a pin shows much less than the
   same comment's card in the drawer; bring them together (the status line with faces, the history, the note,
   Claude's suggestion, Read more, the same actions), one card design in both places.
 - [x] **A drawer you can resize** (done 2026-10-27): drag its edge to make it wider or narrower, between a minimum
@@ -227,6 +271,10 @@ the approver surer, which is where most of the time goes.
 - **Turn fixes into rules** (M): when the same kind of fix repeats (three "use the token" fixes), Claude proposes a
   rulebook line or a lint check so it stops coming back.
   (Parked by Nirav, 2026-10-27: the small ones first.)
+
+- **Comments for a screen width** (Nirav, 2026-10-29, parked; from Tack): when writing, "All widths" or "Only this
+  width" (1280 px, phone); a phone, tablet and laptop preview in the bar where the pins follow the layout; the
+  comment records the window size, browser and system it was taken on.
 
 - Canvas pins (Figma and other canvas pages): see `HANDOFF.md`, "Parked ideas".
 

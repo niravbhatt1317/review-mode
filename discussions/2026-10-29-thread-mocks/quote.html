@@ -1,0 +1,114 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Quoted replies</title>
+<link rel="stylesheet" href="thread.css">
+<style>
+  .q { display: flex; gap: 6px; align-items: baseline; margin: 2px 0 3px; padding: 2px 0 2px 8px; border-left: 2px solid #c9d3e3; font-size: 11.5px; color: #8fa0bd; max-width: 100%; }
+  .q b { color: #5b6b85; font-weight: 600; white-space: nowrap; }
+  .q span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg.hover { background: #f1f5fb; margin: 0 -8px; padding: 8px 8px 4px; border-radius: 8px; position: relative; }
+  .msg-acts { position: absolute; right: 6px; top: 6px; display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: #fff; border: 1px solid #e4eaf3; box-shadow: 0 2px 6px rgba(29,43,62,.08); }
+  .msg-acts span { padding: 2px 8px; border-radius: 6px; font-size: 11.5px; color: #1d2b3e; font-weight: 500; }
+  .msg-acts span.on { background: #eef3fb; color: #0262DF; }
+  .quoting { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 6px 10px; border-radius: 9px 9px 0 0; background: #eef3fb; border: 1px solid #dbe3ef; border-bottom: 0; font-size: 11.5px; color: #5b6b85; }
+  .quoting b { color: #1d2b3e; font-weight: 600; } .quoting .w { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .quoting .x { color: #8fa0bd; font-size: 13px; }
+  .quoting + .reply { margin-top: 0; border-radius: 0 0 14px 14px; }
+  .msg.flash { background: hsl(48 100% 88%); margin: 0 -8px; padding: 8px 8px 4px; border-radius: 8px; box-shadow: 0 0 0 2px hsl(45 95% 60% / .6); }
+  .pc .q { border-left-color: rgba(255,255,255,.25); color: hsl(216 25% 62%); } .pc .q b { color: hsl(216 30% 82%); }
+  /* the rails (Tack's way), for the comparison */
+  .rail { position: relative; margin-left: 29px; padding-left: 14px; border-left: 2px solid #e4eaf3; }
+  .rail .msg { padding-top: 6px; }
+  .rail .reply-link { font-size: 11.5px; color: #8fa0bd; margin: 2px 0 4px; }
+  .x-mark { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+  .x-mark.no { background: #fdecef; color: #c8143e; } .x-mark.yes { background: #e6f6f3; color: #1E8C81; }
+  .pros { margin: 10px 0 0; padding-left: 16px; font-size: 12px; color: #5b6b85; } .pros li { margin: 2px 0; }
+</style></head><body>
+
+<!-- A. the two ways side by side -->
+<div class="frame" id="q1" style="width:500px">
+  <div class="cap">A · Rails, Tack's way (not suggested)</div>
+  <div class="sub">A reply under a reply: the talk branches, and the status lines no longer know where they belong.</div>
+  <div class="card"><div class="thread" style="border-top:0">
+    <div class="msg"><span class="av a-p">A</span><div class="body"><div class="who"><b>Ana</b><span>2h</span></div><div class="words">Is 20% right? Finance says it's 17% now.</div></div></div>
+    <div class="msg"><span class="av a-k">T</span><div class="body"><div class="who"><b>Tomás</b><span>1h</span></div><div class="words">The badge still reads the old plan sheet.</div></div></div>
+    <div class="rail">
+      <div class="msg"><span class="av sm a-z">P</span><div class="body"><div class="who"><b>Priya</b><span>now</span></div><div class="words">Checked with finance: 17% is current.</div></div></div>
+      <div class="sys s-prog" style="margin-left:0"><span><b>Pranjal</b> picked it up · now</span></div>
+      <div class="reply-link">↳ Reply in this branch</div>
+    </div>
+    <div class="msg"><span class="av a-n">K</span><div class="body"><div class="who"><b>Kenji</b><span>34m</span></div><div class="words">Stripe shows 17% on yearly too.</div></div></div>
+    <div class="reply"><span class="ph">Reply, @ to mention…</span></div>
+  </div></div>
+  <ul class="pros"><li>Did Pranjal pick it up in the branch, or for the whole comment?</li><li>Kenji's message is older than Priya's but sits below it.</li><li>Every level costs about 28 px: tight on a 300 px pin card.</li></ul>
+</div>
+
+<div class="frame" id="q2" style="width:500px">
+  <div class="cap">B · Flat, with a quoted reply (suggested)</div>
+  <div class="sub">One line of talk in time order. A reply carries a one-line quote of what it answers; a click on the quote goes to it.</div>
+  <div class="card"><div class="thread" style="border-top:0">
+    <div class="msg"><span class="av a-p">A</span><div class="body"><div class="who"><b>Ana</b><span>2h</span></div><div class="words">Is 20% right? Finance says it's 17% now.</div></div></div>
+    <div class="msg"><span class="av a-k">T</span><div class="body"><div class="who"><b>Tomás</b><span>1h</span></div><div class="words">The badge still reads the old plan sheet.</div></div></div>
+    <div class="msg"><span class="av a-n">K</span><div class="body"><div class="who"><b>Kenji</b><span>34m</span></div><div class="words">Stripe shows 17% on yearly too.</div></div></div>
+    <div class="msg"><span class="av a-z">P</span><div class="body"><div class="who"><b>Priya</b><span>5m</span></div><div class="q"><b>Tomás</b><span>The badge still reads the old plan sheet.</span></div><div class="words">Checked with finance: 17% is current.</div></div></div>
+    <div class="sys s-prog"><span><b>Pranjal</b> picked it up · now</span></div>
+    <div class="reply"><span class="ph">Reply, @ to mention…</span></div>
+  </div></div>
+  <ul class="pros"><li>Everything in time order; every move has one clear place.</li><li>Claude reads it top to bottom like a brief.</li><li>The same width on the pin card and in the drawer.</li></ul>
+</div>
+
+<!-- C. hover a message: Reply -->
+<div class="frame" id="q3" style="width:500px">
+  <div class="cap">C · Hover a message: Reply</div>
+  <div class="sub">A small bar on the message under the pointer: Reply quotes it; Copy for your own notes.</div>
+  <div class="card"><div class="thread" style="border-top:0">
+    <div class="msg"><span class="av a-p">A</span><div class="body"><div class="who"><b>Ana</b><span>2h</span></div><div class="words">Is 20% right? Finance says it's 17% now.</div></div></div>
+    <div class="msg hover"><span class="av a-k">T</span><div class="body"><div class="who"><b>Tomás</b><span>1h</span></div><div class="words">The badge still reads the old plan sheet.</div></div><div class="msg-acts"><span class="on">↩ Reply</span><span>Copy</span></div></div>
+    <div class="msg"><span class="av a-n">K</span><div class="body"><div class="who"><b>Kenji</b><span>34m</span></div><div class="words">Stripe shows 17% on yearly too.</div></div></div>
+    <div class="reply"><span class="ph">Reply, @ to mention…</span></div>
+  </div></div>
+</div>
+
+<!-- D. writing the quoted reply -->
+<div class="frame" id="q4" style="width:500px">
+  <div class="cap">D · Writing the reply</div>
+  <div class="sub">The quote sits on top of the box until it is sent; × drops it and the reply goes plain.</div>
+  <div class="card"><div class="thread" style="border-top:0">
+    <div class="msg"><span class="av a-k">T</span><div class="body"><div class="who"><b>Tomás</b><span>1h</span></div><div class="words">The badge still reads the old plan sheet.</div></div></div>
+    <div class="msg"><span class="av a-n">K</span><div class="body"><div class="who"><b>Kenji</b><span>34m</span></div><div class="words">Stripe shows 17% on yearly too.</div></div></div>
+    <div class="quoting"><span>↩ Replying to <b>Tomás</b>:</span><span class="w">The badge still reads the old plan sheet.</span><span class="x">×</span></div>
+    <div class="reply focus"><span class="typed">Checked with finance: 17% is current.</span><span class="btn ghost">Reply</span></div>
+  </div></div>
+</div>
+
+<!-- E. a click on the quote -->
+<div class="frame" id="q5" style="width:500px">
+  <div class="cap">E · A click on a quote</div>
+  <div class="sub">The thread scrolls to the message it answers, which glows for a moment.</div>
+  <div class="card"><div class="thread" style="border-top:0">
+    <div class="msg"><span class="av a-p">A</span><div class="body"><div class="who"><b>Ana</b><span>2h</span></div><div class="words">Is 20% right? Finance says it's 17% now.</div></div></div>
+    <div class="msg flash"><span class="av a-k">T</span><div class="body"><div class="who"><b>Tomás</b><span>1h</span></div><div class="words">The badge still reads the old plan sheet.</div></div></div>
+    <div class="msg"><span class="av a-n">K</span><div class="body"><div class="who"><b>Kenji</b><span>34m</span></div><div class="words">Stripe shows 17% on yearly too.</div></div></div>
+    <div class="msg"><span class="av a-z">P</span><div class="body"><div class="who"><b>Priya</b><span>5m</span></div><div class="q"><b>Tomás</b><span>The badge still reads the old plan sheet.</span></div><div class="words">Checked with finance: 17% is current.</div></div></div>
+  </div></div>
+</div>
+
+<!-- F. answering Claude, quoted, on the pin card -->
+<div class="frame page" id="q6">
+  <div class="cap">F · On the pin card, answering Claude</div>
+  <div class="sub">The same quote, in the dark card. Quoting Claude's question also reaches Claude, like @Claude.</div>
+  <div class="rel">
+    <span class="pin" style="left:0;top:0">23</span>
+    <div class="pc">
+      <div class="t">The percentage reads as a health score. Label it "Reporting now"…</div>
+      <div class="st"><span class="shape prog"></span><span class="pair"><span class="av sm a-n">N</span><span class="av sm a-c">✳</span></span><b>You and Claude</b> are <span style="color:#FF9A4D">working on it</span></div>
+      <div class="thread">
+        <div class="msg claude"><span class="av a-c">✳</span><div class="body"><div class="who"><b>Claude</b><span>35m</span></div><div class="words">Renamed it. Should "Reporting now" count paused agents too?</div></div></div>
+        <div class="msg"><span class="av a-z">Z</span><div class="body"><div class="who"><b>Zeni</b><span>20m</span></div><div class="words">Tooltip copy is in Figma, frame 12.</div></div></div>
+        <div class="msg"><span class="av a-n">N</span><div class="body"><div class="who"><b>You</b><span>now</span></div><div class="q"><b>Claude</b><span>Should "Reporting now" count paused agents too?</span></div><div class="words">No, active ones only.</div></div></div>
+      </div>
+      <div class="reply" style="margin-top:8px"><span class="ph">Reply, @ to mention…</span></div>
+      <div class="row"><span class="gap"></span><span class="more">•••</span><span class="btn pri">Done</span></div>
+    </div>
+  </div>
+</div>
+
+</body></html>

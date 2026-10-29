@@ -108,7 +108,18 @@ export const newId = () => `${Date.now().toString(36)}-${Math.random().toString(
    their own ask; it clears on Approve (and stays in history). */
 export function applyChange(c, body, who) {
   const { text, severity, status, resolved, note } = body;
-  if (typeof text === "string" && text.trim()) c.text = sentence(text);
+  /* @MENTIONS (Nirav, 2026-10-29): the names a reply or a note mentions ride on its step, so they get a notice */
+  const mentions = Array.isArray(body.mentions) ? [...new Set(body.mentions.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 80)))].slice(0, 10) : [];
+  const ment = mentions.length ? { mentions } : {};
+  if (typeof text === "string" && text.trim()) {
+    c.text = sentence(text);
+    /* an edit's mentions replace the comment's; a name newly mentioned gets a step of its own, so it is news */
+    if (Array.isArray(body.mentions)) {
+      const added = mentions.filter((x) => !(c.mentions || []).includes(x));
+      c.mentions = mentions;
+      if (added.length) (c.history ||= []).push({ at: Date.now(), by: who, status: c.status, from: c.status, kind: "mention", mentions: added });
+    }
+  }
   const wasQuestion = c.severity === "question" || c.severity === "idea";
   if (["fix", "question", "must", "should", "idea"].includes(severity)) c.severity = severity; // fix and question since 2026-10-23; the old four still accepted
   /* THE QUESTION FLOW (Nirav, 2026-10-24): a question is answered, not worked. Asked (open) -> Answered (approval) ->
@@ -156,7 +167,7 @@ export function applyChange(c, body, who) {
       if (to === "open") Object.assign(c, { assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null });
     } else if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at }); // the latest answer's face on the card
     c.note = { text: reply, by: who, at, from, to, kind: "reply", ...(claude ? { via: "claude" } : {}) };
-    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}) });
+    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...ment });
     normalise(c);
     c.edited = Date.now();
     return c;
@@ -169,7 +180,7 @@ export function applyChange(c, body, who) {
     const words = typeof note === "string" ? note.trim().slice(0, 600) : "";
     Object.assign(c, { status: "progress", assignee: body.assignTo, pickedAt: at, handedBy: who, handedAt: at });
     c.note = { text: words, by: who, at, from, to: "progress", kind: "hand", toWho: body.assignTo };
-    (c.history ||= []).push({ at, by: who, status: "progress", from, kind: "hand", toWho: body.assignTo, ...(words ? { note: words } : {}) });
+    (c.history ||= []).push({ at, by: who, status: "progress", from, kind: "hand", toWho: body.assignTo, ...(words ? { note: words } : {}), ...(words ? ment : {}) });
     normalise(c);
     c.edited = Date.now();
     return c;
@@ -195,7 +206,7 @@ export function applyChange(c, body, who) {
     if (take) step.kind = "take";
     const back = STATUSES.indexOf(to) < STATUSES.indexOf(from);
     const words = typeof note === "string" ? note.trim().slice(0, 600) : "";
-    if (back && words) step.note = words;
+    if (back && words) Object.assign(step, { note: words }, ment);
     if (back && !take) c.note = words ? { text: words, by: who, at, from, to } : null;
     if (to === "approved") c.note = null;
     (c.history ||= []).push(step);
