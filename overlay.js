@@ -289,6 +289,19 @@ root.innerHTML = `
   :host([data-composing]) .hover .tag { display: none; } /* the pin's label says it; the outline stays */
   .pin { position: fixed; pointer-events: auto; cursor: default; width: 22px; height: 22px; border-radius: 50%; background: #e11d48; color: #fff; font: 700 11px/22px -apple-system, system-ui, sans-serif; text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.25); transform: translate(-8px, -8px); }
   .pin.faded { opacity: .55; }
+  /* a face pin: a speech bubble (its tail at the element's corner), the face inside a ring of the type's colour */
+  .pin.pin-face { display: flex; align-items: center; width: auto; min-width: 22px; padding: 2px; border-radius: 50% 50% 50% 4px; background: #e11d48; line-height: 1; box-shadow: 0 0 0 1.5px #fff, 0 2px 6px rgba(0,0,0,.25); }
+  .pin.pin-face.q { background: #2f6fe4; }
+  .pin.pin-face .pf { flex: 0 0 auto; display: block; width: 18px; height: 18px; border-radius: 50% 50% 50% 3px; object-fit: cover; background: #fff; }
+  .pin.pin-face .pf-i { color: #fff; font: 700 8px/18px -apple-system, system-ui, sans-serif; text-align: center; letter-spacing: -.2px; }
+  .pin.pin-face .pn { display: none; padding: 0 5px 0 3px; font: 700 11px/18px -apple-system, system-ui, sans-serif; color: #fff; white-space: nowrap; }
+  /* under the pointer: the number beside the face, a pill, above its neighbours */
+  .pin.pin-face.open { z-index: 3; opacity: 1; border-radius: 999px; animation: rv-pin-open .16s cubic-bezier(.2,.8,.2,1); }
+  .pin.pin-face.open .pf { border-radius: 50%; }
+  .pin.pin-face.open .pn { display: block; animation: rv-pin-n .2s ease; }
+  @keyframes rv-pin-open { from { border-radius: 50% 50% 50% 4px; } }
+  @keyframes rv-pin-n { from { opacity: 0; max-width: 0; padding: 0; } to { opacity: 1; max-width: 40px; } }
+  .pin.pin-face.unread { box-shadow: 0 0 0 1.5px #fff, 0 0 0 4.5px hsl(214 98% 44% / .35), 0 2px 6px rgba(0,0,0,.25); }
   .pin-wrap { position: fixed; inset: 0; pointer-events: none; }
   .pin-one { display: contents; }
   .pin-one .pin-box:not(.flash) { display: none; } /* an outline only for the hovered pin's element */
@@ -3778,7 +3791,7 @@ function renderPins() {
   };
   const rowDiv = new Map(); // key -> its row's element
   const rowOf = new Map(); // comment id -> its row's key
-  let overFan = null, litKey = null;
+  let overFan = null, litKey = null, openRow = null;
   moreRows.clear();
   for (const g of rows.values()) {
     const { el, er, ghost } = g;
@@ -3856,15 +3869,24 @@ function renderPins() {
   /* the fanned row on top of every other pin */
   if (state.fan && rowDiv.has(state.fan.key)) rowDiv.get(state.fan.key).parentNode.appendChild(rowDiv.get(state.fan.key));
   if (overFan) over = overFan;
+  /* the open pin over everything: its row last in its layer, its layer last of all (each layer is its own stack, so
+     a later one drew over a pin opened in an earlier one; Nirav, 2026-10-29) */
+  if (openRow?.parentNode) {
+    openRow.parentNode.appendChild(openRow);
+    frag.appendChild(openRow.parentNode);
+  }
   function drawPin(c, r, wrap) {
     let over = null;
     rects.set(c.id, { c, r });
     const d = document.createElement("div");
     const hot = c.id === hotId;
-    d.className = "pin ui" + (hot ? " flash" : " faded") + (state.unread.has(c.id) ? " unread" : "");
+    /* PINS AS FACES (Nirav, 2026-10-29: B, and the number on hover like C): the writer's face in a speech bubble, ringed
+       red for a fix and blue for a question; under the pointer it opens to the number beside the face */
+    d.className = "pin ui pin-face" + (isQ(c) ? " q" : "") + (hot ? " flash" : " faded") + (state.unread.has(c.id) ? " unread" : "") + (onPin(r.left, r.top) ? " open" : "");
     d.style.left = `${r.left}px`;
     d.style.top = `${r.top}px`;
-    d.textContent = c.n;
+    d.innerHTML = `${pinFace(c.by)}<span class="pn">${c.n}</span>`;
+    if (d.classList.contains("open")) openRow = wrap;
     d.dataset.id = c.id;
     wrap.appendChild(d);
     /* A NEW PIN LANDS (Nirav, 2026-10-25): it drops onto its place with a small bounce (the ring that spread from it
@@ -3942,7 +3964,8 @@ function renderPins() {
     if (tip.dataset.id !== over.c.id) buildTip(over.c);
     tipLast = over;
     if (tipHold === over.c.id) tip.classList.add("held");
-    tip.style.left = `${Math.min(over.r.left, window.innerWidth - 310)}px`;
+    /* lined up with the pin's left edge (the pin sits 8px up and left of its point) */
+    tip.style.left = `${Math.max(8, Math.min(over.r.left - 8, window.innerWidth - 310))}px`;
     /* below the pin when it fits, else above it, so a pin near the bottom never opens a card cut off by the window
        (Nirav, 2026-10-25) */
     /* the side is chosen once per card: above, it hangs from its bottom edge, so growing and folding move its top and
@@ -3976,6 +3999,18 @@ function renderPins() {
     tipKeep = null;
     tip.classList.remove("kept");
   }
+}
+/* the face in a pin: the photo, or initials on the person's own colour (the same colour every time, from the name) */
+const PIN_HUES = [221, 262, 172, 340, 32, 196, 290, 12, 140, 48];
+function pinFace(name) {
+  const who = String(name || "").trim();
+  const url = who && state.faces?.[who];
+  if (url) return `<img class="pf" src="${esc(url)}" alt="">`;
+  const parts = who.split(/\s+/).filter(Boolean);
+  const ini = (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : (parts[0] || "?").slice(0, 1)).toUpperCase();
+  let h = 0;
+  for (const ch of who) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `<span class="pf pf-i" style="background:hsl(${PIN_HUES[h % PIN_HUES.length]} 45% 46%)">${esc(ini)}</span>`;
 }
 let tipHold = null; // the comment id whose tip must stay up whatever the pointer does
 /* the card's box before a fold shrank it: the card stays while the pointer is inside it, so folding the note or the
