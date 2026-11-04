@@ -128,7 +128,12 @@ export function applyChange(c, body, who) {
   /* the PR Claude opened for it (the review server opens it), and what GitHub says later: the preview, merged or closed */
   if (body.pr && typeof body.pr === "object") {
     const n = Number(body.pr.n);
-    if (Number.isFinite(n) && n > 0) c.pr = { ...(c.pr?.n === n ? c.pr : {}), n, url: String(body.pr.url || c.pr?.url || "").slice(0, 300), ...(body.pr.branch ? { branch: String(body.pr.branch).slice(0, 120) } : {}), ...(body.pr.repo ? { repo: String(body.pr.repo).slice(0, 120) } : {}), ...(body.pr.preview ? { preview: String(body.pr.preview).slice(0, 300) } : {}), ...(body.pr.state ? { state: String(body.pr.state).slice(0, 20) } : {}), at: c.pr?.n === n ? c.pr.at : Date.now() };
+    const had = c.pr?.n === n ? c.pr : null;
+    if (Number.isFinite(n) && n > 0) c.pr = { ...(c.pr?.n === n ? c.pr : {}), n, url: String(body.pr.url || c.pr?.url || "").slice(0, 300), ...(body.pr.branch ? { branch: String(body.pr.branch).slice(0, 120) } : {}), ...(body.pr.repo ? { repo: String(body.pr.repo).slice(0, 120) } : {}), ...(body.pr.preview ? { preview: String(body.pr.preview).slice(0, 300) } : {}), ...(body.pr.state ? { state: String(body.pr.state).slice(0, 20) } : {}), ...(body.pr.for ? { for: String(body.pr.for).slice(0, 80) } : had?.for ? { for: had.for } : {}), at: c.pr?.n === n ? c.pr.at : Date.now() };
+    if (c.pr?.n === n && c.pr.preview && !had?.preview) c.pr.previewAt = Date.now();
+    if (c.pr?.n === n && c.pr.state === "merged" && had?.state !== "merged") c.pr.mergedAt = Date.now();
+    if (had?.previewAt && !c.pr.previewAt) c.pr.previewAt = had.previewAt;
+    if (had?.mergedAt && !c.pr.mergedAt) c.pr.mergedAt = had.mergedAt;
   }
   if (typeof text === "string" && text.trim()) {
     c.text = sentence(text);
@@ -191,6 +196,7 @@ export function applyChange(c, body, who) {
        change, never skipped); Go starts the work: In progress with Claude, and a call of kind "go" carrying the plan */
     const plan = claude && body.plan === true && !body.ask;
     const go = !claude && body.go === true && c.call?.state === "planned" && !isQ;
+    const forWho = claude && c.call?.by ? { for: c.call.by } : {}; // who called Claude: Claude's message is news for them
     const cask = claude && body.ask === true ? { ask: true, ...(Array.isArray(body.options) ? { options: body.options.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 60)).slice(0, 4) } : {}) } : {};
     if (claude && c.call && c.call.state !== "done") Object.assign(c.call, cask.ask ? { state: "asked", askAt: at } : plan ? { state: "planned", planAt: at } : { state: "done", doneAt: at });
     else if (go) {
@@ -201,7 +207,7 @@ export function applyChange(c, body, who) {
     else if (!claude && !go && (mentions.includes("Claude") || c.call?.state === "asked" || qt.quote?.by === "Claude")) c.call = newCall(who, reply, at, { step: at, ...(c.call?.state === "asked" ? { answers: c.call.askAt } : {}) });
     /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
     if (!isQ) {
-      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...(plan ? { plan: true } : {}), ...(go ? { go: true } : {}), ...ment, ...qt });
+      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true } : {}), ...(go ? { go: true } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...ment, ...qt });
       /* Go on a New comment picks it up: the person who said go is on it, with Claude */
       if (go && from === "open") {
         Object.assign(c, { status: "progress", assignee: who, pickedAt: at, withClaude: true });
@@ -216,7 +222,7 @@ export function applyChange(c, body, who) {
       if (to === "open") Object.assign(c, { assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null });
     } else if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at }); // the latest answer's face on the card
     c.note = { text: reply, by: who, at, from, to, kind: "reply", ...(claude ? { via: "claude" } : {}) };
-    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...ment, ...qt });
+    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...ment, ...qt });
     normalise(c);
     c.edited = Date.now();
     return c;
@@ -271,8 +277,9 @@ export function withNames(c, people = {}) {
   const name = (id) => (id && (typeof find(id) === "string" ? find(id) : find(id)?.name)) || id;
   const out = { ...c, by: name(c.by), assignee: name(c.assignee), doneBy: name(c.doneBy), approvedBy: name(c.approvedBy) };
   if (c.note) out.note = { ...c.note, by: name(c.note.by), ...(c.note.toWho ? { toWho: name(c.note.toWho) } : {}) };
-  if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by), ...(h.toWho ? { toWho: name(h.toWho) } : {}) }));
+  if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by), ...(h.toWho ? { toWho: name(h.toWho) } : {}), ...(h.for ? { for: name(h.for) } : {}) }));
   /* Claude's part of the thread names its people too: who answered, who accepted or set it aside (2026-11-04) */
+  if (c.pr?.for) out.pr = { ...c.pr, for: name(c.pr.for) };
   if (c.call) out.call = { ...c.call, by: name(c.call.by), ...(c.call.draft ? { draft: { ...c.call.draft, for: name(c.call.draft.for) } } : {}) };
   if (c.draft) out.draft = { ...c.draft, ...(c.draft.decidedBy ? { decidedBy: name(c.draft.decidedBy) } : {}), ...(Array.isArray(c.draft.thread) ? { thread: c.draft.thread.map((t) => ({ ...t, by: name(t.by) })) } : {}) };
   return out;

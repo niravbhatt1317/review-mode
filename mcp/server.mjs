@@ -373,8 +373,8 @@ async function ship(c, st, a) {
   const prN = Number(url.match(/\/pull\/(\d+)/)?.[1]);
   dropWork(c.id);
   const fresh = await st.get(c.id);
-  applyChange(fresh, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open" } }, w.by);
-  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}; the live preview link shows here when it is built (a few minutes).`, via: "claude" }, w.by);
+  applyChange(fresh, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open", for: w.by } }, w.by);
+  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}; the live preview link shows here when it is built (a few minutes).`, via: "claude", prN }, w.by);
   if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, w.by);
   await st.put(fresh);
   return `Opened ${url}; #${n} is For approval. A person merges it.`;

@@ -593,6 +593,7 @@ root.innerHTML = `
   .island[data-tone="prog"] { --tone: #D45F00; --tone-lit: #FF7A1A; }
   .island[data-tone="appr"] { --tone: #1E8C81; --tone-lit: #31BFB0; }
   .island[data-tone="new"] { --tone: #8B3FD9; --tone-lit: #A64DFF; }
+  .island[data-tone="claude"] { --tone: #c4572f; --tone-lit: #D97757; }
   .island .av + .av { margin-left: -6px; }
   .island .is-more { display: inline-flex; overflow: hidden; padding-left: 2px; margin-left: -8px; } /* tucked 6 px under the first face, with room for its ring */
   .island .is-more .av:first-child { margin-left: 0; }
@@ -3139,7 +3140,8 @@ async function checkNow() {
   } else if (added.length && !panel.classList.contains("on")) toast(`${added.length} new comment${added.length > 1 ? "s" : ""}`);
 }
 function nextCheckIn() {
-  const watching = panel.classList.contains("on") || state.showPins || PAGE_MODE;
+  const claudeOnYours = state.comments.some((c) => (c.call && callBusy(c) && isMe(c.call.by)) || (c.pr?.state === "open" && !c.pr.preview && isMe(c.pr.for)));
+  const watching = panel.classList.contains("on") || state.showPins || PAGE_MODE || claudeOnYours; // Claude on something of yours: its answer is news soon
   if (!watching) return 60_000;
   const active = Date.now() - state.lastActive < 30_000 || Date.now() < quickUntil;
   return active ? 2_500 : 10_000;
@@ -3238,8 +3240,8 @@ function noticeSave(m) {
 /* SMART WORDING (Nirav, 2026-10-27): who, what, which. One to three comments by number, more as a count ("20 of your
    comments", never a long list); Claude credited when the move was made with it; several kinds by one person in one
    sentence ("Pranjal picked up 2 and sent back #9"), the most pressing first. */
-const NOTICE_RANK = { mention: 0, all: 1, back: 2, reopen: 3, putback: 4, hand: 5, done: 6, answer: 7, approved: 8, pick: 9, new: 10 };
-const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", reopen: "prog", putback: "new", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new" };
+const NOTICE_RANK = { cask: 0, cplan: 0, mention: 1, all: 2, cdraft: 3, back: 3, reopen: 4, putback: 5, hand: 6, cpr: 6, cpreview: 6, done: 7, cans: 7, answer: 8, cmerged: 8, approved: 9, pick: 10, new: 11 };
+const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", reopen: "prog", putback: "new", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new", cask: "claude", cplan: "claude", cans: "claude", cdraft: "claude", cpr: "claude", cpreview: "claude", cmerged: "appr" };
 const numsOf = (ns) => (ns.length === 1 ? `#${ns[0]}` : ns.length <= 3 ? `${ns.slice(0, -1).map((n) => `#${n}`).join(", ")} and #${ns[ns.length - 1]}` : `${ns.length} comments`);
 function noticePhrase(kind, ns) {
   const n = ns.length, nums = numsOf(ns), many = n > 3;
@@ -3255,16 +3257,24 @@ function noticePhrase(kind, ns) {
     case "new": return `added ${nums}`;
     case "mention": return `mentioned you on ${nums}`;
     case "all": return `mentioned everyone on ${nums}`;
+    /* CLAUDE'S NEWS (Nirav, 2026-11-04: away from the drawer, nothing said Claude was back): for the one who called */
+    case "cans": return `answered you on ${nums}`;
+    case "cask": return `asks you something on ${nums}`;
+    case "cplan": return `has a plan for ${nums}, waiting for your Go`;
+    case "cdraft": return `drafted a reply for you on ${nums}`;
+    case "cpr": return `opened a PR for ${nums}`;
+    case "cpreview": return `has the preview of ${nums} ready to try`;
+    case "cmerged": return `reports the PR for ${nums} was merged`;
   }
   return "";
 }
 /* the short form, for several kinds in one sentence: "picked up 2", "sent back #9" */
 function noticeShort(kind, ns) {
   const x = ns.length === 1 ? `#${ns[0]}` : String(ns.length);
-  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, putback: `put back ${x}`, reopen: `reopened ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}` }[kind]; // "added 2" alone read oddly
+  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, putback: `put back ${x}`, reopen: `reopened ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}`, cans: `answered you on ${x}`, cask: `asks you on ${x}`, cplan: `has a plan for ${x}`, cdraft: `drafted a reply on ${x}`, cpr: `opened a PR for ${x}`, cpreview: `has a preview of ${x}`, cmerged: `reports ${x} merged` }[kind]; // "added 2" alone read oddly
 }
 function noticeSentence(who, parts, claude) {
-  const name = String(who).split(/\s+/)[0] + (claude ? ", with Claude," : "");
+  const name = String(who).split(/\s+/)[0] + (claude && who !== "Claude" ? ", with Claude," : "");
   const ps = [...parts].sort((a, b) => NOTICE_RANK[a.kind] - NOTICE_RANK[b.kind]);
   if (ps.length === 1) return `${name} ${noticePhrase(ps[0].kind, ps[0].ns)}`;
   const bits = ps.map((p) => noticeShort(p.kind, p.ns));
@@ -3281,16 +3291,25 @@ function noticesNow() {
     if (c.pending) continue;
     /* mentioned in the comment itself: a step of its own, at its creation */
     const made = c.ts && c.mentions?.some((x) => isMe(x) || x === "all") ? [{ at: c.ts, by: c.by, mentions: c.mentions }] : [];
+    /* Claude's moments that are not steps: a draft for you, the preview built, the PR merged */
+    if (c.call?.draft && isMe(c.call.draft.for)) made.push({ at: c.call.draft.at, by: "Claude", claudeKind: "cdraft" });
+    if (c.pr?.previewAt && isMe(c.pr.for)) made.push({ at: c.pr.previewAt, by: "Claude", claudeKind: "cpreview" });
+    if (c.pr?.mergedAt && isMe(c.pr.for)) made.push({ at: c.pr.mergedAt, by: "Claude", claudeKind: "cmerged" });
     let doer = null, was = "open"; // who last sent it for approval, as the steps go: a reopen tells them
     for (const s of [...made, ...(c.history || [])]) {
       const finished = doer;
       if (s.status === "approval" && (s.from || was) !== "approval") doer = s.by; // older steps keep no "from": the walk knows it
       if (s.status) was = s.status;
-      if (!(s.at > m.seen) || !s.by || isMe(s.by) || m.gone.has(`${c.id}:${s.at}`)) continue;
+      /* a message of Claude's is Claude's, even when it was made as you: news for whoever called it */
+      const byClaude = s.claudeKind || (s.via === "claude" && s.kind === "reply");
+      const who = byClaude ? "Claude" : s.by;
+      if (!(s.at > m.seen) || !who || (!byClaude && isMe(s.by)) || m.gone.has(`${c.id}:${s.at}`)) continue;
       const seenAt = m.seenAt?.[`${c.id}:${s.at}`];
       if (seenAt && Date.now() - seenAt > 864e5) continue; // seen in the list a day ago: it leaves by itself (Nirav, 2026-10-27)
       const kind =
-        s.mentions?.some(isMe) ? "mention" // a mention outranks what the step also did
+        s.claudeKind ? s.claudeKind
+        : byClaude ? (!isMe(s.for) ? null : s.ask ? "cask" : s.plan ? "cplan" : s.pr ? "cpr" : "cans")
+        : s.mentions?.some(isMe) ? "mention" // a mention outranks what the step also did
         : s.mentions?.includes("all") ? "all"
         : s.kind === "reply" ? (isQ(c) && mine(c) ? "answer" : null)
         : s.kind === "hand" ? (isMe(s.toWho) ? "hand" : null)
@@ -3302,8 +3321,8 @@ function noticesNow() {
         : s.from === "progress" && s.status === "open" && s.kind !== "to_fix" ? (mine(c) ? "putback" : null) // to the writer: New again
         : null;
       if (!kind) continue;
-      const k = `${kind}|${s.by}`;
-      if (!groups.has(k)) groups.set(k, { kind, who: s.by, steps: [], at: 0 });
+      const k = `${kind}|${who}`;
+      if (!groups.has(k)) groups.set(k, { kind, who, steps: [], at: 0 });
       const g = groups.get(k);
       g.steps.push({ c, s });
       g.at = Math.max(g.at, s.at);
@@ -3319,6 +3338,7 @@ function noticeText(g) {
    count in the drawer's header, nothing else; a click drops the list down over the cards. Once the list has been
    opened the count goes quiet; Clear (or crossing every line out) takes the faces away. */
 const noteFace = (name) => {
+  if (name === "Claude") return CLAUDE_AV();
   const url = state.faces?.[name];
   const i = esc(String(name).trim()[0].toUpperCase());
   return url ? `<img class="av" src="${esc(url)}" alt="" data-i="${i}">` : `<span class="av av-i">${i}</span>`;
@@ -3326,7 +3346,7 @@ const noteFace = (name) => {
 function noticeRowsHtml(list) {
   return list.map((g, i) => {
     const one = new Set(g.steps.map((x) => x.c.id)).size === 1 ? g.steps.reduce((x, y) => (y.s.at > x.s.at ? y : x)) : null; // one comment: its latest step's reason
-    const why = !one ? "" : one.s.note && (g.kind === "back" || g.kind === "putback" || g.kind === "reopen" || g.kind === "hand" || g.kind === "answer" || g.kind === "mention" || g.kind === "all") ? `<span class="note-why">"${esc(one.s.note.slice(0, 80))}"</span>` : `<span class="note-why">${esc(noticeSnippet(one.c))}</span>`; // the reason when there is one, else what the comment is
+    const why = !one ? "" : one.s.note && (g.kind === "back" || g.kind === "putback" || g.kind === "reopen" || g.kind === "hand" || g.kind === "answer" || g.kind === "mention" || g.kind === "all" || /^c(ans|ask|plan)$/.test(g.kind)) ? `<span class="note-why">"${esc(one.s.note.slice(0, 80))}"</span>` : `<span class="note-why">${esc(noticeSnippet(one.c))}</span>`; // the reason when there is one, else what the comment is
     const go = g.steps.some((x) => x.c.status !== "approved"); // approved ones are not in this list to go to
     return `<div class="join-row note-row${go ? " go" : ""}" data-i="${i}">${noteFace(g.who)}<span class="join-who"><span class="note-txt">${esc(noticeText(g))}</span>${why}</span><span class="note-when">${esc(agoText(g.at))}</span><button type="button" class="note-x" aria-label="Clear this">×</button></div>`;
   }).join("");
