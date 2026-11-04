@@ -5881,6 +5881,8 @@ const CALL_WAIT_MS = 45_000;
 const callBusy = (c) => (c.call?.state === "waiting" || c.call?.state === "reading") && c.status !== "approved" && Date.now() - (c.call.at || 0) < 30 * 60_000;
 function callBusyHtml(c) {
   const k = c.call;
+  /* a new draft for you: one line, no reading list (the thread is read already) */
+  if (k.kind === "draft" && (k.state === "reading" || Date.now() - (k.at || 0) <= CALL_WAIT_MS)) return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.redo === "shorter" || /^Make your draft shorter/.test(k.words || "") ? "Claude is writing a shorter one…" : "Claude is writing a new draft…"}</span></div></div>`;
   if (k.state === "waiting" && Date.now() - (k.at || 0) > CALL_WAIT_MS) return `<div class="th-reading idle">${CLAUDE_AV()}<span>No Claude session has picked it up yet</span><button type="button" class="th-pick th-connect">Connect Claude</button></div>`;
   const read = k.read || [];
   const rows = k.state === "reading" ? [["The thread", read.includes("thread")], ...(c.shot ? [["The picture", read.includes("picture")]] : []), ["The code and the design system", false]] : [];
@@ -5910,7 +5912,7 @@ function threadHtml(c, moves = true) {
   const msgs = items.filter((x) => x.msg);
   if (!state.thOpen.has(c.id)) {
     /* Claude at work, or a draft waiting for you: said on the closed line first */
-    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Sent to Claude…"}</span></button>`;
+    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.kind === "draft" ? "Claude is writing a new draft…" : c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Sent to Claude…"}</span></button>`;
     if (myDraft(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w"><b>Claude</b> drafted a reply for you: ${esc(myDraft(c).text)}</span><span class="th-tag">Only you</span></button>`;
     /* no replies yet: the drawer card shows its reply box on hover, no trip through ⋯ (Nirav, 2026-11-04) */
     if (!msgs.length) return moves && !isQ(c) && can("answer", c) ? `<div class="th-ghost"><div class="th-ghost-in"><div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="Reply, @ to mention…" aria-label="Reply"><button type="button" class="th-go">Reply</button></div></div></div>` : "";
@@ -6116,7 +6118,14 @@ function threadClick(e, c, box, onChange) {
   if (dr && t.closest(".th-cd-short, .th-cd-again")) {
     const short = !!t.closest(".th-cd-short");
     const words = short ? `Make your draft shorter. It was: "${dr.text}"` : `Draft it again, differently. They asked: "${c.call.words}". Your draft was: "${dr.text}"`;
-    applyUpdate({ id: c.id, callClaude: words, callKind: "draft" }, t.closest("button")).then(() => onChange());
+    /* at once, before the hub answers (Nirav, 2026-11-04: the old draft stayed for seconds): Claude at work */
+    const was = c.call;
+    c.call = { state: "waiting", at: Date.now(), by: was.by, words, kind: "draft", redo: short ? "shorter" : "again", read: [] };
+    onChange();
+    applyUpdate({ id: c.id, callClaude: words, callKind: "draft" }).then((r) => {
+      if (!r) c.call = was; // refused: the draft comes back
+      onChange();
+    });
     return true;
   }
   if (t.closest(".th-last")) {
