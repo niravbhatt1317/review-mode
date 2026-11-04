@@ -1777,6 +1777,34 @@ root.innerHTML = `
   .th-res[data-s="ignored"] { color: var(--rv-ink-3); }
   .pin-tip .th-res:not([data-s="ignored"]), :host([data-theme="dark"]) .th-res:not([data-s="ignored"]) { color: #5FCFC2; } /* the teal lifted for a dark card */
   .th-msg.sug:has(.th-res[data-s="ignored"]) .th-sugg { color: var(--rv-ink-3); }
+  /* Claude reading, Claude's quick picks, a draft only you see (step 1, 2026-11-04) */
+  .th-reading { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 2px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, #D97757 8%, var(--rv-surface)); font-size: 11.5px; color: #9a5a40; }
+  .th-reading .av-claude { width: 16px; height: 16px; flex: none; }
+  .th-reading ul { margin: 4px 0 0; padding: 0; list-style: none; line-height: 1.7; color: #7a6457; }
+  .th-reading li::before { content: "✓"; color: #1E8C81; margin-right: 6px; font-size: 10px; }
+  .th-reading li.now::before { content: "…"; color: #c4572f; }
+  .th-reading.idle { align-items: center; color: var(--rv-ink-3); background: hsl(var(--rv-n10)); }
+  .th-rd-t { font-weight: 500; }
+  .th-reading:not(.idle) .th-rd-t, .th-last .th-rd-t { background: linear-gradient(90deg, #b07a63 0%, #b07a63 40%, #6e3a26 50%, #b07a63 60%, #b07a63 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .th-rd-t { animation: none !important; color: #9a5a40 !important; } }
+  .th-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .th-pick { height: 22px; padding: 0 9px; border: 0; border-radius: 999px; background: var(--rv-surface); box-shadow: inset 0 0 0 1px var(--rv-line-2); color: var(--rv-ink); font: 500 11px/22px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .th-pick:hover { box-shadow: inset 0 0 0 1px #D97757; color: #b4532f; }
+  .th-pick.pri { background: hsl(214 98% 44%); box-shadow: none; color: #fff; }
+  .th-pick.pri:hover { background: hsl(214 98% 38%); color: #fff; }
+  .th-pick.loading { opacity: .6; pointer-events: none; }
+  .th-cdraft { display: flex; gap: 8px; padding: 5px 0; }
+  .th-cdraft .av-claude { width: 20px; height: 20px; flex: none; }
+  .th-cdraft .th-who b { color: #b4532f; }
+  .th-cd-box { margin-top: 4px; padding: 7px 9px; border-radius: 8px; box-shadow: inset 0 0 0 1px color-mix(in srgb, #D97757 30%, transparent); font-size: 12px; line-height: 1.45; color: var(--rv-ink-2); }
+  .th-cd-l { font-size: 10.5px; font-weight: 500; color: #b4532f; margin-bottom: 2px; }
+  .pin-tip .th-reading { background: rgba(217,119,87,.16); color: #f0a488; }
+  .pin-tip .th-reading ul { color: hsl(216 30% 80%); }
+  .pin-tip .th-pick { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); color: #fff; }
+  .hand-claude .av-claude { width: 18px; height: 18px; flex: none; }
+  .hand-c { display: flex; flex-direction: column; line-height: 1.25; }
+  .hand-c small { font-size: 10.5px; color: var(--rv-ink-3); }
+  .mp-row .mp-av { width: 20px; height: 20px; flex: none; }
   .th-again { display: flex; align-items: center; gap: 7px; padding: 5px 0; font-size: 11.5px; color: #9a5a40; }
   .th-again .av-claude { width: 16px; height: 16px; border-radius: 50%; flex: none; }
   .th-again > span:last-child { background: linear-gradient(90deg, #b07a63 0%, #b07a63 40%, #6e3a26 50%, #b07a63 60%, #b07a63 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; }
@@ -2909,7 +2937,7 @@ async function sendComment(tmp, el) {
     listSig = ""; // ask for the whole list again
     await loadComments();
     toast(`Saved #${j.entry.n}${localShot ? "" : " (no picture)"}`);
-    if (j.entry.mentions?.includes("Claude")) mentionClaude(state.comments.find((c) => c.id === j.entry.id) || j.entry);
+    if (j.entry.mentions?.includes("Claude")) mentionClaude(state.comments.find((c) => c.id === j.entry.id) || j.entry, j.entry.text);
     const card = panelBody.querySelector(`.card[data-id="${id}"]`);
     if (card) renderPanel();
   } catch (e) {
@@ -3015,7 +3043,7 @@ window.__reviewWhy = (id, fresh) => { /* read-only, for drives: why a pin is or 
   }
   return out;
 };
-window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: lastCheck, persona: state.persona, approver: isApprover(), sign: canSign() }); // read-only, for drives
+window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: lastCheck, persona: state.persona, approver: isApprover(), sign: canSign(), busy: panelBusy(), stale: !!state.stale, draft: state.thDraft, thOpen: [...state.thOpen] }); // read-only, for drives
 $(".panel-sync").addEventListener("click", () => {
   const first = panelBody.querySelector(".card.unread");
   if (first) return first.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -4527,7 +4555,7 @@ function editInPlace(el, c, at, after) {
       const had = c.mentions || [];
       await applyUpdate({ id: c.id, text, mentions });
       toast(`#${c.n} updated`);
-      if (mentions.includes("Claude") && !had.includes("Claude")) mentionClaude(state.comments.find((x) => x.id === c.id) || c);
+      if (mentions.includes("Claude") && !had.includes("Claude")) mentionClaude(state.comments.find((x) => x.id === c.id) || c, text);
     } else el.innerHTML = mentionHtml(c.text); // dropped or unchanged: the saved words back
     after();
   };
@@ -4929,6 +4957,7 @@ function refreshCard(c, animate = false) {
     }
     note.innerHTML = noteHtml(c);
   } else note?.remove();
+  if (state.asking?.id !== c.id) threadSync(card, c); // Claude's call, a new reply: the thread follows (a move's box keeps its own)
   draftSync(card, c);
   histSync(card, c);
   clampCard(card);
@@ -5234,7 +5263,7 @@ function mentionWord(name, list = teamCache.list) {
 /* @all and @Claude (Nirav, 2026-10-29): everyone on the team, and Claude (the comment goes to the connected Claude
    session); kept in `mentions` as "all" and "Claude" */
 const MENTION_SPECIAL = [
-  { name: "Claude", word: "Claude", kind: "claude", sub: "Sends it to your Claude session" },
+  { name: "Claude", word: "Claude", kind: "claude", sub: "Reads the thread and the code, then answers" },
   { name: "all", word: "all", kind: "all", sub: "Everyone on the team" },
 ];
 const hasWord = (text, w) => new RegExp(`(^|[^\\p{L}\\d@])@${reEsc(w)}(?![\\p{L}\\d])`, "iu").test(text);
@@ -5804,7 +5833,9 @@ function threadOf(c) {
     const from = s.from || was;
     if (s.status) was = s.status;
     const claudeSays = s.via === "claude" && s.kind === "reply";
-    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays });
+    /* a question Claude asked on a call: warm, with its quick picks, while the call still waits on it */
+    const live = claudeSays && s.ask && c.call?.state === "asked" && c.call.askAt === s.at && c.status !== "approved";
+    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}) });
     /* a move's reason is a reply, labelled with the move ("You put it back"); a bare move is the history's
        (Nirav, 2026-10-30: the words were written for someone to read) */
     else if (s.note && s.kind !== "mention") out.push({ msg: true, at: s.at, by: s.by, words: s.note, move: stepVerb(c, s, from), st: s.status, mk: moveKey(s, from), pill: movePill(c, s, from, doer) });
@@ -5831,8 +5862,32 @@ function threadOf(c) {
 const claudeWaits = (c) => c.draft?.state === "new" && !!c.draft.unsure && (c.status === "open" || c.status === "progress");
 /* who answers Claude: the person on it, the writer, an approver */
 const talksToClaude = (c) => myName(c.assignee) || isMe(c.by) || isApprover();
-/* the open question as a quote, for the reply box: a reply quoting it is the answer */
-const claudeAsk = (c) => (claudeWaits(c) ? { at: c.draft.at, by: "Claude", text: c.draft.text.slice(0, 140), ask: true } : null);
+/* the open question as a quote, for the reply box: a reply quoting it is the answer (the draft's question, or the
+   question Claude asked on a call) */
+const callAsk = (c) => {
+  if (c.call?.state !== "asked" || c.status === "approved") return null;
+  const s = (c.history || []).find((h) => h.at === c.call.askAt && h.via === "claude");
+  return s ? { at: s.at, by: "Claude", text: String(s.note || "").slice(0, 140), ask: true, call: true } : null;
+};
+const claudeAsk = (c) => (claudeWaits(c) ? { at: c.draft.at, by: "Claude", text: c.draft.text.slice(0, 140), ask: true } : callAsk(c));
+/* CLAUDE AS A TEAMMATE (Nirav, 2026-11-04, step 1): someone wrote @Claude; a connected Claude session claims the call
+   and reads first. The thread says so, with what Claude has read; a call nobody claims for a while says it waits */
+const CALL_WAIT_MS = 45_000;
+const callBusy = (c) => (c.call?.state === "waiting" || c.call?.state === "reading") && c.status !== "approved" && Date.now() - (c.call.at || 0) < 30 * 60_000;
+function callBusyHtml(c) {
+  const k = c.call;
+  if (k.state === "waiting" && Date.now() - (k.at || 0) > CALL_WAIT_MS) return `<div class="th-reading idle">${CLAUDE_AV()}<span>Waiting for Claude: no Claude session has picked it up yet</span></div>`;
+  const read = k.read || [];
+  const rows = k.state === "reading" ? [["The thread", read.includes("thread")], ...(c.shot ? [["The picture", read.includes("picture")]] : []), ["The code and the design system", false]] : [];
+  const list = rows.length ? `<ul>${rows.map(([t, ok]) => `<li class="${ok ? "ok" : "now"}">${t}</li>`).join("")}</ul>` : "";
+  return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is reading…" : "Claude has it, starting…"}</span>${list}</div></div>`;
+}
+/* a reply Claude drafted for one person: only they see it, to use as their own */
+const myDraft = (c) => (c.call?.draft && isMe(c.call.draft.for) && c.status !== "approved" ? c.call.draft : null);
+function myDraftHtml(c) {
+  const d = myDraft(c);
+  return `<div class="th-cdraft">${CLAUDE_AV()}<div class="th-body"><div class="th-who"><b>Claude</b><span class="th-at">${esc(agoText(d.at))} · only you see this</span></div><div class="th-cd-box"><div class="th-cd-l">Draft reply</div>${mentionHtml(d.text)}</div><div class="th-picks"><button type="button" class="th-pick pri th-cd-use">Use it</button><button type="button" class="th-pick th-cd-short">Shorter</button><button type="button" class="th-pick th-cd-again">Try again</button></div></div></div>`;
+}
 /* drafting again with an answer: told at the end of the open thread, not in the box (Nirav, 2026-11-04) */
 const claudeAgain = (c) => !!c.draft?.thread?.length && (c.draft.state === "reply" || (c.draft.state === "drafting" && Date.now() - (c.draft.at || 0) < DRAFT_LIVE_MS));
 const thFace = (c, name) => {
@@ -5849,6 +5904,9 @@ function threadHtml(c, moves = true) {
   const items = threadOf(c);
   const msgs = items.filter((x) => x.msg);
   if (!state.thOpen.has(c.id)) {
+    /* Claude at work, or a draft waiting for you: said on the closed line first */
+    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Waiting for Claude…"}</span></button>`;
+    if (myDraft(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w"><b>Claude</b> drafted a reply for you: ${esc(myDraft(c).text)}</span><span class="th-tag">Only you</span></button>`;
     /* no replies yet: the drawer card shows its reply box on hover, no trip through ⋯ (Nirav, 2026-11-04) */
     if (!msgs.length) return moves && !isQ(c) && can("answer", c) ? `<div class="th-ghost"><div class="th-ghost-in"><div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="Reply, @ to mention…" aria-label="Reply"><button type="button" class="th-go">Reply</button></div></div></div>` : "";
     const last = msgs.find((x) => x.ask) || msgs[msgs.length - 1]; // Claude's question waiting comes first, even under a later reply
@@ -5867,11 +5925,13 @@ function threadHtml(c, moves = true) {
     const q = x.quote ? `<button type="button" class="th-quote" data-at="${x.quote.at}">${TH_ARROW}<b>${thName(x.quote.by)}</b><span>${esc(x.quote.text)}</span></button>` : "";
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
     const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words">${mentionHtml(x.words)}</div>`;
-    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
+    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
+  if (myDraft(c)) rows.push(myDraftHtml(c));
+  if (callBusy(c)) rows.push(callBusyHtml(c));
   if (claudeAgain(c)) rows.push(`<div class="th-again">${CLAUDE_AV()}<span>Claude is drafting again with ${myName(c.draft.thread[c.draft.thread.length - 1].by) ? "your" : "this"} answer…</span></div>`);
   const d = state.thDraft?.id === c.id ? state.thDraft : null;
-  const answering = d?.quote?.ask && claudeWaits(c) && d.quote.at === c.draft.at;
+  const answering = d?.quote?.ask && ((claudeWaits(c) && d.quote.at === c.draft.at) || d.quote.at === callAsk(c)?.at);
   const quoting = d?.quote ? `<div class="th-quoting">${TH_ARROW}<span>Replying to <b>${thName(d.quote.by)}</b>:</span><span class="th-qw">${esc(d.quote.text)}</span><button type="button" class="th-qx" aria-label="Drop the quote">×</button></div>` : "";
   /* a long story folds under "Show 7 earlier", the history's own fold, and opens and shuts again */
   let shown = rows;
@@ -5973,7 +6033,7 @@ function threadSync(box, c, onSent) {
 function thShutEmpty(id) {
   const c = state.comments.find((x) => x.id === id);
   const card = panelBody?.querySelector(`.card[data-id="${id}"]`);
-  if (!c || state.asking?.id === id || threadOf(c).length || card?.querySelector(".th-in")?.value.trim()) return; // a move asking why keeps its box
+  if (!c || state.asking?.id === id || threadOf(c).some((x) => x.msg) || card?.querySelector(".th-in")?.value.trim()) return; // a move asking why keeps its box
   state.thOpen.delete(id);
   if (state.thDraft?.id === id) state.thDraft = null;
   if (card) thSlide(card, () => threadSync(card, c));
@@ -6000,7 +6060,6 @@ async function threadSend(c, input, btn, onSent) {
   state.thDraft = { id: c.id, text: "", quote: null, focus: true };
   const crossed = applyEntry(r.entry);
   const now = state.comments.find((x) => x.id === c.id) || r.entry;
-  if (mentions.includes("Claude")) mentionClaude(now);
   if (onSent) onSent(now);
   else if (crossed) renderPanel();
   else {
@@ -6010,7 +6069,7 @@ async function threadSend(c, input, btn, onSent) {
       settle(card, now);
     }
   }
-  toast(answers ? `#${c.n}: answered, Claude drafts again` : `#${c.n} ${isQ(c) ? (isMine(c) ? "followed up" : "answered") : "replied"}`);
+  toast(answers ? `#${c.n}: answered, Claude drafts again` : now.call?.state === "waiting" && now.call.step && now.call.step >= Date.now() - 10_000 ? `#${c.n}: Claude will read it and reply here` : `#${c.n} ${isQ(c) ? (isMine(c) ? "followed up" : "answered") : "replied"}`);
 }
 /* the clicks inside a thread, the same on both cards; true when it was one */
 /* the thread opens, shuts and unfolds by sliding to its new height while the words fade in (Nirav, 2026-10-31: smooth) */
@@ -6028,6 +6087,31 @@ function thSlide(box, change) {
 }
 function threadClick(e, c, box, onChange) {
   const t = e.target;
+  /* a quick pick under Claude's question: sent as the answer, quoting it */
+  const pick = t.closest(".th-pick[data-pick]");
+  if (pick) {
+    const input = box.querySelector(".th-in"), go = box.querySelector(".th-go");
+    if (!input || !go) return true;
+    state.thDraft = { id: c.id, text: pick.dataset.pick, quote: claudeAsk(c) };
+    input.value = pick.dataset.pick;
+    go.click();
+    return true;
+  }
+  /* Claude's draft for you: into your box, or another go */
+  const dr = myDraft(c);
+  if (dr && t.closest(".th-cd-use")) {
+    state.thDraft = { id: c.id, text: dr.text, quote: null, focus: true };
+    c.call.draft = null;
+    api("update", { id: c.id, draftUsed: true }).catch(() => {});
+    onChange();
+    return true;
+  }
+  if (dr && t.closest(".th-cd-short, .th-cd-again")) {
+    const short = !!t.closest(".th-cd-short");
+    const words = short ? `Make your draft shorter. It was: "${dr.text}"` : `Draft it again, differently. They asked: "${c.call.words}". Your draft was: "${dr.text}"`;
+    applyUpdate({ id: c.id, callClaude: words, callKind: "draft" }, t.closest("button")).then(() => onChange());
+    return true;
+  }
   if (t.closest(".th-last")) {
     state.thOpen.add(c.id);
     /* Claude asked: the box opens answering it (the quote can be dropped for a plain reply) */
@@ -6106,7 +6190,7 @@ function slashClose() {
 function slashDraw() {
   const f = slashFor;
   if (!f?.items.length) return slashClose();
-  const ic = (x) => (x.who ? noteFace(x.name) : `<span class="sp-ic" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}</span>`);
+  const ic = (x) => (x.claude ? CLAUDE_AV("mp-av") : x.who ? noteFace(x.name) : `<span class="sp-ic" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}</span>`);
   mentionPop.innerHTML = f.items.map((x, i) => `<button type="button" class="mp-row${i === f.i ? " on" : ""}" data-i="${i}">${ic(x)}<span class="mp-name">${esc(x.who ? (isMe(x.name) ? "You" : x.name) : x.label)}</span></button>`).join("");
   mentionPop.classList.toggle("dark", host.getAttribute("data-theme") === "dark");
   mentionPop.hidden = false;
@@ -6121,7 +6205,7 @@ async function slashCheck(input, card, c) {
   if (slashFor?.input === input && slashFor.team) {
     /* who to hand it to: the box's words narrow the team */
     const q = v.trim().toLowerCase();
-    slashFor.items = slashFor.team.filter((p) => !q || p.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q))).map((p) => ({ who: true, name: p.name, handle: p.handle }));
+    slashFor.items = slashFor.team.filter((p) => !q || p.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q))).map((p) => ({ who: true, name: p.name, handle: p.handle, claude: !!p.claude }));
     slashFor.i = Math.min(slashFor.i, Math.max(0, slashFor.items.length - 1));
     return slashFor.items.length ? slashDraw() : (mentionPop.hidden = true);
   }
@@ -6145,6 +6229,7 @@ async function slashPick(i) {
   if (x.who) {
     slashClose();
     clear();
+    if (x.claude) return handToClaude(c);
     state.asking = askAt({ id: c.id, to: "progress", label: c.status === "open" ? "Assign" : "Hand over", focused: true, assignTo: x.handle, toName: x.name, wasOpen: true }, c);
     mountAsk(card, c);
     return;
@@ -6152,7 +6237,7 @@ async function slashPick(i) {
   if (x.hand) {
     /* the team next, in the same list; the box empties for a name */
     clear();
-    const team = (await teamList()).filter((p) => p?.name && p.name !== c.assignee);
+    const team = [...(c.withClaude && myName(c.assignee) ? [] : [{ name: "Claude", handle: "", claude: true }]), ...(await teamList()).filter((p) => p?.name && p.name !== c.assignee)];
     if (slashFor !== f) return;
     if (!team.length) return slashClose(), toast("Nobody else on the team yet");
     Object.assign(f, { team, i: 0 });
@@ -6302,7 +6387,7 @@ async function askGo(card, c, input, btn) {
   if (!note && !a.wasOpen) state.thOpen.delete(c.id); // a bare move leaves nothing to read in the thread
   const crossed = applyEntry(r.entry);
   const now = state.comments.find((x) => x.id === c.id) || state.done.find((x) => x.id === c.id) || r.entry;
-  if (mentions.includes("Claude")) mentionClaude(now);
+  if (mentions.includes("Claude")) mentionClaude(now, note);
   if (crossed) renderPanel();
   else {
     const foot = card.querySelector(".card-foot");
@@ -7630,13 +7715,15 @@ panelBody.addEventListener("click", async (e) => {
     const team = await teamList();
     const list = menu.querySelector(".hand-list");
     const pickable = team.filter((p) => p.name !== c.assignee);
-    list.innerHTML = pickable.length ? pickable.map((p) => `<button class="card-mi hand-to" data-h="${esc(p.handle)}" data-n="${esc(p.name)}">${p.avatar ? `<img class="av" src="${esc(p.avatar)}" alt="" data-i="${esc(p.name[0])}">` : `<span class="av av-i">${esc(p.name[0])}</span>`}${isMe(p.name) ? "You" : esc(p.name)}</button>`).join("") : `<span class="hand-wait">Nobody else on the team yet</span>`;
+    const claude = c.withClaude && myName(c.assignee) ? "" : `<button class="card-mi hand-to hand-claude">${CLAUDE_AV()}<span class="hand-c">Claude<small>Reads it, then answers or asks</small></span></button>`;
+    list.innerHTML = claude + (pickable.length ? pickable.map((p) => `<button class="card-mi hand-to" data-h="${esc(p.handle)}" data-n="${esc(p.name)}">${p.avatar ? `<img class="av" src="${esc(p.avatar)}" alt="" data-i="${esc(p.name[0])}">` : `<span class="av av-i">${esc(p.name[0])}</span>`}${isMe(p.name) ? "You" : esc(p.name)}</button>`).join("") : "");
     return;
   }
   if (e.target.closest(".hand-to")) {
     const b = e.target.closest(".hand-to");
     card.querySelector(".card-more-wrap")?.classList.remove("open");
     card.classList.remove("menu-open");
+    if (b.classList.contains("hand-claude")) return handToClaude(c, b);
     state.asking = askAt({ id: c.id, to: "progress", label: c.status === "open" ? "Assign" : "Hand over", focused: true, assignTo: b.dataset.h, toName: b.dataset.n, wasOpen: state.thOpen.has(c.id) }, c);
     mountAsk(card, c);
     return;
@@ -8373,17 +8460,24 @@ function noteSent(list) {
 }
 /* @Claude (Nirav, 2026-10-29): a comment or a note that mentions Claude goes straight to the connected Claude
    session, the same brief as Send to Claude; no session: a toast says how to connect one */
-async function mentionClaude(c) {
+/* @Claude (Nirav, 2026-11-04, step 1: Claude as a teammate): a comment, an edit or a move's note that mentions Claude
+   leaves a call on the hub, which any connected Claude session answers in the thread, so anyone on the team can call
+   Claude (a reply's @Claude makes its call in the hub itself) */
+/* ASSIGN TO CLAUDE (step 1): Claude in the Assign and Hand over lists, like a teammate. Claude works for whoever hands
+   it over: they are on it, with Claude ("You and Claude are working on it"), and Claude reads it and reports back */
+async function handToClaude(c, btn) {
+  const me = (await teamList()).find((p) => isMe(p.name));
+  const mine = c.status === "progress" && myName(c.assignee);
+  if (!mine && !me?.handle) return toast("Could not tell who you are on the team: sign in first", true);
+  const r = await applyUpdate({ id: c.id, ...(mine ? {} : { assignTo: me.handle }), withClaude: true, callClaude: "Handed to Claude", callKind: "assigned" }, btn);
+  if (r) toast(`#${c.n}: with you and Claude. Claude reads it and reports back`);
+}
+async function mentionClaude(c, words) {
   if (!c?.id) return;
-  const q = window.__reviewSession ? `?session=${window.__reviewSession}` : "";
-  const sessions = await rv(`/__review/claude/sessions${q}`).then((r) => r.json()).catch(() => []);
-  if (!Array.isArray(sessions) || !sessions.length) return toast(`@Claude: no Claude session is connected. Run "npx --no review-mode claude" in the project, then Send to Claude`, true);
-  const pick = sessions[0];
-  const md = await buildPrompt([c]);
-  const r = await rv(`/__review/claude/send${q}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ port: pick.port, text: md, count: 1 }) }).then((x) => x.json()).catch(() => null);
-  if (!r?.ok) return toast(`@Claude: could not reach Claude${r?.error ? `: ${r.error}` : ""}`, true);
-  noteSent([c]);
-  toast(`#${c.n} sent to Claude${sessions.length > 1 ? ` (${pick.label})` : ""}`);
+  const r = await api("update", { id: c.id, callClaude: String(words || c.text || "").slice(0, 1200) }).catch(() => null);
+  if (!r?.entry) return toast(`@Claude: could not reach the hub${r?.error ? `: ${r.error}` : ""}`, true);
+  if (applyEntry(r.entry) || !refreshCard(r.entry, !!panelBody.querySelector(`.card[data-id="${c.id}"]`))) renderPanel();
+  toast(`#${c.n}: Claude will read it and reply in the thread`);
 }
 let sendAsk = null; // what waits on the "Already with Claude" card
 let sendSeq = 0; // each send watches for Claude's yes only while it is the latest: an older one never covers a newer card

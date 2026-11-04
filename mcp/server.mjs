@@ -15,7 +15,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { loadConfig } from "../collector/config.js";
 import { storeFor, prepare } from "../collector/stores.js";
-import { withNames, applyChange, mergePeople, draftOpen } from "../hub-core.js";
+import { withNames, applyChange, mergePeople, draftOpen, callOpen } from "../hub-core.js";
 
 /* REVIEW_ROOT: the app's folder when Claude starts higher up (a monorepo root); else where Claude started */
 const ROOT = process.env.REVIEW_ROOT ? path.resolve(process.env.REVIEW_ROOT) : process.cwd();
@@ -48,6 +48,7 @@ const TOOLS = [
   { name: "review_reply", description: "Answer a question (one or two plain sentences, from the code it points at). If something should change, say so; the asker can make it a fix.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, ...asProp }, required: ["id", "text"] } },
   { name: "review_picture", description: "Save a comment's picture (the element boxed, its number on it) and return the file path to Read.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
   { name: "review_suggest", description: "Claude drafts first: leave a short suggestion on a new comment, for a person to accept or ignore. For a fix, what you would change and where (file and line), in one or two plain sentences; for a question, the answer. When you cannot tell what is meant, or the code shows no clear change, set unsure and say in one sentence what you would need to know, instead of guessing. Draft only: change no code and no status.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, unsure: { type: "boolean", description: "True when the text is a question back to the person, not a suggestion" }, ...asProp }, required: ["id", "text"] } },
+  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), or kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft"] }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, ...asProp }, required: ["id", "kind", "text"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
 const line = (c) => `#${c.n} ${c.id} ${c.status} ${kind(c.severity)}${holder(c) ? ` [${holder(c)}${c.withClaude ? " + Claude" : ""}]` : ""}: ${c.text}${c.note?.text ? ` [note: ${c.note.text}]` : ""}`;
@@ -64,7 +65,16 @@ async function call(name, a = {}) {
   }
   const c = a.id ? await store.get(a.id) : null;
   if (name !== "review_ack" && name !== "review_list" && !c) throw new Error(`No comment with id ${a.id}`);
-  if (name === "review_show") return JSON.stringify({ ...withNames(c, ppl), n: (await numbered(c.id))?.n }, null, 2);
+  /* what Claude has read shows on the card while a call is answered: the thread (show), the picture */
+  const tick = async (what) => {
+    if (c.call?.state !== "reading" || c.call.read?.includes(what)) return;
+    applyChange(c, { claudeRead: what }, who);
+    await store.put(c);
+  };
+  if (name === "review_show") {
+    await tick("thread");
+    return JSON.stringify({ ...withNames(c, ppl), n: (await numbered(c.id))?.n }, null, 2);
+  }
   if (name === "review_pick_up") {
     if (kind(c.severity) === "question") throw new Error("This is a question: answer it with review_reply");
     if (c.status === "progress" && c.assignee && c.assignee !== who) throw new Error(`Already picked up by ${withNames(c, ppl).assignee}: leave it and tell the person`);
@@ -85,6 +95,7 @@ async function call(name, a = {}) {
   }
   if (name === "review_picture") {
     if (!c.shot) return "This comment has no picture.";
+    await tick("picture");
     const bytes = await store.shot(c.shot);
     const sess = process.env.REVIEW_SESSION;
     const dir = path.join(cfg.sessionsDir, sess && /^_[a-z0-9-]+$/.test(sess) ? sess : cfg.project, "export"); // a test session's pictures stay in its own folder
@@ -102,6 +113,18 @@ async function call(name, a = {}) {
     drafted.add(`${c.id}:${c.draft?.thread?.length || 0}`);
     heard = true;
     return `Suggestion left on #${(await numbered(c.id))?.n}; the person accepts or ignores it in the drawer.`;
+  }
+  if (name === "review_talk") {
+    const words = String(a.text || "").trim();
+    if (!words) throw new Error("Say something: text is empty");
+    if (!c.call || c.call.state === "done") return `#${(await numbered(c.id))?.n}: nobody is waiting on Claude here, nothing sent`;
+    if (a.kind === "draft") applyChange(c, { claudeDraft: { text: words } }, who);
+    else applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : {}) }, who);
+    await store.put(c);
+    called.delete(callKey(c));
+    heard = true;
+    const n = (await numbered(c.id))?.n;
+    return a.kind === "draft" ? `Draft left on #${n}, only ${withNames(c, ppl).call?.draft?.for || "they"} sees it` : a.kind === "ask" ? `Asked on #${n}; their reply comes back as a new call` : `Answered on #${n}`;
   }
   if (name === "review_ack") {
     const d = deliveries.get(a.delivery_id);
@@ -178,9 +201,60 @@ async function draftRound() {
 }
 setInterval(draftRound, DRAFT_EVERY).unref?.();
 
+/* ---------- Claude as a teammate: answering calls ---------- */
+/* Every 6 s: comments whose call waits (someone wrote @Claude, answered Claude's question, or handed it to Claude) are
+   claimed and sent to this session with everything Claude needs to read first. A claim lapses after ten minutes. */
+const CALL_EVERY = 6_000;
+const called = new Set();
+const callKey = (c) => `${c.id}:${c.call?.at || 0}`;
+const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+async function callRound() {
+  if (!ready || !canHear()) return;
+  try {
+    const ppl = await people();
+    const all = prepare(await store.list());
+    for (const c of all.filter((x) => callOpen(x.call) && !called.has(callKey(x))).slice(0, 3)) {
+      const full = await store.get(c.id);
+      if (!full || !callOpen(full.call)) continue;
+      applyChange(full, { callState: "reading" }, defaultAs);
+      await store.put(full);
+      called.add(callKey(full));
+      const named = withNames(full, ppl);
+      const k = named.call;
+      const src = full.source?.file ? `${full.source.file}${full.source.line ? `:${full.source.line}` : ""}${full.source.component ? ` (${full.source.component})` : ""}` : "none recorded: find it from the page and the element";
+      const talk = (named.history || []).filter((h) => h.kind === "reply").map((h) => `  ${h.via === "claude" ? "Claude" : h.by} (${ago(h.at)}): ${h.note}${h.ask ? "  [your question]" : ""}`);
+      const asked = (named.history || []).filter((h) => h.via === "claude" && h.ask).pop();
+      const what = k.kind === "assigned" ? `${k.by} handed this comment to you. Work out what it needs and tell them (an answer, or what you would change and where).`
+        : k.kind === "draft" ? `${k.by} asked for help writing a reply: "${k.words}". Draft it (kind "draft"), only they see it.`
+        : asked && k.step ? `${k.by} answered your question ("${asked.note}"): "${k.words}". Carry on from there.`
+        : `${k.by} wrote: "${k.words}"`;
+      const text = [
+        `@Claude on review comment #${c.n} (${full.id}), ${kind(full.severity)}, ${named.status}${named.assignee ? `, ${named.assignee} on it` : ""}.`,
+        what,
+        ``,
+        `Comment by ${named.by}: "${full.text}"`,
+        `Page: ${full.pageTitle || full.route || "?"}${full.route ? ` (${full.route})` : ""} · Code: ${src}${full.shot ? " · has a picture" : ""}`,
+        ...(talk.length ? [`The thread so far:`, ...talk] : [`No replies before this.`]),
+        ``,
+        `Read first: review_show ${full.id} (the whole record), review_picture then Read the file (what it looks like),`,
+        `the code at the source, ${cfg.designSystem ? `and the team's design system (${cfg.designSystem}): use its tokens and components by name` : "and the project's design system or tokens"}.`,
+        `Then answer with review_talk (as "${defaultAs}"), ONE of:`,
+        `- "answer": a short message in the thread. Everyone on this team is a designer: plain design words ("the gap`,
+        `  between the title and the icon", "the spacing token space-2"), no code talk unless they ask for files.`,
+        `- "ask": you cannot tell what they mean. One question, with 2 to 4 quick picks in options.`,
+        `- "draft": they asked for help writing a reply. The words they would send, in their voice.`,
+        `When they ask you to change something, say what you would change and where in design words, and that someone can`,
+        `pick it up with Claude to make it. Do not change code or any status from a call. Then carry on with what you were doing.`,
+      ].join("\n");
+      send({ method: "notifications/claude/channel", params: { content: text, meta: { kind: "call", comment: String(c.n), project: String(store.project) } } });
+    }
+  } catch {}
+}
+setInterval(callRound, CALL_EVERY).unref?.();
+
 /* ---------- MCP over stdio ---------- */
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
-const INSTRUCTIONS = `Review mode (design-review comments on this project's running app). Use the review_* tools to list, read, pick up, finish and answer comments, acting as the person you work for (pass "as" with their GitHub handle; default ${defaultAs}). A comment's source (review_show) is the file and line its element is written at: start there. Briefs sent from the drawer arrive as <channel source="review" delivery_id="...">: call review_ack with the delivery_id first, then follow the brief. Requests to draft (kind="draft") ask only for review_suggest: read the code, leave the suggestion, change nothing, then carry on. Ask the person before review_done. Never approve.`;
+const INSTRUCTIONS = `Review mode (design-review comments on this project's running app). Use the review_* tools to list, read, pick up, finish and answer comments, acting as the person you work for (pass "as" with their GitHub handle; default ${defaultAs}). A comment's source (review_show) is the file and line its element is written at: start there. Briefs sent from the drawer arrive as <channel source="review" delivery_id="...">: call review_ack with the delivery_id first, then follow the brief. Requests to draft (kind="draft") ask only for review_suggest: read the code, leave the suggestion, change nothing, then carry on. A call (kind="call") is someone writing @Claude on a comment: read first, then answer it with review_talk (answer, ask or draft), change nothing, then carry on. Ask the person before review_done. Never approve.`;
 let buf = "";
 let queue = Promise.resolve(); // tool calls, one after another
 process.stdin.setEncoding("utf8");
@@ -214,6 +288,7 @@ async function handle(raw) {
   if (m.method === "notifications/initialized") {
     ready = true;
     setTimeout(draftRound, 5000); // a first round soon after the session opens: comments made while none was open
+    setTimeout(callRound, 2000);
     return;
   }
   if (m.method === "ping") return send({ id: m.id, result: {} });

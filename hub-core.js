@@ -10,6 +10,13 @@ export const RETENTION_DAYS = 14;
 export const DRAFT_CLAIM_MS = 10 * 60 * 1000; // a session's claim on drafting a comment, before another may try
 /* a comment a session may (re)draft: none yet, an answer to Claude's question waiting, or a claim that lapsed */
 export const draftOpen = (d) => !d || d.state === "reply" || (d.state === "drafting" && Date.now() - (d.at || 0) > DRAFT_CLAIM_MS);
+/* CLAUDE AS A TEAMMATE (Nirav, 2026-11-04, step 1): anyone mentions @Claude in a reply (or assigns the comment to Claude)
+   and the comment carries a call: who called, their words, and where it stands. A connected Claude session claims it
+   ("reading"), reads the thread, the page and the code, then answers in the thread, asks one question back ("asked",
+   the next reply goes to Claude without an @), or drafts a reply only the caller sees. Data only: no status moves. */
+export const CALL_CLAIM_MS = 10 * 60 * 1000; // a session's claim on a call, before another may take it
+export const callOpen = (k) => !!k && (k.state === "waiting" || (k.state === "reading" && Date.now() - (k.claimedAt || 0) > CALL_CLAIM_MS));
+const newCall = (who, words, at, extra = {}) => ({ state: "waiting", at, by: who, words: String(words || "").trim().slice(0, 1200), read: [], ...extra });
 
 /* sentence case: the first letter capital, the rest as typed (Nirav, 2026-10-19) */
 export const sentence = (t) => {
@@ -111,6 +118,13 @@ export function applyChange(c, body, who) {
   /* @MENTIONS (Nirav, 2026-10-29): the names a reply or a note mentions ride on its step, so they get a notice */
   const mentions = Array.isArray(body.mentions) ? [...new Set(body.mentions.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 80)))].slice(0, 10) : [];
   const ment = mentions.length ? { mentions } : {};
+  /* the call's own moves, none of them a step in the history */
+  if (typeof body.callClaude === "string" && body.callClaude.trim()) c.call = newCall(who, body.callClaude, Date.now(), body.callKind ? { kind: String(body.callKind).slice(0, 20) } : {});
+  if (body.callState === "reading" && callOpen(c.call)) Object.assign(c.call, { state: "reading", claimedAt: Date.now() });
+  if (typeof body.claudeRead === "string" && c.call && !c.call.read?.includes(body.claudeRead)) c.call.read = [...(c.call.read || []), body.claudeRead.slice(0, 20)];
+  if (body.claudeDraft && typeof body.claudeDraft.text === "string" && body.claudeDraft.text.trim() && c.call)
+    Object.assign(c.call, { state: "done", doneAt: Date.now(), draft: { for: c.call.by, text: body.claudeDraft.text.trim().slice(0, 1200), at: Date.now() } });
+  if (body.draftUsed === true && c.call?.draft) c.call.draft = null;
   if (typeof text === "string" && text.trim()) {
     c.text = sentence(text);
     /* an edit's mentions replace the comment's; a name newly mentioned gets a step of its own, so it is news */
@@ -166,9 +180,14 @@ export function applyChange(c, body, who) {
     const qt = body.quote && typeof body.quote === "object" && Number.isFinite(body.quote.at)
       ? { quote: { at: body.quote.at, by: String(body.quote.by || "").slice(0, 80), text: String(body.quote.text || "").trim().slice(0, 140) } }
       : {};
+    /* Claude's message settles the call (a question back leaves it "asked"); a person's @Claude, or any reply while
+       Claude waits on its question, calls Claude again */
+    const cask = claude && body.ask === true ? { ask: true, ...(Array.isArray(body.options) ? { options: body.options.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 60)).slice(0, 4) } : {}) } : {};
+    if (claude && c.call && c.call.state !== "done") Object.assign(c.call, cask.ask ? { state: "asked", askAt: at } : { state: "done", doneAt: at });
+    else if (!claude && (mentions.includes("Claude") || c.call?.state === "asked")) c.call = newCall(who, reply, at, { step: at });
     /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
     if (!isQ) {
-      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...ment, ...qt });
+      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...ment, ...qt });
       c.edited = Date.now();
       return c;
     }
@@ -178,7 +197,7 @@ export function applyChange(c, body, who) {
       if (to === "open") Object.assign(c, { assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null });
     } else if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at }); // the latest answer's face on the card
     c.note = { text: reply, by: who, at, from, to, kind: "reply", ...(claude ? { via: "claude" } : {}) };
-    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...ment, ...qt });
+    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...ment, ...qt });
     normalise(c);
     c.edited = Date.now();
     return c;
@@ -192,6 +211,7 @@ export function applyChange(c, body, who) {
     Object.assign(c, { status: "progress", assignee: body.assignTo, pickedAt: at, handedBy: who, handedAt: at });
     c.note = { text: words, by: who, at, from, to: "progress", kind: "hand", toWho: body.assignTo };
     (c.history ||= []).push({ at, by: who, status: "progress", from, kind: "hand", toWho: body.assignTo, ...(words ? { note: words } : {}), ...(words ? ment : {}) });
+    if (body.withClaude === true) c.withClaude = true; // handed to Claude: the person stays on it, with Claude
     normalise(c);
     c.edited = Date.now();
     return c;
@@ -234,6 +254,7 @@ export function withNames(c, people = {}) {
   if (c.note) out.note = { ...c.note, by: name(c.note.by), ...(c.note.toWho ? { toWho: name(c.note.toWho) } : {}) };
   if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by), ...(h.toWho ? { toWho: name(h.toWho) } : {}) }));
   /* Claude's part of the thread names its people too: who answered, who accepted or set it aside (2026-11-04) */
+  if (c.call) out.call = { ...c.call, by: name(c.call.by), ...(c.call.draft ? { draft: { ...c.call.draft, for: name(c.call.draft.for) } } : {}) };
   if (c.draft) out.draft = { ...c.draft, ...(c.draft.decidedBy ? { decidedBy: name(c.draft.decidedBy) } : {}), ...(Array.isArray(c.draft.thread) ? { thread: c.draft.thread.map((t) => ({ ...t, by: name(t.by) })) } : {}) };
   return out;
 }

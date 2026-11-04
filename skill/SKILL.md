@@ -24,13 +24,19 @@ gives; it adds review.config.json, .review/vite.config.js, a dev:review script, 
 
 `npx --no review-mode init` also adds a `review` MCP server to `.mcp.json`. When it is loaded, prefer its tools to the shell:
 `review_list`, `review_show`, `review_pick_up`, `review_done` (only after the person said yes), `review_reply`,
-`review_suggest`, `review_picture`, each with `as` set to the person's handle; moves are marked as made with Claude. A brief sent from the
+`review_suggest`, `review_talk`, `review_picture`, each with `as` set to the person's handle; moves are marked as made with Claude. A brief sent from the
 drawer ("Send to Claude") arrives as `<channel source="review" delivery_id="...">`: call `review_ack` with that id
 first, then follow it. A request to draft (`kind="draft"`, "Claude drafts first") asks only for `review_suggest` on each
 comment listed: look at its picture (`review_picture`) and read its code, leave one or two plain sentences (a fix:
 what to change and where; a question: the answer; not sure what is meant: `unsure` and one question back; where the request shows "you asked … they
 answered …", draft again with that answer), change
-nothing else, then carry on with what you were doing. A brief line "Do this (your suggestion,
+nothing else, then carry on with what you were doing. A call (`kind="call"`, "@Claude on review comment #N") is someone on the team writing @Claude in a comment or a reply,
+answering your question, or handing the comment to you: read first (`review_show`, `review_picture` then Read it, the
+code at its source, the team's design system), then answer with `review_talk` and ONE kind: `answer` (a short message
+in the thread), `ask` (you cannot tell what they mean: one question with 2 to 4 quick picks in `options`; their reply
+comes back as a new call) or `draft` (they asked for help writing a reply: their words, only they see it). The team are
+designers: plain design words and the design system's token and component names, file names only when asked. A call
+changes no code and no status. A brief line "Do this (your suggestion,
 accepted…)" is the plan the person agreed to: do that. Sending needs Claude started with `npx --no review-mode claude` once (it registers the tools, offers a shell helper so
 plain `claude` turns push on in this folder from then on, and starts Claude;
 channels are a research preview). Never run a bare `npx review`: on npm that name is an unrelated package.

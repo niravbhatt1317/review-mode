@@ -218,6 +218,13 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   ObserveOps. Later Slack (one channel per module, one message per comment, its
   thread is the comment's thread; direct messages only for what needs you). Everything, with the open points and steps:
   `discussions/2026-11-04-claude-buddy.md`.
+  - [x] **Step 1, Claude as a teammate** (done 2026-11-04): @Claude in a reply, a comment, an edit or a move's note
+    leaves a call on the comment (the hub, so anyone on the team can call Claude); a connected session claims it every
+    6 s and gets a brief with the thread, the page, the source and the design system (`designSystem` in
+    review.config.json). Claude answers with `review_talk`: an answer in the thread, one question with quick picks (a
+    pick or any reply goes back to Claude, no @ needed), or a draft only the asker sees (Use it, Shorter, Try again).
+    The card shows "Claude is reading…" with what it has read, and "Waiting for Claude" when no session has it after
+    45 s. Claude is first in Assign and Hand over (and the "/" team step): the person stays on it with Claude.
 
 ## Ideas from Claude (2026-10-26, to pick from)
 
