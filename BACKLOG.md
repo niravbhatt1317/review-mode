@@ -146,10 +146,16 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   - Glow: chosen 12px at 33% (`0 0 12px color-mix(in srgb, var(--tone-lit) 33%, transparent)`); tried 16px at 45%
     and 10px at 28%.
   - Size: chosen 30 px tall, 20 px faces; first tried 36 px and 22 px.
-- [ ] **Nirav gets told when work waits for his approval** (outside the browser): email, Teams or a push. Pick the
-  channel.
-- [ ] **Microsoft Teams integration** for the notifications above (an incoming webhook into a channel is the simplest
-  start; a bot for personal messages is more work).
+- [ ] **Told outside the browser** (Nirav; plan drawn 2026-11-04, `fx/outside.png` in that session): today a notice
+  shows only in the drawer. Three ways, to combine:
+  A. **A Mac notification from the extension** (first): the extension checks the hub every minute in its background
+     (today only an open page checks) and shows each person's own notices as system banners; a click opens the
+     comment. No server, no cost; needs the notifications permission and works while Chrome runs.
+  B. **A post in a Teams channel** (next): the hub posts when something needs someone (finished for approval, sent
+     back, handed over), with an "Open the comment" button. Reaches phones, the team sees the flow; shared, not
+     personal. Needs a small Supabase function and the channel's Workflows link (Nirav adds the SQL and the link).
+  C. **An email per person**, best as the morning digest below; needs an email service and its key (Nirav adds them).
+  Each person chooses in the drawer: all notices, only what waits for them, or none.
 
 ## Access
 
@@ -203,6 +209,15 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   subscription token as a repository secret, with a daily cap), and Claude asking on the card when a comment is big
   or unclear.
   The whole discussion: `discussions/2026-10-29-claude-fixes-it.md`.
+  **Grown into "Claude, a buddy for everyone" (Nirav, 2026-11-04, all of it wanted):** @Claude on a comment or
+  reply reads the thread, page, element, code and design system first, then answers, drafts a reply, or plans a
+  change and waits for "go" (always, no skipping); any designer can say go; Claude never merges, Nirav does (PRs wait with a
+  phone reminder; a named stand-in merges while he is away). Adds: sharper and split comments, sum up, clashes, self-check with before and
+  after, the PR's Cloudflare preview link on the comment, follow-ups on the same PR, undo, stop, one PR for many,
+  the same problem elsewhere, digest, nudges, rules from fixes; designer words only; the nextgen design system, not
+  ObserveOps. Later Slack (one channel per module, one message per comment, its
+  thread is the comment's thread; direct messages only for what needs you). Everything, with the open points and steps:
+  `discussions/2026-11-04-claude-buddy.md`.
 
 ## Ideas from Claude (2026-10-26, to pick from)
 
