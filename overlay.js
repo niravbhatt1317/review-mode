@@ -5893,7 +5893,7 @@ function callBusyHtml(c) {
 const myDraft = (c) => (c.call?.draft && isMe(c.call.draft.for) && c.status !== "approved" ? c.call.draft : null);
 function myDraftHtml(c) {
   const d = myDraft(c);
-  return `<div class="th-cdraft">${CLAUDE_AV()}<div class="th-body"><div class="th-who"><b>Claude</b><span class="th-at">${esc(agoText(d.at))} · only you see this</span></div><div class="th-cd-box"><div class="th-cd-l">Draft reply</div>${mentionHtml(d.text)}</div><div class="th-picks"><button type="button" class="th-pick pri th-cd-use">Use it</button><button type="button" class="th-pick th-cd-short">Shorter</button><button type="button" class="th-pick th-cd-again">Try again</button></div></div></div>`;
+  return `<div class="th-cdraft">${CLAUDE_AV()}<div class="th-body"><div class="th-who"><b>Claude</b><span class="th-at">${esc(agoText(d.at))} · only you see this</span></div><div class="th-cd-box"><div class="th-cd-l">Draft reply</div>${mentionHtml(d.text)}</div><div class="th-picks"><button type="button" class="th-pick pri th-cd-send">Send it</button><button type="button" class="th-pick th-cd-use">Edit</button><button type="button" class="th-pick th-cd-short">Shorter</button><button type="button" class="th-pick th-cd-again">Try again</button></div></div></div>`;
 }
 /* drafting again with an answer: told at the end of the open thread, not in the box (Nirav, 2026-11-04) */
 const claudeAgain = (c) => !!c.draft?.thread?.length && (c.draft.state === "reply" || (c.draft.state === "drafting" && Date.now() - (c.draft.at || 0) < DRAFT_LIVE_MS));
@@ -6108,6 +6108,18 @@ function threadClick(e, c, box, onChange) {
   if (t.closest(".th-connect")) return showSheet("callnone"), true;
   /* Claude's draft for you: into your box, or another go */
   const dr = myDraft(c);
+  /* Send it (Nirav, 2026-11-04: one click, not into the box again): posted as your reply, its @names told */
+  if (dr && t.closest(".th-cd-send")) {
+    const mentions = mentionsIn(dr.text).filter((m) => m !== "Claude");
+    c.call.draft = null;
+    onChange();
+    applyUpdate({ id: c.id, reply: dr.text, draftUsed: true, ...(mentions.length ? { mentions } : {}) }).then((r) => {
+      if (!r) c.call.draft = dr; // refused: the draft comes back
+      else toast(`#${c.n} replied`);
+      onChange();
+    });
+    return true;
+  }
   if (dr && t.closest(".th-cd-use")) {
     state.thDraft = { id: c.id, text: dr.text, quote: null, focus: true };
     c.call.draft = null;
