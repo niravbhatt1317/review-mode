@@ -1766,6 +1766,7 @@ root.innerHTML = `
   .th-res { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 11px; font-weight: 500; color: #1E8C81; }
   .th-res svg { width: 11px; height: 11px; }
   .th-res[data-s="ignored"] { color: var(--rv-ink-3); }
+  .pin-tip .th-res:not([data-s="ignored"]), :host([data-theme="dark"]) .th-res:not([data-s="ignored"]) { color: #5FCFC2; } /* the teal lifted for a dark card */
   .th-msg.sug:has(.th-res[data-s="ignored"]) .th-sugg { color: var(--rv-ink-3); }
   .th-again { display: flex; align-items: center; gap: 7px; padding: 5px 0; font-size: 11.5px; color: #9a5a40; }
   .th-again .av-claude { width: 16px; height: 16px; border-radius: 50%; flex: none; }
@@ -6209,7 +6210,7 @@ function askBar(a, c) {
   const words = a.assignTo ? `${k === "assign" ? "Assigning it to" : "Handing it over to"} ${to}`
     : c.status === "approved" ? `Reopening it as <b>${a.to === "open" ? "New" : "In progress"}</b>`
     : a.to === "open" ? "Putting it back to <b>New</b>"
-    : `Sending it back to <b>${c.doneBy ? thName(c.doneBy) : "the person on it"}</b>`;
+    : `Sending it back to <b>${c.doneBy ? (isMe(c.doneBy) ? "you" : esc(c.doneBy)) : "the person on it"}</b>`;
   return `<div class="th-quoting th-moving" data-c="${MOVE_IC[k][0]}"><span class="th-mi">${MOVE_SVG(k)}</span><span class="th-qw">${words}</span><button type="button" class="th-mx" aria-label="Let it go: nothing moves">×</button></div>`;
 }
 function cancelAsk() {

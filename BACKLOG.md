@@ -77,13 +77,13 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   for approval), a small happy moment for them: a smiling face, a word of praise ("Nice one, Pranjal"), something light
   that makes the work feel good. In the same family as the approval and removal effects.
 
-- [ ] **@mentions** (Nirav, 2026-10-29, seen in Tack's launch film): typing @ in a comment, a reply or a note opens the
+- [x] **@mentions** (done 2026-10-30; the tag lighter and a step smaller 2026-11-04) (Nirav, 2026-10-29, seen in Tack's launch film): typing @ in a comment, a reply or a note opens the
   team list with faces; the person mentioned gets a notice (island and "Since you were here"), and their name shows
   in the words as a chip. @Claude is part of the "Claude fixes it" discussion below.
-- [ ] **Pins as faces** (Nirav, 2026-10-29, from Tack): a pin shows its writer, as initials (or their face) in their own
+- [x] **Pins as faces** (done 2026-10-31: the writer's face in a bubble, the number on hover) (Nirav, 2026-10-29, from Tack): a pin shows its writer, as initials (or their face) in their own
   colour, instead of the number; the number stays in the pin card and the drawer, so "#164" still works in a chat.
   Decide: initials or the photo, and what a pile of pins on one element shows.
-- [ ] **A thread on every comment** (Nirav, 2026-10-29; shape agreed the same day, mocks in
+- [x] **A thread on every comment** (done 2026-11-04, all three steps) (Nirav, 2026-10-29; shape agreed the same day, mocks in
   `discussions/2026-10-29-thread-mocks/`): the card's talk becomes one thread, like a pull request's timeline. The
   comment is the root; under it one flat list in time order: people's and Claude's messages, and each status move as
   a quiet line ("Pranjal picked it up"). No nested replies (rails): a reply to a message carries a one-line quote of
@@ -99,6 +99,16 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   1. the one card: the thread, a reply box on fixes too, quoted replies, in the drawer and on the pin;
   2. Send back, Put back and Hand over reasons through the reply box;
   3. Claude's suggestion and questions as messages (ready for the PR and preview later).
+  Built (2026-10-30 to 11-04): quoted replies, a slide to open and shut, "Show N earlier replies"; a move's reason is a
+  message with a small pill (the move's icon and colour, the person it went to) and a badge on the face of the closed
+  line; the reason is typed in the reply box, a bar over it says the move and the button is the move; Claude's
+  question is a warm message answered by quoting it, a decided suggestion is a "Claude suggested" message with
+  "Accepted by" or "Set aside by". The history stays its own timeline, apart from the thread.
+- [x] **"/" for the moves** (done 2026-11-04): "/" at the start of the reply box lists the moves this comment allows
+  (the ⋯ menu's, by the same rules), in the @ list's look; type to narrow, Enter picks; Hand over asks who first. A
+  move asking why opens its box, one that needs none happens at once. A / mid-sentence stays a /.
+- [x] **Put back and Reopen tell someone** (done 2026-11-04): Put back tells the comment's writer ("Pranjal put back
+  your #2"), Reopen tells whoever finished it ("Kishan reopened #1"), each with the reason under it.
 
 ## Data and sync
 
