@@ -5876,11 +5876,13 @@ const CALL_WAIT_MS = 45_000;
 const callBusy = (c) => (c.call?.state === "waiting" || c.call?.state === "reading") && c.status !== "approved" && Date.now() - (c.call.at || 0) < 30 * 60_000;
 function callBusyHtml(c) {
   const k = c.call;
+  /* a test session (?session=_test) is never read by a Claude session: those answer on the team's hub (2026-11-04) */
+  if (k.state === "waiting" && /^_/.test(window.__reviewSession || "")) return `<div class="th-reading idle">${CLAUDE_AV()}<span>This is a test session: Claude answers @Claude on the team's comments, not here</span></div>`;
   if (k.state === "waiting" && Date.now() - (k.at || 0) > CALL_WAIT_MS) return `<div class="th-reading idle">${CLAUDE_AV()}<span>Waiting for Claude: no Claude session has picked it up yet</span></div>`;
   const read = k.read || [];
   const rows = k.state === "reading" ? [["The thread", read.includes("thread")], ...(c.shot ? [["The picture", read.includes("picture")]] : []), ["The code and the design system", false]] : [];
   const list = rows.length ? `<ul>${rows.map(([t, ok]) => `<li class="${ok ? "ok" : "now"}">${t}</li>`).join("")}</ul>` : "";
-  return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is reading…" : "Claude has it, starting…"}</span>${list}</div></div>`;
+  return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is reading…" : "Sent to Claude…"}</span>${list}</div></div>`;
 }
 /* a reply Claude drafted for one person: only they see it, to use as their own */
 const myDraft = (c) => (c.call?.draft && isMe(c.call.draft.for) && c.status !== "approved" ? c.call.draft : null);
@@ -5905,7 +5907,7 @@ function threadHtml(c, moves = true) {
   const msgs = items.filter((x) => x.msg);
   if (!state.thOpen.has(c.id)) {
     /* Claude at work, or a draft waiting for you: said on the closed line first */
-    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Waiting for Claude…"}</span></button>`;
+    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.state === "reading" ? "Claude is reading the thread and the code…" : /^_/.test(window.__reviewSession || "") ? "Test session: Claude answers on the team's comments" : "Sent to Claude…"}</span></button>`;
     if (myDraft(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w"><b>Claude</b> drafted a reply for you: ${esc(myDraft(c).text)}</span><span class="th-tag">Only you</span></button>`;
     /* no replies yet: the drawer card shows its reply box on hover, no trip through ⋯ (Nirav, 2026-11-04) */
     if (!msgs.length) return moves && !isQ(c) && can("answer", c) ? `<div class="th-ghost"><div class="th-ghost-in"><div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="Reply, @ to mention…" aria-label="Reply"><button type="button" class="th-go">Reply</button></div></div></div>` : "";
