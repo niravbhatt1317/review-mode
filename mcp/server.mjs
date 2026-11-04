@@ -237,7 +237,7 @@ async function callRound() {
         ...(talk.length ? [`The thread so far:`, ...talk] : [`No replies before this.`]),
         ``,
         `Read first: review_show ${full.id} (the whole record), review_picture then Read the file (what it looks like),`,
-        `the code at the source, ${cfg.designSystem ? `and the team's design system (${cfg.designSystem}): use its tokens and components by name` : "and the project's design system or tokens"}.`,
+        `the code at the source, ${cfg.designSystem ? `and the team's design system (${cfg.designSystem}${/github\.com\//.test(cfg.designSystem) ? "; read it with gh, its TOKENS.md and component-catalog.json first" : ""}): use its tokens and components by name` : "and the project's design system or tokens"}.`,
         `Then answer with review_talk (as "${defaultAs}"), ONE of:`,
         `- "answer": a short message in the thread. Everyone on this team is a designer: plain design words ("the gap`,
         `  between the title and the icon", "the spacing token space-2"), no code talk unless they ask for files.`,

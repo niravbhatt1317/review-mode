@@ -39,7 +39,7 @@ export function loadConfig(from = process.cwd()) {
     root,
     project: String(project).replace(/^@[^/]+\//, "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-"),
     port: Number(own.port) || 4178,
-    designSystem: typeof own.designSystem === "string" && own.designSystem.trim() ? own.designSystem.trim() : null, // where the team's design system lives (a repo or a folder), for Claude's briefs
+    designSystem: [local.designSystem, own.designSystem, hub.designSystem].find((x) => typeof x === "string" && x.trim())?.trim() || null, // the team's design system (hub.json; a project may name its own), for Claude's briefs
     drafts: own.drafts !== false && process.env.REVIEW_DRAFTS !== "0", // Claude drafts first (mcp/server.mjs); "drafts": false turns it off
     hub: hub.url && hub.anonKey ? { url: String(hub.url).replace(/\/+$/, ""), key: hub.anonKey } : null,
     people,

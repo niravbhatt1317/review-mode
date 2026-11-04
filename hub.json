@@ -4,6 +4,7 @@
   "authPage": "https://niravbhatt1317.github.io/review-mode/auth.html",
   "project": "next-gen-console",
   "approvers": ["niravbhatt1317"],
+  "designSystem": "github.com/niravbhatt1317/nextgen-design-system",
   "people": {
     "niravbhatt1317": "Nirav",
     "kisu1311": "Kishan",
