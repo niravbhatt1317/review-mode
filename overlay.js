@@ -1734,6 +1734,13 @@ root.innerHTML = `
   .th-last .th-faces .av { width: 16px; height: 16px; font-size: 7.5px; box-shadow: 0 0 0 1.5px var(--rv-surface); }
   .th-last .th-faces .av + .av { margin-left: -5px; }
   .card-th { display: flow-root; }
+  /* the hover reply box: folded away, it slides open when the pointer rests on the card (a beat later, so running down
+     the list does not open every card), at once for the keyboard */
+  .th-ghost { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .26s cubic-bezier(.4,0,.2,1), opacity .18s ease; }
+  .th-ghost-in { min-height: 0; overflow: hidden; margin: 0 -4px -4px; padding: 0 4px 4px; }
+  .th-ghost .th-box { margin-top: 10px; }
+  .card:hover .th-ghost { grid-template-rows: 1fr; opacity: 1; transition-delay: .3s, .36s; }
+  .card:is(:focus-visible, :has(:focus-visible)) .th-ghost { grid-template-rows: 1fr; opacity: 1; transition-delay: 0s; }
   .th-open { margin-top: 10px; } /* no divider: the head says where the thread starts (Nirav, 2026-10-31) */
   .th-more { display: flex; align-items: center; gap: 10px; margin: 2px 0 6px; padding: 2px 0; border: 0; background: none; color: var(--rv-ink-3); font: 500 11.5px/1.3 -apple-system, system-ui, sans-serif; cursor: pointer; } /* Instagram's way: a short line, then the words (Nirav, 2026-10-31) */
   .th-more::before { content: ""; width: 24px; height: 1px; background: currentColor; opacity: .6; }
@@ -5840,7 +5847,8 @@ function threadHtml(c, moves = true) {
   const items = threadOf(c);
   const msgs = items.filter((x) => x.msg);
   if (!state.thOpen.has(c.id)) {
-    if (!msgs.length) return "";
+    /* no replies yet: the drawer card shows its reply box on hover, no trip through ⋯ (Nirav, 2026-11-04) */
+    if (!msgs.length) return moves && !isQ(c) && can("answer", c) ? `<div class="th-ghost"><div class="th-ghost-in"><div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="Reply, @ to mention…" aria-label="Reply"><button type="button" class="th-go">Reply</button></div></div></div>` : "";
     const last = msgs.find((x) => x.ask) || msgs[msgs.length - 1]; // Claude's question waiting comes first, even under a later reply
     /* the latest reply with its writer, fading out, and a pill with who joined in and how many (Nirav, 2026-10-31) */
     const pill = msgs.length === 1 ? "" : `<span class="th-n" title="${msgs.length} replies">${thFaces(c, msgs)}${msgs.length}</span>`;
@@ -5916,6 +5924,19 @@ function threadSync(box, c, onSent) {
     }
     return;
   }
+  /* the hover box: once clicked into, it is the thread's box, opened (and shut again if left empty) */
+  if (el.querySelector(".th-ghost")) {
+    /* focus events are held at the window (the focus-trap guard above), so a click or the first key opens it */
+    const open = () => {
+      state.thOpen.add(c.id);
+      state.thDraft = { id: c.id, text: input.value, quote: null, focus: true };
+      threadSync(box, c, onSent);
+    };
+    input.addEventListener("pointerdown", (e) => (e.preventDefault(), open()), { once: true });
+    input.addEventListener("input", open, { once: true });
+    input.addEventListener("keydown", (e) => e.stopPropagation());
+    return;
+  }
   const d = state.thDraft?.id === c.id ? state.thDraft : null;
   if (d) input.value = d.text || "";
   input.addEventListener("input", () => {
@@ -5928,7 +5949,7 @@ function threadSync(box, c, onSent) {
   input.addEventListener("keydown", (e) => {
     e.stopPropagation();
     if (e.key === "Enter") threadSend(c, input, go, onSent);
-    if (e.key === "Escape") input.blur();
+    if (e.key === "Escape") (input.value.trim() || threadOf(c).length ? input.blur() : thShutEmpty(c.id));
   });
   /* opened with no replies yet (⋯ → Reply): leaving the box empty shuts it again, there is no header to shut it by */
   input.addEventListener("blur", () => setTimeout(() => {
@@ -5945,6 +5966,19 @@ function threadSync(box, c, onSent) {
     if (d) d.focus = false;
   }
 }
+/* a box opened with no replies yet and left empty shuts again: on Esc, or a click anywhere else in the drawer (its
+   blur never arrives, the window's focus guard holds it) */
+function thShutEmpty(id) {
+  const c = state.comments.find((x) => x.id === id);
+  const card = panelBody?.querySelector(`.card[data-id="${id}"]`);
+  if (!c || state.asking?.id === id || threadOf(c).length || card?.querySelector(".th-in")?.value.trim()) return; // a move asking why keeps its box
+  state.thOpen.delete(id);
+  if (state.thDraft?.id === id) state.thDraft = null;
+  if (card) thSlide(card, () => threadSync(card, c));
+}
+root.addEventListener("pointerdown", (e) => {
+  for (const id of [...state.thOpen]) if (!panelBody?.querySelector(`.card[data-id="${id}"] .card-th`)?.contains(e.target)) thShutEmpty(id);
+}, true);
 async function threadSend(c, input, btn, onSent) {
   const words = input.value.trim();
   if (!words) return input.focus();
