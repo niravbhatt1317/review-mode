@@ -419,19 +419,25 @@ root.innerHTML = `
   /* @mentions: a soft blue chip in the words; the team list while @ is typed */
   /* slim tags (Nirav, 2026-10-29: they nearly touched the line above): their own short line box, so they never reach
      the next line */
-  .mention { display: inline-block; padding: 1px 4px; margin: 0 -1px; line-height: 1.15; border-radius: 4px; background: hsl(214 98% 50% / .12); color: hsl(214 90% 42%); font-weight: 500; white-space: nowrap; }
-  :host([data-theme="dark"]) .mention, .pin-tip .mention { background: hsl(214 98% 60% / .2); color: hsl(214 100% 80%); }
+  .mention { display: inline-block; padding: 1px 4px; margin: 0 -1px; line-height: 1.15; border-radius: 4px; background: hsl(214 98% 50% / .08); color: hsl(214 90% 42%); font-size: .92em; font-weight: 500; white-space: nowrap; } /* a step under the words, a lighter tint (Nirav, 2026-11-04: the tag looked bigger than the move pill) */
+  :host([data-theme="dark"]) .mention, .pin-tip .mention { background: hsl(214 98% 60% / .15); color: hsl(214 100% 80%); }
   .mention-pop { position: fixed; z-index: 2147483000; display: flex; flex-direction: column; min-width: 200px; max-width: 280px; padding: 4px; border: 1px solid var(--rv-line); border-radius: 10px; background: var(--rv-surface); box-shadow: 0 12px 32px rgba(29,43,62,.16), 0 2px 6px rgba(29,43,62,.06); }
   .mention-pop[hidden] { display: none; }
   .mention-pop .mp-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--rv-ink); font: 400 13px/1.3 -apple-system, system-ui, sans-serif; text-align: left; cursor: pointer; }
   .mention-pop .mp-row.on, .mention-pop .mp-row:hover { background: var(--rv-hover); }
   .mention-pop .mp-row .av, .mention-pop .mp-row .av-claude { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
   .mention-pop .mp-all { font-size: 11px; font-weight: 600; }
+  /* the "/" list is the @ list (Nirav, 2026-11-04: one look): the move's icon in a round mark the size of a face */
+  .mention-pop .sp-ic { --c: hsl(270 62% 52%); flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--c) 12%, var(--rv-surface)); color: var(--c); }
+  .mention-pop .sp-ic[data-c="prog"] { --c: #D45F00; } .mention-pop .sp-ic[data-c="hand"] { --c: hsl(214 98% 44%); } .mention-pop .sp-ic[data-c="appr"] { --c: var(--rv-st-appr-dot); } .mention-pop .sp-ic[data-c="done"] { --c: var(--rv-st-done-dot); }
+  .mention-pop .sp-ic svg { width: 11px; height: 11px; }
+  .mention-pop.dark .sp-ic { background: color-mix(in srgb, var(--c) 22%, hsl(216 36% 18%)); }
   .mention-pop.dark .av-i { background: hsl(216 28% 36%); color: #fff; } /* the initial, readable on the dark list */
-  .mention-hl { position: absolute; z-index: 0; pointer-events: none; overflow: hidden; margin: 0; border-style: solid; border-color: transparent; background: transparent; color: transparent; }
+  .mention-hl { position: absolute; z-index: 0; pointer-events: none; overflow: hidden; margin: 0; border-style: solid; border-color: transparent; background: transparent; }
   .mention-hl > div { will-change: transform; }
-  .mention-hl .mention { display: inline; padding: 0; margin: 0; line-height: inherit; color: transparent; background: hsl(214 98% 55% / .3); box-shadow: 0 0 0 1.5px hsl(214 98% 55% / .3); border-radius: 3px; font-weight: inherit; }
-  .mention-hl .mention.m-claude { background: rgba(217,119,87,.4); box-shadow: 0 0 0 1.5px rgba(217,119,87,.4); }
+  .mention-hl .mention { display: inline; padding: 0; margin: 0; font-size: inherit; line-height: inherit; color: hsl(214 90% 42%); background: hsl(214 98% 50% / .08); box-shadow: 0 0 0 2px hsl(214 98% 50% / .08); border-radius: 2px; font-weight: inherit; } /* the sent reply's tag: blue words on the light tint; same size and weight as the typed words, so nothing drifts */
+  .mention-hl .mention.m-claude { color: #b4532f; background: rgba(217,119,87,.12); box-shadow: 0 0 0 2px rgba(217,119,87,.12); }
+  :host([data-theme="dark"]) .mention-hl .mention, .pin-tip .mention-hl .mention, .composer .mention-hl .mention { color: hsl(214 100% 80%); background: hsl(214 98% 60% / .15); box-shadow: 0 0 0 2px hsl(214 98% 60% / .15); }
   .mention-pop .mp-sub { margin-left: auto; padding-left: 10px; font-size: 11px; color: var(--rv-ink-3); white-space: nowrap; }
   .mention-pop { max-width: 340px; }
   .mention-pop.dark { --rv-surface: hsl(216 36% 23%); --rv-ink: hsl(216 30% 92%); --rv-ink-3: hsl(216 25% 65%); --rv-line: rgba(255,255,255,.1); --rv-hover: rgba(255,255,255,.08); box-shadow: 0 14px 32px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25); }
@@ -1743,6 +1749,15 @@ root.innerHTML = `
   .th-who .th-move { margin-left: 4px; color: var(--rv-ink-2); } .th-who .th-move b { font-weight: 500; } /* "You put it back": the move as part of the sentence */
   .pin-tip .th-who .th-move { color: hsl(216 30% 80%); }
   .th-msg.claude .th-who b { color: #b4532f; }
+  /* the move's pill over its reason: 16px, regular words, the person in medium, a small face (Nirav, 2026-11-04) */
+  .th-pill { --c: hsl(270 62% 52%); display: inline-flex; align-items: center; gap: 3px; max-width: 100%; height: 16px; margin: 2px 0 1px; padding: 0 6px 0 4px; border-radius: 999px; background: color-mix(in srgb, var(--c) 11%, var(--rv-surface)); color: var(--c); font-size: 10px; line-height: 16px; white-space: nowrap; vertical-align: top; }
+  .th-pill[data-c="prog"] { --c: #D45F00; } .th-pill[data-c="hand"] { --c: hsl(214 98% 44%); } .th-pill[data-c="appr"] { --c: var(--rv-st-appr); } .th-pill[data-c="done"] { --c: var(--rv-st-done); }
+  .th-pill > svg { flex: 0 0 auto; width: 9px; height: 9px; }
+  .th-pill > span { display: inline-flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .th-pill b { font-weight: 500; }
+  .th-pill .av { width: 9px; height: 9px; margin: 0; font-size: 5px; flex: 0 0 auto; box-shadow: none; }
+  .th-body > .th-pill { display: flex; width: max-content; margin-bottom: 3px; } /* a little air between the move and its words (Nirav, 2026-11-04) */
+  .pin-tip .th-pill { background: color-mix(in srgb, var(--c) 22%, hsl(216 36% 18%)); color: color-mix(in srgb, var(--c) 60%, #fff); }
   /* Claude's part of the thread (Nirav, 2026-11-04): warm while it waits on someone, a quiet block for a decided suggestion */
   .th-msg.ask { margin: 2px -6px; background: color-mix(in srgb, #D97757 8%, var(--rv-surface)); }
   .th-msg.ask:hover { background: color-mix(in srgb, #D97757 12%, var(--rv-surface)); }
@@ -1788,6 +1803,19 @@ root.innerHTML = `
   .th-quoting .th-qw { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .th-quoting .th-qx { flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--rv-ink-3); font-size: 14px; line-height: 20px; cursor: pointer; }
   .th-quoting .th-qx:hover { color: var(--rv-ink); background: hsl(var(--rv-n20)); }
+  /* a move asking why (step 2, Nirav, 2026-11-04): its bar says what is being done, the button is the move in its colour */
+  .th-moving { --c: hsl(270 62% 52%); color: var(--rv-ink-2); }
+  .th-moving[data-c="prog"] { --c: #D45F00; } .th-moving[data-c="hand"] { --c: hsl(214 98% 44%); }
+  .th-moving .th-mi { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--c) 14%, var(--rv-surface)); color: var(--c); }
+  .th-moving .th-mi svg { width: 10px; height: 10px; }
+  .th-moving .th-qw { display: inline-flex; align-items: center; gap: 4px; }
+  .th-moving .th-qw .av { width: 16px; height: 16px; margin: 0; font-size: 8px; }
+  .th-moving .th-mx { flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--rv-ink-3); font-size: 14px; line-height: 20px; cursor: pointer; }
+  .th-moving .th-mx:hover { color: var(--rv-ink); background: hsl(var(--rv-n20)); }
+  .th-move-box { --c: hsl(270 62% 52%); } .th-move-box[data-c="prog"] { --c: #D45F00; } .th-move-box[data-c="hand"] { --c: hsl(214 98% 44%); }
+  .th-move-box .th-go, .th-move-box .th-go:hover, .th-box.th-move-box:focus-within .th-go { position: relative; background: var(--c); color: #fff; }
+  .th-move-box .th-go:hover { filter: brightness(.92); }
+  .th-hint { margin: 5px 0 0 12px; font-size: 10.5px; color: var(--rv-ink-3); }
   .th-box { display: flex; align-items: center; gap: 4px; margin-top: 8px; padding: 3px 3px 3px 12px; border: 1px solid var(--rv-line-2); border-radius: 999px; background: var(--rv-surface); transition: border-color .12s, box-shadow .12s; }
   .th-quoting + .th-box { margin-top: 0; border-radius: 0 0 12px 12px; }
   .th-box:focus-within { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 3px hsl(214 98% 44% / .12); }
@@ -1796,13 +1824,6 @@ root.innerHTML = `
   .th-go { flex: 0 0 auto; height: 24px; padding: 0 11px; border: 0; border-radius: 999px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 11.5px/24px -apple-system, system-ui, sans-serif; cursor: pointer; }
   .th-go:hover, .th-box:focus-within .th-go { background: hsl(214 98% 44%); color: #fff; }
   .th-go.loading { opacity: .6; pointer-events: none; }
-  .card-ask { margin-top: 8px; }
-  .card-ask .note-box { display: flex; align-items: center; gap: 4px; height: 28px; box-sizing: border-box; padding: 0 2px 0 0; border: 1px solid var(--rv-line-2); border-radius: 7px; background: var(--rv-surface); }
-  .card-ask .note-box:focus-within { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 1px hsl(214 98% 44%); }
-  .card-ask .note-in { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0 0 0 10px; font: 12px/1.2 -apple-system, system-ui, sans-serif; color: var(--rv-ink); background: transparent; outline: none; }
-  .card-ask .note-in::placeholder { color: var(--rv-ink-3); }
-  .card-ask .note-go { flex: 0 0 auto; height: 22px; padding: 0 9px; border: 0; border-radius: 5px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 11px/22px -apple-system, system-ui, sans-serif; cursor: pointer; }
-  .card-ask .note-go:hover { background: hsl(214 98% 44%); color: #fff; }
   /* the thread on the pin card: the same block, in the dark card's colours */
   .pin-tip .th-last { background: rgba(255,255,255,.06); color: hsl(216 30% 80%); }
   .pin-tip .th-last:hover { background: rgba(255,255,255,.1); }
@@ -3163,8 +3184,8 @@ function noticeSave(m) {
 /* SMART WORDING (Nirav, 2026-10-27): who, what, which. One to three comments by number, more as a count ("20 of your
    comments", never a long list); Claude credited when the move was made with it; several kinds by one person in one
    sentence ("Pranjal picked up 2 and sent back #9"), the most pressing first. */
-const NOTICE_RANK = { mention: 0, all: 1, back: 2, hand: 3, done: 4, answer: 5, approved: 6, pick: 7, new: 8 };
-const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new" };
+const NOTICE_RANK = { mention: 0, all: 1, back: 2, reopen: 3, putback: 4, hand: 5, done: 6, answer: 7, approved: 8, pick: 9, new: 10 };
+const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", reopen: "prog", putback: "new", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new" };
 const numsOf = (ns) => (ns.length === 1 ? `#${ns[0]}` : ns.length <= 3 ? `${ns.slice(0, -1).map((n) => `#${n}`).join(", ")} and #${ns[ns.length - 1]}` : `${ns.length} comments`);
 function noticePhrase(kind, ns) {
   const n = ns.length, nums = numsOf(ns), many = n > 3;
@@ -3174,6 +3195,8 @@ function noticePhrase(kind, ns) {
     case "done": return `finished ${nums}, ${n > 1 ? "they wait" : "it waits"} for your approval`;
     case "approved": return many ? `approved ${n} of your comments` : `approved your ${nums}`;
     case "back": return `sent back ${nums} to you`;
+    case "putback": return many ? `put back ${n} of your comments` : `put back your ${nums}`; // the writer hears it is New again (Nirav, 2026-11-04)
+    case "reopen": return `reopened ${nums}`; // the one who finished it hears it is open again
     case "answer": return n === 1 ? `answered your question ${nums}` : many ? `answered ${n} of your questions` : `answered your questions ${nums}`;
     case "new": return `added ${nums}`;
     case "mention": return `mentioned you on ${nums}`;
@@ -3184,7 +3207,7 @@ function noticePhrase(kind, ns) {
 /* the short form, for several kinds in one sentence: "picked up 2", "sent back #9" */
 function noticeShort(kind, ns) {
   const x = ns.length === 1 ? `#${ns[0]}` : String(ns.length);
-  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}` }[kind]; // "added 2" alone read oddly
+  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, putback: `put back ${x}`, reopen: `reopened ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}` }[kind]; // "added 2" alone read oddly
 }
 function noticeSentence(who, parts, claude) {
   const name = String(who).split(/\s+/)[0] + (claude ? ", with Claude," : "");
@@ -3204,7 +3227,11 @@ function noticesNow() {
     if (c.pending) continue;
     /* mentioned in the comment itself: a step of its own, at its creation */
     const made = c.ts && c.mentions?.some((x) => isMe(x) || x === "all") ? [{ at: c.ts, by: c.by, mentions: c.mentions }] : [];
+    let doer = null, was = "open"; // who last sent it for approval, as the steps go: a reopen tells them
     for (const s of [...made, ...(c.history || [])]) {
+      const finished = doer;
+      if (s.status === "approval" && (s.from || was) !== "approval") doer = s.by; // older steps keep no "from": the walk knows it
+      if (s.status) was = s.status;
       if (!(s.at > m.seen) || !s.by || isMe(s.by) || m.gone.has(`${c.id}:${s.at}`)) continue;
       const seenAt = m.seenAt?.[`${c.id}:${s.at}`];
       if (seenAt && Date.now() - seenAt > 864e5) continue; // seen in the list a day ago: it leaves by itself (Nirav, 2026-10-27)
@@ -3217,6 +3244,8 @@ function noticesNow() {
         : s.from === "open" && s.status === "progress" ? (mine(c) ? "pick" : null)
         : s.from === "progress" && s.status === "approval" ? (!isQ(c) && isApprover() ? "done" : null)
         : s.from === "approval" && s.status === "progress" && s.kind !== "take" ? (isMe(c.assignee) ? "back" : null) // taking your own back is not a send-back
+        : s.from === "approved" && (s.status === "open" || s.status === "progress") ? (isMe(finished) ? "reopen" : null) // to whoever finished it
+        : s.from === "progress" && s.status === "open" && s.kind !== "to_fix" ? (mine(c) ? "putback" : null) // to the writer: New again
         : null;
       if (!kind) continue;
       const k = `${kind}|${s.by}`;
@@ -3243,7 +3272,7 @@ const noteFace = (name) => {
 function noticeRowsHtml(list) {
   return list.map((g, i) => {
     const one = new Set(g.steps.map((x) => x.c.id)).size === 1 ? g.steps.reduce((x, y) => (y.s.at > x.s.at ? y : x)) : null; // one comment: its latest step's reason
-    const why = !one ? "" : one.s.note && (g.kind === "back" || g.kind === "hand" || g.kind === "answer" || g.kind === "mention" || g.kind === "all") ? `<span class="note-why">"${esc(one.s.note.slice(0, 80))}"</span>` : `<span class="note-why">${esc(noticeSnippet(one.c))}</span>`; // the reason when there is one, else what the comment is
+    const why = !one ? "" : one.s.note && (g.kind === "back" || g.kind === "putback" || g.kind === "reopen" || g.kind === "hand" || g.kind === "answer" || g.kind === "mention" || g.kind === "all") ? `<span class="note-why">"${esc(one.s.note.slice(0, 80))}"</span>` : `<span class="note-why">${esc(noticeSnippet(one.c))}</span>`; // the reason when there is one, else what the comment is
     const go = g.steps.some((x) => x.c.status !== "approved"); // approved ones are not in this list to go to
     return `<div class="join-row note-row${go ? " go" : ""}" data-i="${i}">${noteFace(g.who)}<span class="join-who"><span class="note-txt">${esc(noticeText(g))}</span>${why}</span><span class="note-when">${esc(agoText(g.at))}</span><button type="button" class="note-x" aria-label="Clear this">×</button></div>`;
   }).join("");
@@ -5326,25 +5355,39 @@ function mentionLayer(el) {
   const multi = el.tagName === "TEXTAREA";
   if (getComputedStyle(el).position === "static") el.style.position = "relative";
   el.style.zIndex = "1";
+  /* the layer draws the words too, the tag in blue as in a sent reply (Nirav, 2026-11-04: a dark block on dark words);
+     the box's own words go see-through over it, its caret and selection stay */
+  const ink = getComputedStyle(el).color;
+  el.style.color = "transparent";
+  el.style.caretColor = ink;
+  layer.style.color = ink;
   const sync = () => {
     /* the box's own colour (it may change on focus) moves to the layer, the box goes see-through over it */
     el.style.backgroundColor = "";
     const cs = getComputedStyle(el);
     layer.style.backgroundColor = cs.backgroundColor;
     el.style.backgroundColor = "transparent";
-    Object.assign(layer.style, { left: `${el.offsetLeft}px`, top: `${el.offsetTop}px`, width: `${el.offsetWidth}px`, height: `${el.offsetHeight}px`, borderRadius: cs.borderRadius });
+    /* 3px wider each side, the words moved in by the same: a tag's tint ring at the very start is not cut (Nirav, 2026-11-04) */
+    const G = 3;
+    Object.assign(layer.style, { left: `${el.offsetLeft - G}px`, top: `${el.offsetTop}px`, width: `${el.offsetWidth + 2 * G}px`, height: `${el.offsetHeight}px`, borderRadius: cs.borderRadius });
     for (const k of ["font", "letterSpacing", "wordSpacing", "textIndent", "textTransform", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "lineHeight", "textAlign", "boxSizing"]) layer.style[k] = cs[k];
+    layer.style.paddingLeft = `${parseFloat(cs.paddingLeft) + G}px`;
+    layer.style.paddingRight = `${parseFloat(cs.paddingRight) + G}px`;
     layer.style.whiteSpace = multi ? "pre-wrap" : "pre";
     if (!multi) { // a one-line box centres its line; the layer starts at the top, so it gets the same gap above (Nirav, 2026-10-30: the tag sat high)
       const room = el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom), lh = parseFloat(cs.lineHeight) || room;
       layer.style.paddingTop = `${parseFloat(cs.paddingTop) + Math.max(0, (room - lh) / 2)}px`;
     }
     layer.style.overflowWrap = multi ? "break-word" : "normal";
-    inner.innerHTML = el.value.includes("@") ? `${mentionHtml(el.value)}${multi ? "<br>" : ""}` : "";
+    const v = el.value; // plain words drawn as they are: the tags need the team, which may not be loaded yet at start-up
+    inner.innerHTML = `${v.includes("@") ? mentionHtml(v) : v.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch])}${multi ? "<br>" : ""}`;
     inner.style.transform = `translate(${-el.scrollLeft}px, ${-el.scrollTop}px)`;
     if (multi) inner.style.width = `${el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)}px`;
   };
   for (const ev of ["input", "scroll", "focus", "blur", "keyup", "select"]) el.addEventListener(ev, sync);
+  /* words set from code (a sent reply emptied, a draft put back) redraw the layer too: the box's own are see-through */
+  const own = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value");
+  Object.defineProperty(el, "value", { configurable: true, get() { return own.get.call(el); }, set(v) { own.set.call(el, v); sync(); } });
   new ResizeObserver(sync).observe(el);
   sync();
 }
@@ -5370,6 +5413,7 @@ function attachMentions(el) {
 mentionPop.addEventListener("mousedown", (e) => e.preventDefault()); // the box keeps its focus and caret
 mentionPop.addEventListener("click", (e) => {
   const b = e.target.closest(".mp-row");
+  if (b && slashFor) return slashPick(Number(b.dataset.i));
   if (b && mentionFor) mentionPick(mentionFor.items[Number(b.dataset.i)]);
 });
 /* WHO MAY DO WHAT comes from the hub's rules table (hub/roles.sql, review_rules; Nirav, 2026-10-24): change a row in
@@ -5732,9 +5776,20 @@ function thLastFace(c, x) {
   const said = x.tip || String(x.move || "").replace(/<[^>]+>/g, "");
   return `<span class="th-fw">${face}<span class="th-bd" data-c="${ic[0]}" title="${esc(said[0].toUpperCase() + said.slice(1))}">${MOVE_SVG(x.mk)}</span></span>`;
 }
+/* the move as a small pill over its reason (Nirav, 2026-11-04: "sent it back" in grey read as a plain reply): the
+   move's icon and colour, and the person it went to */
+function movePill(c, s, from, doer) {
+  const to = (name) => (name ? `${thFace(c, name)}<b>${isMe(name) ? "you" : esc(name)}</b>` : "");
+  if (s.kind === "hand") return `${from === "open" ? "Assigned" : "Handed"} to ${to(s.toWho) || "someone"}`;
+  if (s.kind === "take") return "Took it back";
+  if (s.status === "progress") return from === "approval" ? `Sent back${doer ? ` to ${to(doer)}` : ""}` : from === "approved" ? "Reopened" : "Picked up";
+  if (s.status === "approval") return "Sent for approval";
+  if (s.status === "approved") return isQ(c) ? "Resolved" : "Approved";
+  return from === "approved" ? "Reopened as <b>New</b>" : "Put back to <b>New</b>";
+}
 function threadOf(c) {
   const out = [];
-  let was = "open";
+  let was = "open", doer = null; // who last sent it for approval: a send back goes to them
   for (const s of c.history || []) {
     const from = s.from || was;
     if (s.status) was = s.status;
@@ -5742,7 +5797,8 @@ function threadOf(c) {
     if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays });
     /* a move's reason is a reply, labelled with the move ("You put it back"); a bare move is the history's
        (Nirav, 2026-10-30: the words were written for someone to read) */
-    else if (s.note && s.kind !== "mention") out.push({ msg: true, at: s.at, by: s.by, words: s.note, move: stepVerb(c, s, from), st: s.status, mk: moveKey(s, from) });
+    else if (s.note && s.kind !== "mention") out.push({ msg: true, at: s.at, by: s.by, words: s.note, move: stepVerb(c, s, from), st: s.status, mk: moveKey(s, from), pill: movePill(c, s, from, doer) });
+    if (s.status === "approval" && from !== "approval") doer = s.by; // a real move to For approval, not a reply or a mention on it
   }
   /* Claude's part (Nirav, 2026-11-04): each question it asked and the answer (a reply quoting it), the question still
      waiting, and the suggestion once someone accepted it or set it aside. A live suggestion stays the box above */
@@ -5779,7 +5835,7 @@ const thName = (name) => (name === "Claude" ? "Claude" : isMe(name) ? "You" : es
 const TH_ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'; // the reply arrow, drawn: the ↩ glyph sat on the baseline
 /* who joined in, the latest first, three at most */
 const thFaces = (c, msgs) => `<span class="th-faces">${[...new Set(msgs.map((x) => x.by).reverse())].slice(0, 3).map((n) => thFace(c, n)).join("")}</span>`;
-function threadHtml(c) {
+function threadHtml(c, moves = true) {
   const items = threadOf(c);
   const msgs = items.filter((x) => x.msg);
   if (!state.thOpen.has(c.id)) {
@@ -5800,7 +5856,7 @@ function threadHtml(c) {
     const q = x.quote ? `<button type="button" class="th-quote" data-at="${x.quote.at}">${TH_ARROW}<b>${thName(x.quote.by)}</b><span>${esc(x.quote.text)}</span></button>` : "";
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
     const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words">${mentionHtml(x.words)}</div>`;
-    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.move ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${q}${words}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
+    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (claudeAgain(c)) rows.push(`<div class="th-again">${CLAUDE_AV()}<span>Claude is drafting again with ${myName(c.draft.thread[c.draft.thread.length - 1].by) ? "your" : "this"} answer…</span></div>`);
   const d = state.thDraft?.id === c.id ? state.thDraft : null;
@@ -5814,6 +5870,14 @@ function threadHtml(c) {
     const cut = Math.min(at.length ? at[Math.max(0, at.length - 3)] : rows.length, rows.length - 5); // from the third-last message, five rows at least
     if (cut > 1) shown = [`<button type="button" class="th-more" aria-expanded="${all}">${all ? "Hide earlier replies" : `Show ${cut} earlier ${cut === 1 ? "reply" : "replies"}`}</button>`, ...(all ? rows : rows.slice(cut))];
   }
+  /* a move asking why takes the box over: its bar, its button (step 2) */
+  const a = moves && state.asking?.id === c.id ? state.asking : null;
+  if (a) {
+    const who = a.assignTo ? (isMe(a.toName) ? "yourself" : esc(a.toName)) : "";
+    const ph = a.assignTo ? `A note for ${who} (optional)` : "Why? @ to mention";
+    const hint = a.assignTo ? `<div class="th-hint">Enter ${a.label === "Assign" ? "assigns it" : "hands it over"}, with or without a note</div>` : "";
+    return `<div class="th-open"><div class="th-list">${shown.join("")}</div>${askBar(a, c)}<div class="th-box th-move-box" data-c="${MOVE_IC[askKey(a, c)][0]}"><input class="th-in" type="text" maxlength="600" placeholder="${ph}" aria-label="${esc(a.label)}: ${ph}"><button type="button" class="th-go">${esc(a.label)}</button></div>${hint}</div>`;
+  }
   return `<div class="th-open"><div class="th-list">${shown.join("")}</div>${quoting}<div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="${answering ? "Answer Claude…" : "Reply, @ to mention…"}" aria-label="${answering ? "Answer Claude" : "Reply"}"><button type="button" class="th-go">Reply</button></div></div>`;
 }
 /* the thread block on a card (the drawer's or the pin card's), and its reply box wired */
@@ -5821,7 +5885,8 @@ function threadSync(box, c, onSent) {
   const el = box.classList.contains("card-th") ? box : box.querySelector(".card-th");
   if (!el) return;
   const typing = el.querySelector(".th-in") === root.activeElement;
-  el.innerHTML = threadHtml(c);
+  const ask = !onSent && state.asking?.id === c.id ? state.asking : null; // the drawer's card asks why; the pin card hands its moves to it
+  el.innerHTML = threadHtml(c, !onSent);
   /* the tags are known only once the team list is in: drawn before it, "@Kishan" stayed plain words (Nirav, 2026-10-30) */
   if (!teamCache.list.length && /@/.test(el.querySelector(".th-w, .th-list")?.textContent || "")) teamList().then((t) => t.length && el.isConnected && threadSync(box, c, onSent));
   const list = el.querySelector(".th-list");
@@ -5830,6 +5895,26 @@ function threadSync(box, c, onSent) {
   requestAnimationFrame(toEnd); // the pin card is measured a frame later
   const input = el.querySelector(".th-in");
   if (!input) return;
+  if (ask) {
+    const go = el.querySelector(".th-go");
+    input.value = ask.text;
+    input.addEventListener("input", () => (ask.text = input.value));
+    attachMentions(input);
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") askGo(box, c, input, go);
+      if (e.key === "Escape") cancelAsk();
+    });
+    go.addEventListener("click", (e) => {
+      e.stopPropagation();
+      askGo(box, c, input, go);
+    });
+    if (ask.focused) {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(input.value.length, input.value.length); // after "@Kishan ", ready to type
+    }
+    return;
+  }
   const d = state.thDraft?.id === c.id ? state.thDraft : null;
   if (d) input.value = d.text || "";
   input.addEventListener("input", () => {
@@ -5837,6 +5922,7 @@ function threadSync(box, c, onSent) {
     state.thDraft.text = input.value;
   });
   attachMentions(input);
+  if (!onSent && !isQ(c)) attachSlash(input, box, c); // "/" for the moves, on the drawer's card
   const go = el.querySelector(".th-go");
   input.addEventListener("keydown", (e) => {
     e.stopPropagation();
@@ -5930,6 +6016,10 @@ function threadClick(e, c, box, onChange) {
     onChange();
     return true;
   }
+  if (t.closest(".th-mx")) {
+    cancelAsk();
+    return true;
+  }
   if (t.closest(".th-qx")) {
     if (state.thDraft?.id === c.id) Object.assign(state.thDraft, { quote: null, focus: true });
     onChange();
@@ -5955,6 +6045,102 @@ function threadClick(e, c, box, onChange) {
     return true;
   }
   return !!t.closest(".th-open, .th-box");
+}
+/* "/" IN THE REPLY BOX (Nirav, 2026-11-04): typed at the very start, the moves this comment allows show in a small
+   list (the ⋯ menu's, by the same rules); type to narrow, ↑↓ and Enter to pick. A pick presses that move's own button,
+   so a move asking why opens its box (step 2) and one that needs no words happens at once; Hand over asks who first,
+   from the team. A / anywhere else is a plain /, and Esc leaves it as typed. */
+let slashFor = null; // { input, card, c, items, i, who }
+function slashMoves(c) {
+  const out = [];
+  const say = { approval: ["Done, for approval", "done", ["done", "finish"]], approved: ["Approve", "approved", ["approve"]], open: c.status === "approved" ? ["Reopen", "reopen", ["reopen"]] : ["Put back to New", "back", ["put", "back", "new"]], progress: c.status === "approval" ? [`Send back${c.doneBy && !isMe(c.doneBy) ? ` to ${c.doneBy}` : ""}`, "sendback", ["send", "back"]] : c.status === "approved" ? ["Reopen", "reopen", ["reopen"]] : ["Pick up", "pick", ["pick", "take"]] };
+  for (const [, to] of statusActions(c).matchAll(/data-to="(\w+)"/g)) if (can(moveOf(c, to), c) && say[to]) out.push({ to, label: say[to][0], mk: say[to][1], keys: say[to][2] });
+  if (c.status === "approval" && !isApprover() && can("take_back", c)) out.push({ take: true, label: "Take back", mk: "take", keys: ["take", "back"] });
+  if (c.status === "progress" && can("hand_over", c)) out.push({ hand: true, label: "Hand over…", mk: "hand", keys: ["hand", "over", "give"] });
+  if (c.status === "open" && can("assign", c)) out.push({ hand: true, label: "Assign…", mk: "assign", keys: ["assign", "hand"] });
+  return out;
+}
+function slashClose() {
+  if (!slashFor) return;
+  if (slashFor.team) slashFor.input.placeholder = "Reply, @ to mention…"; // the "who" step let go
+  slashFor = null;
+  mentionPop.hidden = true;
+}
+function slashDraw() {
+  const f = slashFor;
+  if (!f?.items.length) return slashClose();
+  const ic = (x) => (x.who ? noteFace(x.name) : `<span class="sp-ic" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}</span>`);
+  mentionPop.innerHTML = f.items.map((x, i) => `<button type="button" class="mp-row${i === f.i ? " on" : ""}" data-i="${i}">${ic(x)}<span class="mp-name">${esc(x.who ? (isMe(x.name) ? "You" : x.name) : x.label)}</span></button>`).join("");
+  mentionPop.classList.toggle("dark", host.getAttribute("data-theme") === "dark");
+  mentionPop.hidden = false;
+  const r = f.input.getBoundingClientRect();
+  const below = r.bottom + 6 + f.items.length * 36 + 10 <= innerHeight - 8;
+  mentionPop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - (mentionPop.offsetWidth || 200) - 8))}px`;
+  if (below) Object.assign(mentionPop.style, { top: `${r.bottom + 6}px`, bottom: "auto" });
+  else Object.assign(mentionPop.style, { top: "auto", bottom: `${innerHeight - r.top + 6}px` });
+}
+async function slashCheck(input, card, c) {
+  const v = input.value;
+  if (slashFor?.input === input && slashFor.team) {
+    /* who to hand it to: the box's words narrow the team */
+    const q = v.trim().toLowerCase();
+    slashFor.items = slashFor.team.filter((p) => !q || p.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q))).map((p) => ({ who: true, name: p.name, handle: p.handle }));
+    slashFor.i = Math.min(slashFor.i, Math.max(0, slashFor.items.length - 1));
+    return slashFor.items.length ? slashDraw() : (mentionPop.hidden = true);
+  }
+  const hit = v.match(/^\/(\S*)$/);
+  if (!hit) return slashFor?.input === input && slashClose();
+  const q = hit[1].toLowerCase();
+  const items = slashMoves(c).filter((x) => !q || x.keys.some((k) => k.startsWith(q)) || x.label.toLowerCase().startsWith(q));
+  if (!items.length) return slashFor?.input === input && slashClose(); // no move by that name: just words
+  slashFor = { input, card, c, items, i: slashFor?.input === input ? Math.min(slashFor.i, items.length - 1) : 0 };
+  slashDraw();
+}
+async function slashPick(i) {
+  const f = slashFor;
+  const x = f?.items[i];
+  if (!x) return;
+  const { input, card, c } = f;
+  const clear = () => {
+    input.value = "";
+    if (state.thDraft?.id === c.id) state.thDraft.text = "";
+  };
+  if (x.who) {
+    slashClose();
+    clear();
+    state.asking = askAt({ id: c.id, to: "progress", label: c.status === "open" ? "Assign" : "Hand over", focused: true, assignTo: x.handle, toName: x.name, wasOpen: true }, c);
+    mountAsk(card, c);
+    return;
+  }
+  if (x.hand) {
+    /* the team next, in the same list; the box empties for a name */
+    clear();
+    const team = (await teamList()).filter((p) => p?.name && p.name !== c.assignee);
+    if (slashFor !== f) return;
+    if (!team.length) return slashClose(), toast("Nobody else on the team yet");
+    Object.assign(f, { team, i: 0 });
+    input.placeholder = c.status === "open" ? "Assign to…" : "Hand over to…";
+    return slashCheck(input, card, c);
+  }
+  slashClose();
+  clear();
+  const btn = x.take ? card.querySelector(".card-take") : card.querySelector(`.card-tb .card-st[data-to="${x.to}"]`);
+  btn?.click(); // the move's own button: its rules, its box, its effect
+}
+function attachSlash(input, card, c) {
+  input.addEventListener("input", () => slashCheck(input, card, c));
+  input.addEventListener("keydown", (e) => {
+    const f = slashFor;
+    if (f?.input !== input || mentionPop.hidden) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") f.i = (f.i + (e.key === "ArrowDown" ? 1 : f.items.length - 1)) % f.items.length;
+    else if (e.key === "Enter" || e.key === "Tab") slashPick(f.i);
+    else if (e.key === "Escape") slashClose();
+    else return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (slashFor === f && !mentionPop.hidden) slashDraw();
+  }, true);
+  input.addEventListener("blur", () => setTimeout(() => slashFor?.input === input && root.activeElement !== input && slashClose(), 150));
 }
 /* the author line in the hover strip is the history's button (Nirav, 2026-10-24: one thing, not two): "Pranjal · 2 h
    ago" as before; under the pointer (and while open) the face turns into a history mark, a click opens it. Without a
@@ -5996,110 +6182,100 @@ function noteLine(c) {
   const what = c.note.from === "approved" ? "Reopened" : c.note.to === "open" ? "Put back" : "Sent back";
   return `${what}${c.note.by ? ` · ${c.note.by}` : ""}: ${c.note.text}`;
 }
-/* a move back (Send back, Put back, Reopen) asks why, in the card's foot: one line, Enter sends, Esc keeps the comment
-   where it is. The box is state (state.asking), so a redraw of the list puts it back with the words typed so far;
-   it closes on Esc, on a click outside the card, or when sent. The reason travels with the status. */
-state.asking = null; // { id, to, label, text, focused }
+/* A MOVE'S REASON IN THE REPLY BOX (Nirav, 2026-11-04, step 2): Put back, Send back, Reopen and Hand over open the
+   thread's own reply box, set up for the move: a bar on top says what is being done (as "Replying to" does), the button
+   is the move. Enter does it with the words (optional, as before), × or Esc lets it go and nothing moves. The box is
+   state (state.asking), so a redraw puts it back with the words typed so far; the reason lands in the thread as a reply
+   labelled with its move. */
+state.asking = null; // { id, to, label, text, focused, assignTo?, toName?, wasOpen }
 function askNote(card, c, to, label) {
   if (state.asking?.id === c.id) return;
-  state.asking = { id: c.id, to, label, text: "", focused: true };
+  state.asking = askAt({ id: c.id, to, label, focused: true, wasOpen: state.thOpen.has(c.id) }, c);
   mountAsk(card, c);
 }
-/* the box grows out of the button that opened it (the foot's right end) and folds back into it when sent or let go
-   (Nirav, 2026-10-24); the foot's own line fades back in after it */
-const BOX_EASE = { duration: 220, easing: "cubic-bezier(.32,.72,0,1)" };
-function boxFrom(box) {
-  const go = box.querySelector(".note-go");
-  return `inset(0 0 0 ${Math.max(0, box.offsetWidth - (go?.offsetWidth || 60) - 6)}px round 7px)`;
+/* the person the move goes to (sent back to the one who did it, handed over to the one picked): the move tells them
+   already, so an @ for them in the reason adds no second notice */
+function askAt(a, c) {
+  const who = a.assignTo ? a.toName : a.to === "progress" ? c.doneBy || c.assignee : null;
+  a.who = who && !isMe(who) ? who : null; // an @ for them in the words adds no second notice
+  a.text = ""; // no "@Kishan" to start: the bar and the pill name them already (Nirav, 2026-11-04)
+  return a;
 }
-function openBox(box) {
-  if (!box?.animate) return;
-  box.animate([{ clipPath: boxFrom(box), opacity: 0.4 }, { clipPath: "inset(0 0 0 0 round 7px)", opacity: 1 }], BOX_EASE);
-}
-function closeBox(foot, then) {
-  const box = foot?.querySelector(".note-box");
-  const back = () => {
-    then();
-    foot?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: "ease-out" });
-  };
-  if (!box?.animate) return back();
-  const a = box.animate([{ clipPath: "inset(0 0 0 0 round 7px)", opacity: 1 }, { clipPath: boxFrom(box), opacity: 0 }], { ...BOX_EASE, duration: 180, fill: "forwards" });
-  a.onfinish = back;
+/* the move's key (for its icon and colour), and the bar's words */
+const askKey = (a, c) => moveKey(a.assignTo ? { kind: "hand" } : { status: a.to }, c.status);
+function askBar(a, c) {
+  const k = askKey(a, c);
+  const to = a.assignTo ? `${thFace(c, a.toName)}<b>${isMe(a.toName) ? "yourself" : esc(a.toName)}</b>` : "";
+  const words = a.assignTo ? `${k === "assign" ? "Assigning it to" : "Handing it over to"} ${to}`
+    : c.status === "approved" ? `Reopening it as <b>${a.to === "open" ? "New" : "In progress"}</b>`
+    : a.to === "open" ? "Putting it back to <b>New</b>"
+    : `Sending it back to <b>${c.doneBy ? thName(c.doneBy) : "the person on it"}</b>`;
+  return `<div class="th-quoting th-moving" data-c="${MOVE_IC[k][0]}"><span class="th-mi">${MOVE_SVG(k)}</span><span class="th-qw">${words}</span><button type="button" class="th-mx" aria-label="Let it go: nothing moves">×</button></div>`;
 }
 function cancelAsk() {
   const a = state.asking;
   if (!a) return;
   state.asking = null;
   const card = panelBody.querySelector(`.card[data-id="${a.id}"]`);
-  const slot = card?.querySelector(".card-ask");
-  if (slot) closeBox(slot, () => slot.remove());
+  const c = state.comments.find((x) => x.id === a.id) || state.done.find((x) => x.id === a.id);
+  if (card && c) {
+    if (!a.wasOpen) state.thOpen.delete(c.id);
+    thSlide(card, () => {
+      threadSync(card, c);
+      draftSync(card, c);
+    });
+    clampCard(card);
+  }
   if (state.stale && !panelBusy()) {
     state.stale = false;
     renderPanel(); // what arrived while the box was open
   }
 }
-/* the reason box (Send back, Put back, Hand over) under the comment, so the top row keeps its status; the thread's
-   reply box takes these over in step 2 */
-function askSlot(card) {
-  let slot = card.querySelector(".card-ask");
-  if (!slot) {
-    slot = document.createElement("div");
-    slot.className = "card-ask";
-    card.insertBefore(slot, card.querySelector(".card-th"));
-  }
-  return slot;
-}
+/* the move's box is the thread's: open it there (sliding, the first time) */
 function mountAsk(card, c) {
   const a = state.asking;
   if (!a || !card.querySelector(".card-th")) return;
-  const slot = askSlot(card);
-  const foot = card.querySelector(".card-foot");
-  slot.innerHTML = `<span class="note-box"><input class="note-in" type="text" maxlength="${a.reply ? 1200 : 600}" placeholder="${a.reply ? esc(a.ph) : a.assignTo ? `A note for ${esc(isMe(a.toName) ? "yourself" : a.toName)}? (optional) Enter hands it over` : "Why? Enter sends it, Esc keeps it here"}"><button class="note-go">${a.label}</button></span>`;
-  const input = slot.querySelector(".note-in");
-  const btn = slot.querySelector(".note-go");
-  if (!a.shown) openBox(slot.querySelector(".note-box")); // only the first time: a redraw puts it back still
-  a.shown = true;
-  input.value = a.text;
-  input.addEventListener("input", () => (a.text = input.value));
-  attachMentions(input);
-  const go = async () => {
-    if (state.asking !== a) return;
-    const note = input.value.trim();
-    if (a.reply && !note) return input.focus(); // an answer needs words
-    input.disabled = true;
-    btn.classList.add("loading");
-    const mentions = mentionsIn(note);
-    const r = await api("update", { ...(a.reply ? { id: c.id, reply: note } : a.assignTo ? { id: c.id, assignTo: a.assignTo, note } : { id: c.id, status: a.to, note }), ...(mentions.length ? { mentions } : {}) }).catch(() => null);
-    if (state.asking === a) state.asking = null;
-    if (!r?.entry) {
-      input.disabled = false;
-      btn.classList.remove("loading");
-      state.asking = a;
-      toast(`Could not save that: ${r?.error || "the hub did not answer"}`);
-      return;
-    }
-    const crossed = applyEntry(r.entry);
-    if (mentions.includes("Claude")) mentionClaude(state.comments.find((x) => x.id === c.id) || r.entry);
-    if (crossed) renderPanel();
-    else
-      closeBox(slot, () => {
-        slot.remove();
-        if (foot) foot.innerHTML = footHtml(r.entry);
-        settle(card, r.entry);
-      });
-    if (a.reply) return toast(`#${c.n} ${isMine(c) ? "followed up" : "answered"}`);
-    toast(a.assignTo ? `#${c.n} handed to ${isMe(a.toName) ? "you" : a.toName}` : `#${c.n} ${a.to === "open" && c.status === "approved" ? "reopened" : backToast[a.to]}${note ? " with a note" : ""}`);
+  state.thOpen.add(c.id);
+  const draw = () => {
+    threadSync(card, c);
+    draftSync(card, c);
   };
-  input.addEventListener("keydown", (e) => {
-    e.stopPropagation();
-    if (e.key === "Enter") go();
-    if (e.key === "Escape") cancelAsk();
-  });
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    go();
-  });
-  if (a.focused) input.focus({ preventScroll: true });
+  if (a.shown) draw();
+  else thSlide(card, draw);
+  a.shown = true;
+  clampCard(card);
+}
+/* Enter or the move's button: the move, with the words as its reason */
+async function askGo(card, c, input, btn) {
+  const a = state.asking;
+  if (!a || a.id !== c.id) return;
+  let note = input.value.trim();
+  if (a.who && note.toLowerCase() === `@${mentionWord(a.who)}`.toLowerCase()) note = ""; // only the tag: no reason given
+  input.disabled = true;
+  btn.classList.add("loading");
+  const mentions = mentionsIn(note).filter((m) => m !== a.who); // the move tells them already
+  const r = await api("update", { ...(a.assignTo ? { id: c.id, assignTo: a.assignTo, note } : { id: c.id, status: a.to, note }), ...(mentions.length ? { mentions } : {}) }).catch(() => null);
+  if (!r?.entry) {
+    input.disabled = false;
+    btn.classList.remove("loading");
+    toast(`Could not save that: ${r?.error || "the hub did not answer"}`);
+    return;
+  }
+  if (state.asking === a) state.asking = null;
+  if (!note && !a.wasOpen) state.thOpen.delete(c.id); // a bare move leaves nothing to read in the thread
+  const crossed = applyEntry(r.entry);
+  const now = state.comments.find((x) => x.id === c.id) || state.done.find((x) => x.id === c.id) || r.entry;
+  if (mentions.includes("Claude")) mentionClaude(now);
+  if (crossed) renderPanel();
+  else {
+    const foot = card.querySelector(".card-foot");
+    if (foot) foot.innerHTML = footHtml(now);
+    settle(card, now);
+    threadSync(card, now);
+    draftSync(card, now);
+    clampCard(card);
+  }
+  toast(a.assignTo ? `#${c.n} handed to ${isMe(a.toName) ? "you" : a.toName}` : `#${c.n} ${a.to === "open" && c.status === "approved" ? "reopened" : backToast[a.to]}${note ? " with a note" : ""}`);
 }
 /* a click outside the card with the box closes it */
 window.addEventListener("pointerdown", (e) => {
@@ -6333,7 +6509,7 @@ function renderPanel() {
   updateNotices(); // the faces in the header
   if (!panel.classList.contains("on")) return;
   if (renderPanel.skipWhileMenu && $(".scope-menu")) return; // a background refresh never rebuilds an open menu
-  if (state.asking) state.asking.focused = !!root.activeElement?.classList?.contains("note-in"); // before the rebuild takes it
+  if (state.asking) state.asking.focused = !!root.activeElement?.classList?.contains("th-in"); // before the rebuild takes it
   const scrollWas = panelBody.scrollTop;
   const focusWas = root.activeElement?.classList?.contains("card") ? root.activeElement.dataset.id : null;
   let view = PAGE_MODE ? window.__reviewView || "open" : "open";
@@ -7424,7 +7600,7 @@ panelBody.addEventListener("click", async (e) => {
     const b = e.target.closest(".hand-to");
     card.querySelector(".card-more-wrap")?.classList.remove("open");
     card.classList.remove("menu-open");
-    state.asking = { id: c.id, to: "progress", label: "Hand over", text: "", focused: true, assignTo: b.dataset.h, toName: b.dataset.n };
+    state.asking = askAt({ id: c.id, to: "progress", label: c.status === "open" ? "Assign" : "Hand over", focused: true, assignTo: b.dataset.h, toName: b.dataset.n, wasOpen: state.thOpen.has(c.id) }, c);
     mountAsk(card, c);
     return;
   }
