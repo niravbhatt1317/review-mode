@@ -146,7 +146,7 @@ export function applyChange(c, body, who) {
     c.draft = { state: "new", text: body.draft.text.trim().slice(0, 600), kind: isQ ? "answer" : "fix", at: Date.now(), by: who, via: "claude", ...(body.draft.unsure === true ? { unsure: true } : {}), ...thread };
   }
   const answer = typeof body.draftReply === "string" ? body.draftReply.trim().slice(0, 600) : "";
-  if (answer && c.draft?.state === "new" && c.draft.unsure) c.draft = { state: "reply", at: Date.now(), by: who, thread: [...(c.draft.thread || []), { q: c.draft.text, a: answer, by: who, at: Date.now() }] };
+  if (answer && c.draft?.state === "new" && c.draft.unsure) c.draft = { state: "reply", at: Date.now(), by: who, thread: [...(c.draft.thread || []), { q: c.draft.text, qAt: c.draft.at, a: answer, by: who, at: Date.now() }] };
   if ((body.draftState === "accepted" || body.draftState === "ignored") && c.draft?.state === "new") Object.assign(c.draft, { state: body.draftState, decidedBy: who, decidedAt: Date.now() });
   if (body.withClaude === true && c.status === "progress") c.withClaude = true; // the person on it handed the work to Claude too
   /* Claude taking a fix (a pick-up made with Claude, or handed to Claude) uses its suggestion: it leaves the card, so
@@ -161,13 +161,24 @@ export function applyChange(c, body, who) {
     const asker = !claude && !!c.by && who === c.by;
     const isQ = c.severity === "question" || c.severity === "idea";
     const to = !isQ ? from : asker ? "open" : "approval";
+    /* THE THREAD (Nirav, 2026-10-29): a reply can quote one earlier message (its step's time and writer, and the first
+       words, so the quote reads even when that message is gone) */
+    const qt = body.quote && typeof body.quote === "object" && Number.isFinite(body.quote.at)
+      ? { quote: { at: body.quote.at, by: String(body.quote.by || "").slice(0, 80), text: String(body.quote.text || "").trim().slice(0, 140) } }
+      : {};
+    /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
+    if (!isQ) {
+      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...ment, ...qt });
+      c.edited = Date.now();
+      return c;
+    }
     if (to !== from) {
       c.status = to;
       if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at, assignee: null });
       if (to === "open") Object.assign(c, { assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null });
     } else if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at }); // the latest answer's face on the card
     c.note = { text: reply, by: who, at, from, to, kind: "reply", ...(claude ? { via: "claude" } : {}) };
-    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...ment });
+    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...ment, ...qt });
     normalise(c);
     c.edited = Date.now();
     return c;
@@ -222,6 +233,8 @@ export function withNames(c, people = {}) {
   const out = { ...c, by: name(c.by), assignee: name(c.assignee), doneBy: name(c.doneBy), approvedBy: name(c.approvedBy) };
   if (c.note) out.note = { ...c.note, by: name(c.note.by), ...(c.note.toWho ? { toWho: name(c.note.toWho) } : {}) };
   if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by), ...(h.toWho ? { toWho: name(h.toWho) } : {}) }));
+  /* Claude's part of the thread names its people too: who answered, who accepted or set it aside (2026-11-04) */
+  if (c.draft) out.draft = { ...c.draft, ...(c.draft.decidedBy ? { decidedBy: name(c.draft.decidedBy) } : {}), ...(Array.isArray(c.draft.thread) ? { thread: c.draft.thread.map((t) => ({ ...t, by: name(t.by) })) } : {}) };
   return out;
 }
 /* the people shown: the hub's (first word of the GitHub name, the picture) under the team's own map (a chosen name) */

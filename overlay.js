@@ -439,6 +439,19 @@ root.innerHTML = `
   :host([data-theme="dark"]) .mention.m-claude, .pin-tip .mention.m-claude { background: rgba(217,119,87,.22); color: hsl(20 95% 78%); }
   .pin-tip .card-menu .card-rm.card-mi.sure, .pin-tip .card-menu .card-rm.card-mi.sure .mi-ico { color: #fff; }
   .pin-tip .tip-row .tip-ok { background: hsl(214 98% 44%); color: #fff; box-shadow: none; padding: 0 14px; font-weight: 600; }
+  /* the pin card's top row (Nirav, 2026-10-30): the status, then ✓ and ⋯ in one small bar, as on the drawer card */
+  .pin-tip .tip-top { position: relative; display: flex; align-items: center; gap: 8px; min-height: 24px; margin: 0 0 8px; padding-right: 68px; } /* as tall as the status, the toolbar floats (Nirav, 2026-10-30) */
+  .pin-tip .tip-top .tip-tb { position: absolute; right: -4px; top: 50%; transform: translateY(-50%); z-index: 2; }
+  .pin-tip .tip-top .tip-stat { flex: 1; min-width: 0; margin-top: 0; }
+  .pin-tip .tip-tb { display: inline-flex; align-items: center; flex: 0 0 auto; padding: 2px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; background: rgba(255,255,255,.04); }
+  .pin-tip .tip-tb .tb-main, .pin-tip .tip-tb .tip-more { position: relative; width: 28px; height: 24px; padding: 0; border: 0; border-radius: 7px; background: transparent; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: none; transition: background-color .12s, color .12s; }
+  .pin-tip .tip-tb .tb-main { color: #64CEC3; }
+  .pin-tip .tip-tb .tb-main:hover { background: rgba(100,206,195,.16); }
+  .pin-tip .tip-tb .tip-more { color: hsl(216 30% 78%); }
+  .pin-tip .tip-tb .tip-more:hover, .pin-tip.menu-open .tip-tb .tip-more { background: rgba(255,255,255,.1); color: #fff; }
+  .pin-tip .tip-tb .tb-main .scope-tip { left: auto; right: 0; transform: none; }
+  .pin-tip .tip-tb .tb-main:hover .scope-tip { opacity: 1; }
+  .pin-tip .tip-tb .card-menu { bottom: auto; top: calc(100% + 6px); } /* from the top row the menu drops down */
   .pin-tip .tip-row .tip-ok:hover { background: hsl(214 98% 50%); }
   .pin { cursor: pointer; }
   /* the card the pin pointed at, once the list opens on it */
@@ -910,7 +923,7 @@ root.innerHTML = `
   .rm-toggle:hover, .rm-toggle:focus-visible { color: var(--rv-ink); }
   .rm-toggle:hover, .rm-toggle:focus-visible { text-decoration: underline dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; outline: none; } /* dotted on hover (Nirav, 2026-10-26) */
   .card-text.ro, .card-text.ro:hover { cursor: default; background: transparent; box-shadow: none; }
-  .card-text:hover { background: hsl(var(--rv-n10)); box-shadow: 0 0 0 1px var(--rv-line); }
+  .card-text:hover { background: hsl(var(--rv-n10)); box-shadow: none; } /* a soft ground only, no border (Nirav, 2026-10-31) */
   .card-text[contenteditable="true"] { background: var(--rv-surface); outline: 2px solid #2563eb; outline-offset: 0; }
   .card-shot { display: block; width: 100%; border: 1px solid var(--rv-fill); border-radius: 6px; cursor: zoom-in; }
   .card-c { position: relative; margin-left: 32px; }
@@ -1476,16 +1489,6 @@ root.innerHTML = `
   .card-draft .dr-ignore { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); }
   .card-draft .dr-ignore:hover { color: var(--rv-ink); border-color: hsl(var(--rv-n70)); }
   .card-draft button.loading { opacity: .6; pointer-events: none; }
-  .card-draft .dr-reply { border: 0; background: #D97757; color: #fff; }
-  .card-draft .dr-reply:hover { background: #C6613F; }
-  .card-draft .dr-ask { display: flex; align-items: center; gap: 6px; margin: 8px 0 0 22px; }
-  .card-draft .dr-in { flex: 1; min-width: 0; height: 28px; padding: 0 9px; border: 1px solid var(--rv-line-2); border-radius: 6px; background: var(--rv-surface); color: var(--rv-ink); font: 12px/1.3 -apple-system, system-ui, sans-serif; outline: none; }
-  .card-draft .dr-in:focus { border-color: #D97757; box-shadow: 0 0 0 3px color-mix(in srgb, #D97757 18%, transparent); }
-  .card-draft .dr-ask button { height: 28px; padding: 0 11px; border-radius: 6px; font: 500 11.5px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
-  .card-draft .dr-send { border: 0; background: #D97757; color: #fff; }
-  .card-draft .dr-send:hover { background: #C6613F; }
-  .card-draft .dr-cancel { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); }
-  .card-draft .dr-wait { margin: 5px 0 0 22px; font-size: 11px; color: var(--rv-ink-3); }
   .card-note { margin-top: 8px; padding: 6px 10px;  font-size: 12px; line-height: 1.4; color: var(--rv-ink); background: hsl(var(--rv-warn-bg) / .55); border-radius: 8px; border-left: 2px solid hsl(var(--rv-warn-ink) / .5); /* a curved border: it follows the 8 px corners */ white-space: pre-wrap; overflow-wrap: anywhere; }
   .card-note .nt-head, .tip-note .nt-head { color: var(--rv-ink-2); }
   .card-note .nt-head b { font-weight: 500; font-size: 11px; color: var(--rv-ink); }
@@ -1662,6 +1665,167 @@ root.innerHTML = `
   :host([data-hit]) * { pointer-events: none !important; } /* while targetAt measures what is under a point */
   /* review hidden (${HIDE_KEY} or the bar's eye button): nothing on screen but the toast that says how to bring it back */
   :host([data-off]) .bar, :host([data-off]) .bar-mini, :host([data-off]) .hover, :host([data-off]) .pins, :host([data-off]) .pin-tip, :host([data-off]) .composer, :host([data-off]) .panel-veil, :host([data-off]) .panel, :host([data-off]) .lightbox { display: none !important; }
+
+  /* THE TOP ROW (Nirav, 2026-10-30: A's status on the left, Figma's toolbar on the right). The status sentence first;
+     on the right one small white bar: the main move as an icon (its name in the tooltip), ⋯, a rule, the select box.
+     The bar is only hidden at rest, never taken away, so nothing moves; picked and the pointer away, only the ticked
+     box stays where it was. The picked edge is drawn inside the card, so the card never grows. */
+  /* the row is as tall as the status line, not the toolbar: at rest a 30px row left a gap under the status that only
+     the toolbar filled (Nirav, 2026-10-30); the toolbar floats over the corner, centred on the line, and moves nothing */
+  .card-c > .card-foot { position: relative; margin: 0 0 8px; min-height: 24px; padding-right: 98px; } /* the toolbar reaches 87px in: 10px clear of it (Nirav, 2026-10-31) */
+  .card-c > .card-foot .card-tb { position: absolute; right: -10px; top: 50%; transform: translateY(-50%); z-index: 2; } /* the ticked box as far from the right as from the top (Nirav, 2026-10-30) */
+  .card-c .card-line { padding-right: 0; }
+  .card-c .card-n.out { top: 11px; }
+  .card-tb { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; margin-left: auto; padding: 2px; border: 1px solid transparent; border-radius: 9px; transition: background-color .12s, border-color .12s, box-shadow .12s; }
+  .card-foot .card-tb .acts { display: inline-flex; gap: 0; margin: 0; opacity: 0; transition: opacity .12s; }
+  .card:is(:hover, :focus-visible, :has(.card-tb :focus-visible), .menu-open) .card-tb { background: var(--rv-surface); border-color: var(--rv-line); box-shadow: 0 1px 2px rgba(29,43,62,.06); }
+  .card:is(:hover, :focus-visible, :has(.card-tb :focus-visible), .menu-open) .card-tb .acts, .card-tb .acts.on, .card-tb .acts.busy { opacity: 1; }
+  .card-tb .tb-main, .card-tb .card-more { position: relative; width: 28px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--rv-ink-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: background-color .12s, color .12s; }
+  .card-tb .tb-main { color: var(--rv-st-appr); }
+  .card-tb .tb-main:hover { background: color-mix(in srgb, var(--rv-st-appr-dot) 14%, transparent); color: var(--rv-st-appr); border: 0; }
+  .card-tb .card-more:hover, .card.menu-open .card-tb .card-more { background: var(--rv-fill); color: var(--rv-ink); }
+  .card-tb .tb-main:hover .scope-tip, .card-tb .card-pick:hover .scope-tip { opacity: 1; }
+  .card-tb .card-menu { bottom: auto; top: calc(100% + 6px); } /* from the top row the menu drops down */
+  .card-tb .tb-rule { width: 1px; height: 16px; margin: 0 3px; background: var(--rv-line); opacity: 0; transition: opacity .12s; }
+  .card:is(:hover, :focus-visible, :has(.card-tb :focus-visible), .menu-open) .card-tb .tb-rule { opacity: 1; }
+  .card-tb .card-pick { position: relative; right: auto; top: auto; z-index: auto; width: 28px; height: 26px; border: 0; border-radius: 7px; box-shadow: none; background: transparent; opacity: 0; }
+  .card-tb .card-pick::before { content: ""; width: 14px; height: 14px; box-sizing: border-box; border-radius: 4px; border: 1.5px solid hsl(var(--rv-n70)); background: var(--rv-surface); transition: background-color .12s, border-color .12s; }
+  .card-tb .card-pick:hover::before { border-color: hsl(214 98% 44%); }
+  .card-tb .card-pick svg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 10px; height: 10px; }
+  .card:is(:hover, :focus-visible, :has(.card-tb :focus-visible), .menu-open, .picked) .card-tb .card-pick { opacity: 1; }
+  .card.picked .card-tb .card-pick { background: transparent; }
+  .card.picked .card-tb .card-pick::before { background: hsl(214 98% 44%); border-color: hsl(214 98% 44%); }
+  .card.card-fill.picked, :host([data-theme="dark"]) .card.card-fill.picked { border-color: hsl(214 98% 44%); box-shadow: inset 0 0 0 .5px hsl(214 98% 44%); }
+  /* a picked card with its strip open: one blue edge round both (Nirav, 2026-10-30: the edge shut above the strip) */
+  :host([data-strip="float"]) .card.card-fill.picked:is(:hover, :focus-visible, :has(:focus-visible), .menu-open, .hist-open) { border-color: hsl(214 98% 44%); border-bottom-color: transparent; box-shadow: inset .5px 0 0 hsl(214 98% 44%), inset -.5px 0 0 hsl(214 98% 44%), inset 0 .5px 0 hsl(214 98% 44%); }
+  .card.card-fill.picked .card-meta-in, :host([data-theme="dark"]) .card.card-fill.picked .card-meta-in { box-shadow: inset 1.5px 0 0 hsl(214 98% 44%), inset -1.5px 0 0 hsl(214 98% 44%), inset 0 -1.5px 0 hsl(214 98% 44%); } /* the strip paints over the card's edge, so it carries the blue itself */
+  :host([data-strip="float"]) .card.card-fill.picked .card-meta-in, :host([data-strip="float"][data-theme="dark"]) .card.card-fill.picked .card-meta-in { box-shadow: inset 1.5px 0 0 hsl(214 98% 44%), inset -1.5px 0 0 hsl(214 98% 44%), inset 0 -1.5px 0 hsl(214 98% 44%), 0 16px 32px -6px rgba(29,43,62,.2), 0 3px 8px -2px rgba(29,43,62,.08); }
+  .card-foot .card-status { flex: 0 1 auto; }
+  /* the "…" takes the line's own grey, not the status colour; only the status word keeps it (Nirav, 2026-10-31) */
+  .card-status .st-s { color: var(--rv-ink-2); }
+  .card-status[data-s="open"] .st-k { color: var(--rv-st-new); } .card-status[data-s="progress"] .st-k { color: var(--rv-st-prog); }
+  .card-status[data-s="approval"] .st-k { color: var(--rv-st-appr); } .card-status[data-s="approved"] .st-k { color: var(--rv-st-done); }
+  .card-foot .card-maybe { margin-left: -3px; } /* closer to the words it qualifies */
+  .card:has(.th-in:focus):not(:hover):not(.menu-open) .card-tb .acts { opacity: 0; } /* typing a reply is not a reason to show the moves */
+
+  /* THE THREAD (Nirav, 2026-10-29): one flat talk per comment, in time order. Shut: the latest message on one line and
+     "3 replies"; open: every message with its face, the moves as quiet lines, a quote on a reply that answers one, and
+     the reply box at the foot. The same block in the drawer card and on the pin card. */
+  .card-th:empty { display: none; }
+  .th-last { display: flex; align-items: center; gap: 7px; width: 100%; margin-top: 10px; padding: 6px 9px; border: 0; border-radius: 8px; background: hsl(var(--rv-n10)); color: var(--rv-ink-2); font: 12px/1.35 -apple-system, system-ui, sans-serif; text-align: left; cursor: pointer; }
+  .th-last:hover { background: hsl(var(--rv-n20)); }
+  .th-last .av { margin: 0; flex: 0 0 auto; }
+  .th-last .th-fw { position: relative; flex: 0 0 auto; display: inline-flex; }
+  .th-bd { --c: var(--rv-st-new-dot); position: absolute; right: -4px; bottom: -3px; width: 13px; height: 13px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--c) 18%, var(--rv-surface)); color: var(--c); box-shadow: 0 0 0 1.5px hsl(var(--rv-n10)); } /* soft: a tint, the icon in colour (Nirav, 2026-10-31) */
+  .th-bd svg { width: 8px; height: 8px; }
+  .th-bd[data-c="prog"] { --c: var(--rv-st-prog-dot); } .th-bd[data-c="appr"] { --c: var(--rv-st-appr-dot); } .th-bd[data-c="done"] { --c: var(--rv-st-done-dot); } .th-bd[data-c="hand"] { --c: hsl(214 98% 50%); } .th-bd[data-c="ok"] { --c: #1E8C81; } .th-bd[data-c="no"] { --c: hsl(var(--rv-n70)); } .th-bd[data-c="ask"] { --c: #c4572f; }
+  .th-last:hover .th-bd { box-shadow: 0 0 0 1.5px hsl(var(--rv-n20)); }
+  .pin-tip .th-bd { background: color-mix(in srgb, var(--c) 26%, hsl(216 36% 18%)); color: color-mix(in srgb, var(--c) 70%, #fff); box-shadow: 0 0 0 1.5px hsl(216 33% 22%); }
+  .th-last .th-w { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; color: var(--rv-ink); -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); } /* a soft fade, not three dots (Nirav, 2026-10-31) */
+  .th-last .th-w b { font-weight: 600; }
+  .th-last .th-n { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; height: 22px; margin: -2px -4px -2px 0; padding: 0 8px 0 3px; border-radius: 11px; background: var(--rv-surface); box-shadow: 0 0 0 1px var(--rv-line); color: hsl(214 98% 44%); font-weight: 500; white-space: nowrap; }
+  .th-last .th-faces { display: inline-flex; }
+  .th-last .th-faces .av { width: 16px; height: 16px; font-size: 7.5px; box-shadow: 0 0 0 1.5px var(--rv-surface); }
+  .th-last .th-faces .av + .av { margin-left: -5px; }
+  .card-th { display: flow-root; }
+  .th-open { margin-top: 10px; } /* no divider: the head says where the thread starts (Nirav, 2026-10-31) */
+  .th-more { display: flex; align-items: center; gap: 10px; margin: 2px 0 6px; padding: 2px 0; border: 0; background: none; color: var(--rv-ink-3); font: 500 11.5px/1.3 -apple-system, system-ui, sans-serif; cursor: pointer; } /* Instagram's way: a short line, then the words (Nirav, 2026-10-31) */
+  .th-more::before { content: ""; width: 24px; height: 1px; background: currentColor; opacity: .6; }
+  .th-more:hover { color: var(--rv-ink); }
+  
+  .th-msg { position: relative; display: flex; gap: 8px; padding: 6px 6px 4px; margin: 0 -6px; border-radius: 8px; transition: background-color .3s; }
+  .th-msg:hover { background: hsl(var(--rv-n10)); }
+  .th-msg > .av { width: 20px; height: 20px; margin: 1px 0 0; flex: 0 0 auto; }
+  .th-msg > .av-i { font-size: 9px; }
+  .th-body { flex: 1; min-width: 0; }
+  .th-who { font-size: 12px; color: var(--rv-ink); } .th-who b { font-weight: 600; }
+  .th-who .th-at { margin-left: 5px; color: var(--rv-ink-3); font-size: 11px; }
+  .th-who .th-move { margin-left: 4px; color: var(--rv-ink-2); } .th-who .th-move b { font-weight: 500; } /* "You put it back": the move as part of the sentence */
+  .pin-tip .th-who .th-move { color: hsl(216 30% 80%); }
+  .th-msg.claude .th-who b { color: #b4532f; }
+  /* Claude's part of the thread (Nirav, 2026-11-04): warm while it waits on someone, a quiet block for a decided suggestion */
+  .th-msg.ask { margin: 2px -6px; background: color-mix(in srgb, #D97757 8%, var(--rv-surface)); }
+  .th-msg.ask:hover { background: color-mix(in srgb, #D97757 12%, var(--rv-surface)); }
+  .th-sugg { margin-top: 4px; padding: 6px 8px; border-radius: 7px; background: hsl(var(--rv-n10)); font-size: 12px; line-height: 1.45; color: var(--rv-ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .th-msg.sug:hover .th-sugg { background: var(--rv-surface); }
+  .th-res { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 11px; font-weight: 500; color: #1E8C81; }
+  .th-res svg { width: 11px; height: 11px; }
+  .th-res[data-s="ignored"] { color: var(--rv-ink-3); }
+  .th-msg.sug:has(.th-res[data-s="ignored"]) .th-sugg { color: var(--rv-ink-3); }
+  .th-again { display: flex; align-items: center; gap: 7px; padding: 5px 0; font-size: 11.5px; color: #9a5a40; }
+  .th-again .av-claude { width: 16px; height: 16px; border-radius: 50%; flex: none; }
+  .th-again > span:last-child { background: linear-gradient(90deg, #b07a63 0%, #b07a63 40%, #6e3a26 50%, #b07a63 60%, #b07a63 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .th-again > span:last-child { animation: none; color: #9a5a40; } }
+  .th-last.ask { background: color-mix(in srgb, #D97757 8%, var(--rv-surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #D97757 20%, transparent); }
+  .th-last.ask:hover { background: color-mix(in srgb, #D97757 13%, var(--rv-surface)); }
+  .th-last.ask .th-bd { box-shadow: 0 0 0 1.5px color-mix(in srgb, #D97757 8%, var(--rv-surface)); }
+  .th-last .th-tag { flex: 0 0 auto; font-size: 11px; font-weight: 500; color: #c4572f; white-space: nowrap; }
+  .pin-tip .th-msg.ask, .pin-tip .th-last.ask { background: rgba(217,119,87,.16); box-shadow: none; }
+  .pin-tip .th-sugg { background: rgba(255,255,255,.06); color: hsl(216 30% 84%); }
+  .pin-tip .th-again, .pin-tip .th-last .th-tag { color: #f0a488; }
+  .pin-tip .th-again > span:last-child { animation: none; color: #f0a488; background: none; }
+  .th-words { margin-top: 1px; font-size: 12.5px; line-height: 1.45; color: var(--rv-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .th-quote { display: flex; gap: 4px; align-items: center; max-width: 100%; margin: 1px 0 2px; padding: 0; border: 0; background: none; font: 11px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); text-align: left; cursor: pointer; opacity: .85; } /* a quiet "in reply to" line over the words, not a block that fights them (Nirav, 2026-10-30) */
+  .th-quote svg { width: 11px; height: 11px; flex: 0 0 auto; transform: scaleY(-1); } /* the arrow turned to point up, at what it answers */
+  .th-quote:hover { opacity: 1; }
+  .th-quote:focus { outline: none; } .th-quote:focus-visible { outline: 2px solid hsl(214 98% 44% / .5); outline-offset: 2px; border-radius: 4px; } /* no hard square after a click, only for the keyboard */
+  .th-quote b { color: inherit; font-weight: 500; white-space: nowrap; }
+  .th-quote span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .th-quote:hover, .th-quote:hover b { color: var(--rv-ink-2); }
+  .th-q { position: absolute; right: 4px; top: 4px; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px 0 6px; border: 1px solid var(--rv-line); border-radius: 7px; background: var(--rv-surface); color: var(--rv-ink); font: 500 11px/1 -apple-system, system-ui, sans-serif; box-shadow: 0 2px 6px rgba(29,43,62,.08); cursor: pointer; opacity: 0; transition: opacity .12s; }
+  .th-msg:hover .th-q { opacity: 1; }
+  .th-q:hover { color: hsl(214 98% 44%); }
+  .th-q svg { width: 12px; height: 12px; flex: 0 0 auto; display: block; } /* an icon, not the ↩ glyph that sat on the baseline (Nirav, 2026-10-30) */
+  .th-msg.glow { background: hsl(48 100% 88%); box-shadow: 0 0 0 2px hsl(45 95% 60% / .6); }
+  .card-hist .hs-step { transition: background-color .3s; border-radius: 6px; } .card-hist .hs-step.glow { background: hsl(48 100% 88%); }
+  .th-sys { display: flex; align-items: center; gap: 7px; margin: 5px 0 3px 4px; font-size: 11.5px; color: var(--rv-ink-3); }
+  .th-sys::before { content: ""; flex: 0 0 auto; width: 8px; height: 8px; margin-right: 3px; border-radius: 50%; border: 1.5px solid hsl(var(--rv-n40)); }
+  .th-sys[data-s="progress"]::before { border-color: var(--rv-st-prog-dot); } .th-sys[data-s="approval"]::before { border-color: var(--rv-st-appr-dot); } .th-sys[data-s="open"]::before { border-color: var(--rv-st-new-dot); } .th-sys[data-s="approved"]::before { border-color: var(--rv-st-done-dot, #1E8C81); background: var(--rv-st-done-dot, #1E8C81); }
+  .th-sys b { color: var(--rv-ink-2); font-weight: 500; }
+  .th-quoting { display: flex; align-items: center; gap: 5px; margin-top: 8px; padding: 5px 6px 5px 10px; border: 1px solid var(--rv-line-2); border-bottom: 0; border-radius: 9px 9px 0 0; background: hsl(var(--rv-n10)); font-size: 11.5px; color: var(--rv-ink-2); }
+  .th-quoting b { color: var(--rv-ink); font-weight: 600; }
+  .th-quoting > svg { width: 12px; height: 12px; flex: 0 0 auto; color: var(--rv-ink-3); }
+  .th-quoting .th-qw { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .th-quoting .th-qx { flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--rv-ink-3); font-size: 14px; line-height: 20px; cursor: pointer; }
+  .th-quoting .th-qx:hover { color: var(--rv-ink); background: hsl(var(--rv-n20)); }
+  .th-box { display: flex; align-items: center; gap: 4px; margin-top: 8px; padding: 3px 3px 3px 12px; border: 1px solid var(--rv-line-2); border-radius: 999px; background: var(--rv-surface); transition: border-color .12s, box-shadow .12s; }
+  .th-quoting + .th-box { margin-top: 0; border-radius: 0 0 12px 12px; }
+  .th-box:focus-within { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 3px hsl(214 98% 44% / .12); }
+  .th-in { flex: 1; min-width: 0; height: 24px; border: 0; padding: 0; background: transparent; color: var(--rv-ink); font: 12.5px/1.3 -apple-system, system-ui, sans-serif; outline: none; }
+  .th-in::placeholder { color: var(--rv-ink-3); }
+  .th-go { flex: 0 0 auto; height: 24px; padding: 0 11px; border: 0; border-radius: 999px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 11.5px/24px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .th-go:hover, .th-box:focus-within .th-go { background: hsl(214 98% 44%); color: #fff; }
+  .th-go.loading { opacity: .6; pointer-events: none; }
+  .card-ask { margin-top: 8px; }
+  .card-ask .note-box { display: flex; align-items: center; gap: 4px; height: 28px; box-sizing: border-box; padding: 0 2px 0 0; border: 1px solid var(--rv-line-2); border-radius: 7px; background: var(--rv-surface); }
+  .card-ask .note-box:focus-within { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 1px hsl(214 98% 44%); }
+  .card-ask .note-in { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0 0 0 10px; font: 12px/1.2 -apple-system, system-ui, sans-serif; color: var(--rv-ink); background: transparent; outline: none; }
+  .card-ask .note-in::placeholder { color: var(--rv-ink-3); }
+  .card-ask .note-go { flex: 0 0 auto; height: 22px; padding: 0 9px; border: 0; border-radius: 5px; background: hsl(var(--rv-n20)); color: var(--rv-ink); font: 500 11px/22px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .card-ask .note-go:hover { background: hsl(214 98% 44%); color: #fff; }
+  /* the thread on the pin card: the same block, in the dark card's colours */
+  .pin-tip .th-last { background: rgba(255,255,255,.06); color: hsl(216 30% 80%); }
+  .pin-tip .th-last:hover { background: rgba(255,255,255,.1); }
+  .pin-tip .th-last .th-w { color: hsl(216 30% 88%); }
+  .pin-tip .th-last .th-n { color: hsl(214 100% 78%); background: hsl(216 36% 22%); box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+  .pin-tip .th-last .th-faces .av { box-shadow: 0 0 0 1.5px hsl(216 36% 22%); }
+  .pin-tip .th-last .th-w b { color: #fff; }
+  
+  .pin-tip .th-list { max-height: 240px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.2) transparent; margin-right: -6px; padding-right: 6px; }
+  .pin-tip .th-more { color: hsl(216 25% 66%); } .pin-tip .th-more:hover { color: #fff; }
+  .pin-tip .th-msg:hover { background: rgba(255,255,255,.05); }
+  .pin-tip .th-who { color: #fff; } .pin-tip .th-who .th-at { color: hsl(216 25% 62%); }
+  .pin-tip .th-words { color: hsl(216 30% 88%); }
+  .pin-tip .th-msg.claude .th-who b { color: hsl(20 95% 75%); }
+  .pin-tip .th-sys { color: hsl(216 25% 62%); } .pin-tip .th-sys b { color: hsl(216 30% 80%); }
+  .pin-tip .th-quote { color: hsl(216 25% 62%); } .pin-tip .th-quote:hover, .pin-tip .th-quote:hover b { color: hsl(216 30% 82%); }
+  .pin-tip .th-q { background: hsl(216 36% 24%); border-color: rgba(255,255,255,.14); color: #fff; }
+  .pin-tip .th-quoting { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.16); color: hsl(216 25% 70%); }
+  .pin-tip .th-quoting b { color: #fff; }
+  .pin-tip .th-box { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.16); }
+  .pin-tip .th-in { color: #fff; } .pin-tip .th-in::placeholder { color: hsl(216 25% 60%); }
+  .pin-tip .th-go { background: rgba(255,255,255,.1); color: #fff; }
+  .pin-tip .th-msg.glow { background: hsl(45 60% 30% / .6); box-shadow: 0 0 0 2px hsl(45 95% 60% / .5); }
 </style>
 <div class="hover ui"><span class="tag"></span></div>
 <div class="pins"></div>
@@ -4037,10 +4201,9 @@ function buildTip(c) {
   const moves = isQ(c) ? [] : (statusActions(c).match(/<button[^>]*>[^<]*<\/button>/g) || []).map((b) => ({ to: (b.match(/data-to="(\w+)"/) || [])[1], label: b.replace(/<[^>]+>/g, ""), alt: / alt"/.test(b) })).filter((m) => m.to && can(moveOf(c, m.to), c));
   const main = moves.find((m) => !m.alt);
   const sug = draftShown(c) && (c.draft.state === "new" || c.draft.state === "accepted") && c.draft.text;
-  /* FEWER THINGS (Nirav, 2026-10-28): the comment and the list icon on hover; the status line; on hover one row: the
-     note's writer and Claude as two small icons (a click opens the words), then ⋯ (the drawer's menu) and the main move */
-  const noteBy = hasNote(c) ? c.note.by : null;
-  const icons = `${noteBy ? `<button type="button" class="tip-chip" data-open="note" aria-label="Note from ${esc(noteBy)}">${noteFace(noteBy)}<span class="scope-tip">Note from ${esc(isMe(noteBy) ? "you" : noteBy.split(/\\s+/)[0])}</span></button>` : ""}${sug ? `<button type="button" class="tip-chip" data-open="draft" aria-label="Claude suggests">${CLAUDE_AV()}<span class="scope-tip">Claude suggests</span></button>` : ""}`;
+  /* ONE CARD, TWO PLACES (Nirav, 2026-10-29/30): the drawer card's top row (the status, then ✓ and ⋯ in a small bar),
+     the comment, the thread; Claude's live suggestion stays a chip under it (decided, it is a thread message) */
+  const icons = sug ? `<button type="button" class="tip-chip" data-open="draft" aria-label="Claude suggests">${CLAUDE_AV()}<span class="scope-tip">Claude suggests</span></button>` : "";
   /* ⋯ is the drawer card's own popover (Nirav, 2026-10-28: the same menu, icons and groups, the type change and Hand
      over in it): its items as the drawer builds them */
   const tpl = document.createElement("template");
@@ -4049,11 +4212,22 @@ function buildTip(c) {
   const menu = items ? `<span class="card-more-wrap tip-dots"><button type="button" class="tip-more" aria-label="More" aria-haspopup="menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="12.5" cy="8" r="1.4"/></svg></button><span class="card-menu tip-menu" role="menu">${items}</span></span>` : "";
   /* the note and the suggestion fold open and shut (a grid row from 0 to its height), never a jump */
   const fold = (cls, inner) => `<div class="tip-fold" data-for="${cls}"><div class="tip-fold-in"><div class="${cls}">${inner}</div></div></div>`;
-  tip.innerHTML = `<div class="tip-line"><div class="tip-text" aria-label="Comment, click to edit"></div><button class="tip-open" aria-label="Show it in the list"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 15l3 3 3-3M18 11v7"/></svg><span class="scope-tip">Show in the list</span></button></div><div class="tip-stat">${statusHtml(c)}</div><div class="tip-acts"><div class="tip-acts-in">${hasNote(c) ? fold("tip-note", "") : ""}${sug ? fold("tip-draft", `${CLAUDE_AV()}<span class="tip-draft-t"></span>`) : ""}<div class="tip-row">${icons}<span class="tip-gap"></span>${menu}${main ? `<button type="button" class="tip-ok" data-to="${main.to}">${esc(main.label)}</button>` : ""}</div></div></div>`;
+  const ok = main ? `<button type="button" class="tip-ok tb-main" data-to="${main.to}" aria-label="${esc(main.label)}">${TB_CHECK}<span class="scope-tip">${esc(main.label)}</span></button>` : "";
+  tip.innerHTML = `<div class="tip-top"><div class="tip-stat">${statusHtml(c)}</div>${ok || menu ? `<span class="tip-tb">${ok}${menu}</span>` : ""}</div><div class="tip-line"><div class="tip-text" aria-label="Comment, click to edit"></div><button class="tip-open" aria-label="Show it in the list"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 15l3 3 3-3M18 11v7"/></svg><span class="scope-tip">Show in the list</span></button></div><div class="card-th"></div>${sug ? `<div class="tip-acts"><div class="tip-acts-in">${fold("tip-draft", `${CLAUDE_AV()}<span class="tip-draft-t"></span>`)}<div class="tip-row">${icons}<span class="tip-gap"></span></div></div></div>` : ""}`;
   tip.querySelector(".tip-text").innerHTML = mentionHtml(c.text);
-  if (hasNote(c)) tip.querySelector(".tip-note").innerHTML = noteHtml(c);
   if (sug) tip.querySelector(".tip-draft-t").textContent = c.draft.text;
+  tipThread(c);
 }
+/* the pin card's thread: open, it holds the card up until a click lands outside it */
+function tipThread(c) {
+  threadSync(tip.querySelector(".card-th"), c, (now) => buildTip(now));
+}
+window.addEventListener("pointerdown", (e) => {
+  if (!tipHold || !state.thOpen.has(tipHold)) return;
+  const path = e.composedPath();
+  if (path.includes(tip) || path.some((n) => n.classList?.contains?.("mention-pop"))) return;
+  tipHold = null;
+}, true);
 tip.addEventListener("scroll", (e) => {
   const t = e.target;
   if (t.classList?.contains("tip-text")) t.classList.toggle("at-end", t.scrollTop + t.clientHeight >= t.scrollHeight - 2);
@@ -4063,6 +4237,11 @@ tip.addEventListener("click", async (e) => {
   if (!c) return;
   /* ⋯ open: a click anywhere else on the card shuts it, and does only that (Nirav, 2026-10-28) */
   if (tip.classList.contains("menu-open") && !e.target.closest(".tip-menu, .tip-more")) return closeTipMenu();
+  if (threadClick(e, c, tip, () => tipThread(c))) {
+    if (state.thOpen.has(c.id)) tipHold = c.id;
+    else if (tipHold === c.id) tipHold = null;
+    return;
+  }
   const t = e.target.closest("button, .tip-text");
   if (!t) return;
   if (c.pending && !t.classList.contains("tip-open")) return; // still on its way to the hub: nothing to act on yet
@@ -5156,6 +5335,10 @@ function mentionLayer(el) {
     Object.assign(layer.style, { left: `${el.offsetLeft}px`, top: `${el.offsetTop}px`, width: `${el.offsetWidth}px`, height: `${el.offsetHeight}px`, borderRadius: cs.borderRadius });
     for (const k of ["font", "letterSpacing", "wordSpacing", "textIndent", "textTransform", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "lineHeight", "textAlign", "boxSizing"]) layer.style[k] = cs[k];
     layer.style.whiteSpace = multi ? "pre-wrap" : "pre";
+    if (!multi) { // a one-line box centres its line; the layer starts at the top, so it gets the same gap above (Nirav, 2026-10-30: the tag sat high)
+      const room = el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom), lh = parseFloat(cs.lineHeight) || room;
+      layer.style.paddingTop = `${parseFloat(cs.paddingTop) + Math.max(0, (room - lh) / 2)}px`;
+    }
     layer.style.overflowWrap = multi ? "break-word" : "normal";
     inner.innerHTML = el.value.includes("@") ? `${mentionHtml(el.value)}${multi ? "<br>" : ""}` : "";
     inner.style.transform = `translate(${-el.scrollLeft}px, ${-el.scrollTop}px)`;
@@ -5269,6 +5452,7 @@ function actsHtml(c) {
   /* hand over (in progress: the person on it or the approver) or assign (New: the approver) */
   const handLabel = c.status === "progress" && can("hand_over", c) ? "Hand over to…" : c.status === "open" && can("assign", c) ? "Assign to…" : "";
   if (handLabel && !isQ(c)) rest.push(`<button class="card-hand card-mi">${ICO.hand}${handLabel}</button>`);
+  if (!isQ(c) && can("answer", c)) rest.unshift(`<button class="card-reply card-mi">${ICO.reply}Reply</button>`); // a fix has a thread too (Nirav, 2026-10-29)
   /* A QUESTION'S BUTTONS (Nirav, 2026-10-24): Answer while it is asked (not for the asker); Got it once answered (the
      asker, or an approver); the asker adds a detail or follows up; anyone may hand it to Claude */
   if (isQ(c)) {
@@ -5459,6 +5643,21 @@ function noteHtml(c) {
 state.histOpen = new Set();
 state.histAll = new Set(); // long ones unfolded
 const hasHist = (c) => Array.isArray(c.history) && c.history.length >= 2;
+function stepVerb(c, s, from) {
+  if (s.kind === "hand") {
+    const to = s.toWho ? (isMe(s.toWho) ? "you" : esc(s.toWho)) : "someone";
+    return `${from === "open" ? "assigned" : "handed"} it to <b>${to}</b>`;
+  }
+  if (s.kind === "take") return "took it back";
+  if (s.kind === "reply") return s.via !== "claude" && s.by === c.by ? "followed up" : isQ(c) ? "answered" : "replied";
+  if (s.kind === "to_fix") return "made it a fix";
+  if (s.kind === "mention") return `mentioned ${(s.mentions || []).map((x) => (x === "all" ? "everyone" : isMe(x) ? "you" : esc(x))).join(", ")}`;
+  if (isQ(c) && s.status === "approved") return "marked it resolved";
+  if (s.status === "progress") return from === "approval" ? "sent it back" : from === "approved" ? "reopened it" : "picked it up";
+  if (s.status === "approval") return "sent it for approval";
+  if (s.status === "approved") return "approved it";
+  return from === "approved" ? "reopened it" : "put it back";
+}
 function histHtml(c) {
   const face = (name) => {
     if (!name) return "";
@@ -5467,25 +5666,13 @@ function histHtml(c) {
     return full.slice(0, full.length - named.length);
   };
   const row = (st, by, line, at, words, withClaude) =>
-    `<li class="hs-step"><span class="gh-shape" data-s="${st}"></span>${by ? `<span class="hs-face">${face(by)}${withClaude ? CLAUDE_AV("hs-claude") : ""}</span>` : ""}<span class="hs-body"><span class="hs-line">${by ? `<b>${isMe(by) ? "You" : esc(by)}</b> ` : ""}${line}</span>${words ? `<span class="hs-words">“${mentionHtml(words)}”</span>` : ""}</span><span class="hs-when"${at ? ` title="${esc(new Date(at).toLocaleString())}"` : ""}>${esc(agoText(at))}</span></li>`;
+    `<li class="hs-step"${at ? ` data-at="${at}"` : ""}><span class="gh-shape" data-s="${st}"></span>${by ? `<span class="hs-face">${face(by)}${withClaude ? CLAUDE_AV("hs-claude") : ""}</span>` : ""}<span class="hs-body"><span class="hs-line">${by ? `<b>${isMe(by) ? "You" : esc(by)}</b> ` : ""}${line}</span>${words ? `<span class="hs-words">“${mentionHtml(words)}”</span>` : ""}</span><span class="hs-when"${at ? ` title="${esc(new Date(at).toLocaleString())}"` : ""}>${esc(agoText(at))}</span></li>`;
   const cap = (h, name) => (name ? h : h[0].toUpperCase() + h.slice(1)); // "Picked it up" when nobody is named
   const out = []; // who added it is the strip's own line, where the thread starts
   let was = "open";
   for (const s of c.history) {
     const from = s.from || was; // steps from before 2026-10-24 carry no "from": the one before tells
-    let verb;
-    if (s.kind === "hand") {
-      const to = s.toWho ? (isMe(s.toWho) ? "you" : esc(s.toWho)) : "someone";
-      verb = `${from === "open" ? "assigned" : "handed"} it to <b>${to}</b>`;
-    } else if (s.kind === "take") verb = "took it back";
-    else if (s.kind === "reply") verb = s.via !== "claude" && s.by === c.by ? "followed up" : "answered";
-    else if (s.kind === "to_fix") verb = "made it a fix";
-    else if (s.kind === "mention") verb = `mentioned ${(s.mentions || []).map((x) => (x === "all" ? "everyone" : isMe(x) ? "you" : esc(x))).join(", ")}`;
-    else if (isQ(c) && s.status === "approved") verb = "marked it resolved";
-    else if (s.status === "progress") verb = from === "approval" ? "sent it back" : from === "approved" ? "reopened it" : "picked it up";
-    else if (s.status === "approval") verb = "sent it for approval";
-    else if (s.status === "approved") verb = "approved it";
-    else verb = from === "approved" ? "reopened it" : "put it back";
+    const verb = stepVerb(c, s, from);
     /* Claude's answers under its own mark; a move made with Claude is the person's, Claude's mark tucked beside their
        face ("You picked it up, with Claude"; Nirav, 2026-10-26: it read "Claude picked it up, with Claude") */
     const claudeSays = s.via === "claude" && s.kind === "reply";
@@ -5504,6 +5691,270 @@ function histHtml(c) {
     else out.splice(0, hidden, fold);
   }
   return `<ol class="hs-list">${out.join("")}</ol>`;
+}
+/* THE THREAD (Nirav, 2026-10-29: one flat talk per comment, quoted replies, no nested rails). Built from the history:
+   a reply is a message; a move is a quiet line, and the words that rode with it (why it came back, a note for the
+   person it was handed to) are a message under it. Mentions-only steps are left out: the mention is in the words. */
+state.thOpen = new Set(); // comments whose thread is open
+state.thDraft = null; // { id, text, quote }: the reply being written, kept through a redraw
+state.thAll = new Set(); // long threads unfolded
+/* which move a step's words came with, for the badge on the closed line's face */
+function moveKey(s, from) {
+  if (s.kind === "hand") return from === "open" ? "assign" : "hand";
+  if (s.kind === "take") return "take";
+  if (s.status === "progress") return from === "approval" ? "sendback" : from === "approved" ? "reopen" : "pick";
+  if (s.status === "approval") return "done";
+  if (s.status === "approved") return "approved";
+  return "back";
+}
+const MOVE_IC = {
+  back: ["new", '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>'],
+  sendback: ["prog", '<path d="M12 19V5"/><path d="M5 12l7 7 7-7"/>'],
+  reopen: ["prog", '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'],
+  take: ["prog", '<path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/>'],
+  pick: ["prog", '<path d="M7 17L17 7"/><path d="M8 7h9v9"/>'],
+  hand: ["hand", '<path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>'],
+  assign: ["hand", '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/>'],
+  done: ["appr", '<path d="M5 12.5l4.5 4.5L19 7.5"/>'],
+  approved: ["done", '<path d="M5 12.5l4.5 4.5L19 7.5"/>'],
+  /* Claude's suggestion once decided, and its question while it waits (Nirav, 2026-11-04) */
+  accepted: ["ok", '<path d="M5 12.5l4.5 4.5L19 7.5"/>'],
+  ignored: ["no", '<path d="M7 7l10 10M17 7L7 17"/>'],
+  ask: ["ask", '<path d="M9 9a3 3 0 1 1 4.5 2.6c-.9.5-1.5 1.2-1.5 2.4"/><path d="M12 18h.01"/>'],
+};
+const MOVE_SVG = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MOVE_IC[k][1]}</svg>`;
+/* the face on the closed line, with a soft badge when the words came with a move (Nirav, 2026-10-31: a plain reply
+   and "put it back" looked the same until the thread was open) */
+function thLastFace(c, x) {
+  const face = thFace(c, x.by); // the person who made the move, as the open thread shows it
+  const ic = x.mk && MOVE_IC[x.mk];
+  if (!ic) return face;
+  const said = x.tip || String(x.move || "").replace(/<[^>]+>/g, "");
+  return `<span class="th-fw">${face}<span class="th-bd" data-c="${ic[0]}" title="${esc(said[0].toUpperCase() + said.slice(1))}">${MOVE_SVG(x.mk)}</span></span>`;
+}
+function threadOf(c) {
+  const out = [];
+  let was = "open";
+  for (const s of c.history || []) {
+    const from = s.from || was;
+    if (s.status) was = s.status;
+    const claudeSays = s.via === "claude" && s.kind === "reply";
+    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays });
+    /* a move's reason is a reply, labelled with the move ("You put it back"); a bare move is the history's
+       (Nirav, 2026-10-30: the words were written for someone to read) */
+    else if (s.note && s.kind !== "mention") out.push({ msg: true, at: s.at, by: s.by, words: s.note, move: stepVerb(c, s, from), st: s.status, mk: moveKey(s, from) });
+  }
+  /* Claude's part (Nirav, 2026-11-04): each question it asked and the answer (a reply quoting it), the question still
+     waiting, and the suggestion once someone accepted it or set it aside. A live suggestion stays the box above */
+  const d = c.draft;
+  for (const t of d?.thread || []) {
+    const qAt = t.qAt || t.at - 1;
+    out.push({ msg: true, at: qAt, by: "Claude", words: t.q, claude: true, move: "isn't sure" });
+    out.push({ msg: true, at: t.at, by: t.by, words: t.a, quote: { at: qAt, by: "Claude", text: t.q } });
+  }
+  if (d?.state === "new" && d.unsure) out.push({ msg: true, at: d.at, by: "Claude", words: d.text, claude: true, move: "isn't sure", ask: claudeWaits(c), mk: claudeWaits(c) ? "ask" : "", tip: "Waiting for an answer" });
+  /* an accepted answer is posted as Claude's reply already: only a fix, or an answer set aside, gets the record */
+  if ((d?.state === "accepted" && d.kind === "fix") || d?.state === "ignored") {
+    const who = myName(d.decidedBy) ? "You" : d.decidedBy || "someone";
+    const said = d.state === "accepted" ? `Accepted by ${who}` : `Set aside by ${who}`;
+    out.push({ msg: true, at: d.at, by: "Claude", words: d.text, claude: true, move: "suggested", sug: d.state, decided: said, mk: d.state, tip: said });
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+/* Claude's question waits on the card while the comment is still to do */
+const claudeWaits = (c) => c.draft?.state === "new" && !!c.draft.unsure && (c.status === "open" || c.status === "progress");
+/* who answers Claude: the person on it, the writer, an approver */
+const talksToClaude = (c) => myName(c.assignee) || isMe(c.by) || isApprover();
+/* the open question as a quote, for the reply box: a reply quoting it is the answer */
+const claudeAsk = (c) => (claudeWaits(c) ? { at: c.draft.at, by: "Claude", text: c.draft.text.slice(0, 140), ask: true } : null);
+/* drafting again with an answer: told at the end of the open thread, not in the box (Nirav, 2026-11-04) */
+const claudeAgain = (c) => !!c.draft?.thread?.length && (c.draft.state === "reply" || (c.draft.state === "drafting" && Date.now() - (c.draft.at || 0) < DRAFT_LIVE_MS));
+const thFace = (c, name) => {
+  if (!name) return "";
+  if (name === "Claude") return CLAUDE_AV();
+  const full = personHtml(c, name), named = esc(name);
+  return full.slice(0, full.length - named.length);
+};
+const thName = (name) => (name === "Claude" ? "Claude" : isMe(name) ? "You" : esc(name || "Someone"));
+const TH_ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'; // the reply arrow, drawn: the ↩ glyph sat on the baseline
+/* who joined in, the latest first, three at most */
+const thFaces = (c, msgs) => `<span class="th-faces">${[...new Set(msgs.map((x) => x.by).reverse())].slice(0, 3).map((n) => thFace(c, n)).join("")}</span>`;
+function threadHtml(c) {
+  const items = threadOf(c);
+  const msgs = items.filter((x) => x.msg);
+  if (!state.thOpen.has(c.id)) {
+    if (!msgs.length) return "";
+    const last = msgs.find((x) => x.ask) || msgs[msgs.length - 1]; // Claude's question waiting comes first, even under a later reply
+    /* the latest reply with its writer, fading out, and a pill with who joined in and how many (Nirav, 2026-10-31) */
+    const pill = msgs.length === 1 ? "" : `<span class="th-n" title="${msgs.length} replies">${thFaces(c, msgs)}${msgs.length}</span>`;
+    /* Claude's question waiting: the line in Claude's warm tint, "Answer" when nothing else would sit there */
+    const tag = last.ask && msgs.length === 1 && talksToClaude(c) ? '<span class="th-tag">Answer</span>' : "";
+    return `<button type="button" class="th-last${last.ask ? " ask" : ""}" aria-label="Open the thread, ${msgs.length} ${msgs.length === 1 ? "reply" : "replies"}">${thLastFace(c, last)}<span class="th-w"><b>${thName(last.by)}</b> ${last.sug ? "suggested: " : ""}${mentionHtml(last.words)}</span>${tag}${pill}</button>`;
+  }
+  const rows = items.map((x) => {
+    if (x.sys) {
+      const who = x.by ? `<b>${thName(x.by)}</b> ` : "";
+      const verb = x.by ? x.verb : x.verb[0].toUpperCase() + x.verb.slice(1);
+      return `<div class="th-sys" data-s="${esc(x.st || "")}"><span>${who}${verb}${x.withClaude ? ", with Claude" : ""} · ${esc(agoText(x.at))}</span></div>`;
+    }
+    const q = x.quote ? `<button type="button" class="th-quote" data-at="${x.quote.at}">${TH_ARROW}<b>${thName(x.quote.by)}</b><span>${esc(x.quote.text)}</span></button>` : "";
+    /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
+    const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words">${mentionHtml(x.words)}</div>`;
+    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.move ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${q}${words}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
+  });
+  if (claudeAgain(c)) rows.push(`<div class="th-again">${CLAUDE_AV()}<span>Claude is drafting again with ${myName(c.draft.thread[c.draft.thread.length - 1].by) ? "your" : "this"} answer…</span></div>`);
+  const d = state.thDraft?.id === c.id ? state.thDraft : null;
+  const answering = d?.quote?.ask && claudeWaits(c) && d.quote.at === c.draft.at;
+  const quoting = d?.quote ? `<div class="th-quoting">${TH_ARROW}<span>Replying to <b>${thName(d.quote.by)}</b>:</span><span class="th-qw">${esc(d.quote.text)}</span><button type="button" class="th-qx" aria-label="Drop the quote">×</button></div>` : "";
+  /* a long story folds under "Show 7 earlier", the history's own fold, and opens and shuts again */
+  let shown = rows;
+  if (rows.length > 8) {
+    const all = state.thAll.has(c.id);
+    const at = items.map((x, i) => (x.msg ? i : -1)).filter((i) => i >= 0);
+    const cut = Math.min(at.length ? at[Math.max(0, at.length - 3)] : rows.length, rows.length - 5); // from the third-last message, five rows at least
+    if (cut > 1) shown = [`<button type="button" class="th-more" aria-expanded="${all}">${all ? "Hide earlier replies" : `Show ${cut} earlier ${cut === 1 ? "reply" : "replies"}`}</button>`, ...(all ? rows : rows.slice(cut))];
+  }
+  return `<div class="th-open"><div class="th-list">${shown.join("")}</div>${quoting}<div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="${answering ? "Answer Claude…" : "Reply, @ to mention…"}" aria-label="${answering ? "Answer Claude" : "Reply"}"><button type="button" class="th-go">Reply</button></div></div>`;
+}
+/* the thread block on a card (the drawer's or the pin card's), and its reply box wired */
+function threadSync(box, c, onSent) {
+  const el = box.classList.contains("card-th") ? box : box.querySelector(".card-th");
+  if (!el) return;
+  const typing = el.querySelector(".th-in") === root.activeElement;
+  el.innerHTML = threadHtml(c);
+  /* the tags are known only once the team list is in: drawn before it, "@Kishan" stayed plain words (Nirav, 2026-10-30) */
+  if (!teamCache.list.length && /@/.test(el.querySelector(".th-w, .th-list")?.textContent || "")) teamList().then((t) => t.length && el.isConnected && threadSync(box, c, onSent));
+  const list = el.querySelector(".th-list");
+  const toEnd = () => list && list.scrollHeight > list.clientHeight && (list.scrollTop = list.scrollHeight); // the latest in view
+  toEnd();
+  requestAnimationFrame(toEnd); // the pin card is measured a frame later
+  const input = el.querySelector(".th-in");
+  if (!input) return;
+  const d = state.thDraft?.id === c.id ? state.thDraft : null;
+  if (d) input.value = d.text || "";
+  input.addEventListener("input", () => {
+    if (state.thDraft?.id !== c.id) state.thDraft = { id: c.id, text: "", quote: null };
+    state.thDraft.text = input.value;
+  });
+  attachMentions(input);
+  const go = el.querySelector(".th-go");
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") threadSend(c, input, go, onSent);
+    if (e.key === "Escape") input.blur();
+  });
+  /* opened with no replies yet (⋯ → Reply): leaving the box empty shuts it again, there is no header to shut it by */
+  input.addEventListener("blur", () => setTimeout(() => {
+    if (root.activeElement === input || input.value.trim() || !state.thOpen.has(c.id) || threadOf(c).length) return;
+    state.thOpen.delete(c.id);
+    if (el.isConnected) thSlide(el, () => threadSync(box, c, onSent));
+  }, 160));
+  go.addEventListener("click", (e) => {
+    e.stopPropagation();
+    threadSend(c, input, go, onSent);
+  });
+  if (typing || d?.focus) {
+    input.focus({ preventScroll: true });
+    if (d) d.focus = false;
+  }
+}
+async function threadSend(c, input, btn, onSent) {
+  const words = input.value.trim();
+  if (!words) return input.focus();
+  const d = state.thDraft?.id === c.id ? state.thDraft : null;
+  input.disabled = true;
+  btn.classList.add("loading");
+  const mentions = mentionsIn(words);
+  /* quoting Claude's open question, it is the answer: Claude drafts again with it (Nirav, 2026-11-04) */
+  const answers = !!d?.quote?.ask && claudeWaits(c) && d.quote.at === c.draft.at;
+  const r = await api("update", answers ? { id: c.id, draftReply: words } : { id: c.id, reply: words, ...(d?.quote ? { quote: d.quote } : {}), ...(mentions.length ? { mentions } : {}) }).catch(() => null);
+  if (!r?.entry) {
+    input.disabled = false;
+    btn.classList.remove("loading");
+    toast(`Could not save that: ${r?.error || "the hub did not answer"}`, true);
+    return;
+  }
+  state.thDraft = { id: c.id, text: "", quote: null, focus: true };
+  const crossed = applyEntry(r.entry);
+  const now = state.comments.find((x) => x.id === c.id) || r.entry;
+  if (mentions.includes("Claude")) mentionClaude(now);
+  if (onSent) onSent(now);
+  else if (crossed) renderPanel();
+  else {
+    const card = panelBody.querySelector(`.card[data-id="${c.id}"]`);
+    if (card) {
+      card.querySelector(".card-foot").innerHTML = footHtml(now);
+      settle(card, now);
+    }
+  }
+  toast(answers ? `#${c.n}: answered, Claude drafts again` : `#${c.n} ${isQ(c) ? (isMine(c) ? "followed up" : "answered") : "replied"}`);
+}
+/* the clicks inside a thread, the same on both cards; true when it was one */
+/* the thread opens, shuts and unfolds by sliding to its new height while the words fade in (Nirav, 2026-10-31: smooth) */
+function thSlide(box, change) {
+  const el = box.classList.contains("card-th") ? box : box.querySelector(".card-th");
+  if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return change();
+  const h0 = el.getBoundingClientRect().height;
+  el.getAnimations().forEach((a) => a.cancel());
+  change();
+  const now = box.classList.contains("card-th") ? box : box.querySelector(".card-th") || el;
+  const h1 = now.getBoundingClientRect().height;
+  if (Math.abs(h1 - h0) < 2) return;
+  now.animate([{ height: `${h0}px`, overflow: "hidden" }, { height: `${h1}px`, overflow: "hidden" }], { duration: 280, easing: "cubic-bezier(.4,0,.2,1)" });
+  now.firstElementChild?.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 240, easing: "ease-out" });
+}
+function threadClick(e, c, box, onChange) {
+  const t = e.target;
+  if (t.closest(".th-last")) {
+    state.thOpen.add(c.id);
+    /* Claude asked: the box opens answering it (the quote can be dropped for a plain reply) */
+    const ask = talksToClaude(c) && claudeAsk(c);
+    if (ask && !(state.thDraft?.id === c.id && state.thDraft.quote)) state.thDraft = { id: c.id, text: state.thDraft?.id === c.id ? state.thDraft.text : "", quote: ask, focus: true };
+    thSlide(box, onChange);
+    return true;
+  }
+  if (t.closest(".th-more")) {
+    if (state.thAll.has(c.id)) state.thAll.delete(c.id);
+    else state.thAll.add(c.id);
+    thSlide(box, onChange);
+    return true;
+  }
+  const q = t.closest(".th-q");
+  if (q) {
+    const m = q.closest(".th-msg");
+    const text = (m.querySelector(".th-words")?.textContent || "").trim().slice(0, 140);
+    const was = state.thDraft?.id === c.id ? state.thDraft.text : "";
+    const at = Number(m.dataset.at);
+    const ask = claudeAsk(c);
+    state.thDraft = { id: c.id, text: was, quote: ask && ask.at === at ? ask : { at, by: m.dataset.by === "Claude" ? "Claude" : m.dataset.by, text }, focus: true };
+    onChange();
+    return true;
+  }
+  if (t.closest(".th-qx")) {
+    if (state.thDraft?.id === c.id) Object.assign(state.thDraft, { quote: null, focus: true });
+    onChange();
+    return true;
+  }
+  const qt = t.closest(".th-quote");
+  if (qt) {
+    const to = [...box.querySelectorAll(".th-msg")].find((m) => m.dataset.at === qt.dataset.at);
+    if (to) {
+      to.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      to.classList.add("glow");
+      setTimeout(() => to.classList.remove("glow"), 1200);
+    } else if (box.classList.contains("card") && hasHist(c)) { // it quotes a move's reason: that lives in the history now
+      const fresh = !state.histOpen.has(c.id);
+      state.histOpen.add(c.id);
+      state.histAll.add(c.id); // unfolded, so the step is there to find
+      histSync(box, c);
+      roomFor(box);
+      if (fresh) slideHist(box.querySelector(".card-hist"), true);
+      const step = box.querySelector(`.card-hist .hs-step[data-at="${qt.dataset.at}"]`);
+      if (step) setTimeout(() => { step.scrollIntoView({ block: "nearest", behavior: "smooth" }); step.classList.add("glow"); setTimeout(() => step.classList.remove("glow"), 1200); }, fresh ? 340 : 0);
+    }
+    return true;
+  }
+  return !!t.closest(".th-open, .th-box");
 }
 /* the author line in the hover strip is the history's button (Nirav, 2026-10-24: one thing, not two): "Pranjal · 2 h
    ago" as before; under the pointer (and while open) the face turns into a history mark, a click opens it. Without a
@@ -5580,26 +6031,33 @@ function cancelAsk() {
   if (!a) return;
   state.asking = null;
   const card = panelBody.querySelector(`.card[data-id="${a.id}"]`);
-  const c = state.comments.find((x) => x.id === a.id) || state.done.find((x) => x.id === a.id);
-  if (card && c) {
-    const foot = card.querySelector(".card-foot");
-    closeBox(foot, () => {
-      if (!state.asking || state.asking.id !== a.id) foot.innerHTML = footHtml(c);
-    });
-  }
+  const slot = card?.querySelector(".card-ask");
+  if (slot) closeBox(slot, () => slot.remove());
   if (state.stale && !panelBusy()) {
     state.stale = false;
     renderPanel(); // what arrived while the box was open
   }
 }
+/* the reason box (Send back, Put back, Hand over) under the comment, so the top row keeps its status; the thread's
+   reply box takes these over in step 2 */
+function askSlot(card) {
+  let slot = card.querySelector(".card-ask");
+  if (!slot) {
+    slot = document.createElement("div");
+    slot.className = "card-ask";
+    card.insertBefore(slot, card.querySelector(".card-th"));
+  }
+  return slot;
+}
 function mountAsk(card, c) {
   const a = state.asking;
+  if (!a || !card.querySelector(".card-th")) return;
+  const slot = askSlot(card);
   const foot = card.querySelector(".card-foot");
-  if (!a || !foot) return;
-  foot.innerHTML = `<span class="note-box"><input class="note-in" type="text" maxlength="${a.reply ? 1200 : 600}" placeholder="${a.reply ? esc(a.ph) : a.assignTo ? `A note for ${esc(isMe(a.toName) ? "yourself" : a.toName)}? (optional) Enter hands it over` : "Why? Enter sends it, Esc keeps it here"}"><button class="note-go">${a.label}</button></span>`;
-  const input = foot.querySelector(".note-in");
-  const btn = foot.querySelector(".note-go");
-  if (!a.shown) openBox(foot.querySelector(".note-box")); // only the first time: a redraw puts it back still
+  slot.innerHTML = `<span class="note-box"><input class="note-in" type="text" maxlength="${a.reply ? 1200 : 600}" placeholder="${a.reply ? esc(a.ph) : a.assignTo ? `A note for ${esc(isMe(a.toName) ? "yourself" : a.toName)}? (optional) Enter hands it over` : "Why? Enter sends it, Esc keeps it here"}"><button class="note-go">${a.label}</button></span>`;
+  const input = slot.querySelector(".note-in");
+  const btn = slot.querySelector(".note-go");
+  if (!a.shown) openBox(slot.querySelector(".note-box")); // only the first time: a redraw puts it back still
   a.shown = true;
   input.value = a.text;
   input.addEventListener("input", () => (a.text = input.value));
@@ -5624,8 +6082,9 @@ function mountAsk(card, c) {
     if (mentions.includes("Claude")) mentionClaude(state.comments.find((x) => x.id === c.id) || r.entry);
     if (crossed) renderPanel();
     else
-      closeBox(foot, () => {
-        foot.innerHTML = footHtml(r.entry);
+      closeBox(slot, () => {
+        slot.remove();
+        if (foot) foot.innerHTML = footHtml(r.entry);
         settle(card, r.entry);
       });
     if (a.reply) return toast(`#${c.n} ${isMine(c) ? "followed up" : "answered"}`);
@@ -5654,19 +6113,22 @@ const CLAUDE_AV = (cls = "") => `<span class="av av-claude${cls ? ` ${cls}` : ""
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
 /* the foot's normal content: where, the status chip, the actions */
 function footHtml(c) {
-  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${shownStatus(c)}">${statusHtml(c)}</span>${maybe.has(c.id) ? `<span class="card-maybe" data-tip="${esc(maybeTip(c))}">Maybe fixed?</span>` : ""}${c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${actsHtml(c)}</span>`}`;
+  const pick = `<i class="tb-rule" aria-hidden="true"></i><button class="card-pick" aria-label="Select for copying" aria-pressed="${state.selected.has(c.id)}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></button>`;
+  const acts = c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${tbMain(actsHtml(c))}</span>`;
+  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${shownStatus(c)}">${statusHtml(c)}</span>${maybe.has(c.id) ? `<span class="card-maybe" data-tip="${esc(maybeTip(c))}">Maybe fixed?</span>` : ""}<span class="card-tb">${acts}${pick}</span>`;
+}
+/* the main move in the toolbar: an icon, its name in the tooltip (Pick up, Done, Approve, Got it; Answer as a reply) */
+const TB_CHECK = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>`;
+const TB_REPLY = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/></svg>`;
+function tbMain(h) {
+  const cut = h.indexOf('<span class="card-more-wrap">');
+  const main = cut > 0 ? h.slice(0, cut) : "";
+  if (!main) return h;
+  return main.replace(/^<button class="card-ok([^"]*)"([^>]*)>([^<]*)<\/button>$/, (m, cls, attrs, label) => `<button class="card-ok tb-main${cls}"${attrs} aria-label="${esc(label)}">${/card-reply/.test(cls) ? TB_REPLY : TB_CHECK}<span class="scope-tip">${esc(label)}</span></button>`) + h.slice(cut);
 }
 /* the note under the foot, added, changed or removed to match the comment */
 function settle(card, c) {
-  let note = card.querySelector(".card-note");
-  if (hasNote(c)) {
-    if (!note) {
-      note = document.createElement("div");
-      note.className = "card-note";
-      card.insertBefore(note, card.querySelector(".card-meta")); // above the hover strip
-    }
-    note.innerHTML = noteHtml(c);
-  } else note?.remove();
+  threadSync(card, c); // the note is a message in the thread now (Nirav, 2026-10-29)
   draftSync(card, c);
   histSync(card, c);
   clampCard(card);
@@ -5681,7 +6143,8 @@ const DRAFT_LIVE_MS = 10 * 60 * 1000;
 const myName = (x) => !!x && (isMe(x) || (!!state.hub?.handle && String(x).toLowerCase() === state.hub.handle.toLowerCase()));
 const draftShown = (c) => {
   const d = c.draft;
-  if (!d) return false;
+  if (!d || (d.state === "new" && d.unsure)) return false; // Claude's question is a thread message (Nirav, 2026-11-04)
+  if (claudeAgain(c) && state.thOpen.has(c.id)) return false; // drafting again: said at the end of the open thread
   const fresh = d.state === "drafting" && Date.now() - (d.at || 0) < DRAFT_LIVE_MS;
   if (c.status === "open") return d.state === "new" || d.state === "reply" || fresh;
   if (c.status === "progress" && c.withClaude) return false; // Claude already has the work
@@ -5689,17 +6152,9 @@ const draftShown = (c) => {
 };
 function draftHtml(c) {
   const d = c.draft;
-  if (d.state === "drafting") return `<div class="dr-head">${CLAUDE_AV()}<span class="dr-busy">Claude is looking at it${d.thread?.length ? " again" : ""}…</span></div>`;
+  /* answered: the answer is in the thread, the box says Claude is on it again */
+  if (d.state === "drafting" || d.state === "reply") return `<div class="dr-head">${CLAUDE_AV()}<span class="dr-busy">Claude is looking at it${d.thread?.length ? " again" : ""}…</span></div>`;
   const working = c.status === "progress"; // shown only to the person on it (draftShown)
-  const talks = working || isMe(c.by) || isApprover(); // who answers Claude or sets its words aside
-  /* the person answered Claude's question: waiting for a session to draft again */
-  if (d.state === "reply") {
-    const last = d.thread[d.thread.length - 1];
-    const mine = myName(last.by);
-    return `<div class="dr-head">${CLAUDE_AV()}<b>${mine ? "You" : esc(last.by || "Someone")} answered Claude</b></div><div class="dr-text"></div><div class="dr-wait">Claude drafts again with ${mine ? "your" : "this"} answer</div>`;
-  }
-  /* not sure what was meant: Claude's question back, answered right here (Reply) or set aside; nothing to accept */
-  if (d.unsure) return `<div class="dr-head">${CLAUDE_AV()}<b>Claude isn't sure</b></div><div class="dr-text"></div>${talks ? `<div class="dr-acts"><button type="button" class="dr-reply">Reply</button><button type="button" class="dr-ignore">Ignore</button></div>` : ""}`;
   const ok = working || (d.kind === "answer" ? can("answer", c) : can("pick_up", c));
   const no = working || isMe(c.by) || isApprover();
   const label = working ? "Let Claude do it" : d.kind === "answer" ? "Post answer" : "Accept";
@@ -5713,13 +6168,13 @@ function draftSync(card, c) {
   if (!box) {
     box = document.createElement("div");
     box.className = "card-draft";
-    card.insertBefore(box, card.querySelector(".card-foot"));
+    card.insertBefore(box, card.querySelector(".card-th")); // under the comment and its picture, above the thread
   }
   box.dataset.key = key;
-  box.dataset.state = c.draft.state;
+  box.dataset.state = c.draft.state === "reply" ? "drafting" : c.draft.state;
   box.innerHTML = draftHtml(c);
   const t = box.querySelector(".dr-text");
-  if (t) t.textContent = c.draft.state === "reply" ? c.draft.thread[c.draft.thread.length - 1].a : c.draft.text;
+  if (t) t.textContent = c.draft.text;
 }
 /* NUMBERS (Nirav, 2026-10-27): how the review runs, on the full page, from the history the hub already keeps. Fixes
    only for the approval figures (a question is answered, not approved). Raised to approved and picked-up times are
@@ -6258,19 +6713,20 @@ function renderPanel() {
     card.dataset.id = c.id;
     card.tabIndex = 0; // the keyboard walks the cards (↑ ↓, Space selects)
     const sevLabel = SEVERITIES.find(([k]) => k === c.severity)?.[1] || c.severity;
+    /* the top row first (Nirav, 2026-10-30): the status and the toolbar (the select box in it); then the comment, the
+       picture and the thread; the number stays outside, in the gutter */
     card.innerHTML = `
+      <div class="card-foot">${footHtml(c)}</div>
       <div class="card-line"><span class="card-n out${onPage ? "" : " away"}" title="Show it on the page">${c.n}</span><div class="card-text${canEdit(c) ? "" : " ro"}"${canEdit(c) ? ' title="Click to edit"' : ""}></div></div>
-      ${"" /* TRY 2026-10-23 (hover strip): was c.shot ? "" : the card-by line */}
-      <button class="card-pick" aria-label="Select for copying" aria-pressed="${state.selected.has(c.id)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></button>
       ${c.shot ? `<div class="card-pic"${c.viewport?.w && c.viewport?.h ? ` style="--ar:${c.viewport.w} / ${c.viewport.h}"` : ""}><img class="card-shot" data-id="${c.id}" ${onPage ? "src" : "data-src"}="${thumbUrl(c)}" alt=""></div>` /* TRY 2026-10-23: byPicHtml(c) was here */ : ""}
-      <div class="card-foot">${footHtml(c)}</div>${hasNote(c) ? `<div class="card-note"></div>` : ""}
+      <div class="card-th"></div>
       <div class="card-meta"><div class="card-meta-in"><span class="cm-by">${byHtml(c)}</span><span class="cm-where"></span></div></div>`;
     card.querySelector(".card-text").innerHTML = mentionHtml(c.text);
     /* quiet on the right (Nirav, 2026-10-24): the kind and the page only; the place on the page and "no picture" in the
        tooltip */
     const where = card.querySelector(".cm-where");
     where.innerHTML = `<b class="cm-type" data-k="${c.severity}">${esc(sevLabel)}</b> · <span class="cm-place" data-tip="${esc(`${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}">${esc(c.pageTitle || c.route)}</span>`;
-    if (hasNote(c)) card.querySelector(".card-note").innerHTML = noteHtml(c);
+    threadSync(card, c);
     draftSync(card, c);
     histSync(card, c);
     if (c.shot && c.rect) card.querySelector(".card-pic").appendChild(liveBadge(c, card.querySelector(".card-shot")));
@@ -6820,38 +7276,11 @@ panelBody.addEventListener("click", async (e) => {
   if (!card) return;
   const c = state.comments.find((x) => x.id === card.dataset.id) || state.done.find((x) => x.id === card.dataset.id);
   if (!c) return;
-  if (e.target.closest(".dr-reply")) {
-    const acts = e.target.closest(".dr-acts");
-    acts.outerHTML = `<div class="dr-ask"><input class="dr-in" type="text" maxlength="600" placeholder="Answer Claude…" aria-label="Answer Claude"><button type="button" class="dr-send">Send</button><button type="button" class="dr-cancel" aria-label="Cancel">Cancel</button></div>`;
-    const box = card.querySelector(".card-draft");
-    const input = box.querySelector(".dr-in");
-    const send = async () => {
-      const words = input.value.trim();
-      if (!words) return input.focus();
-      if (await applyUpdate({ id: c.id, draftReply: words }, box.querySelector(".dr-send"))) toast(`#${c.n}: answered, Claude drafts again`);
-    };
-    input.addEventListener("keydown", (ev) => {
-      ev.stopPropagation();
-      if (ev.key === "Enter") send();
-      if (ev.key === "Escape") {
-        delete box.dataset.key;
-        draftSync(card, c);
-      }
-    });
-    box.querySelector(".dr-send").addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      send();
-    });
-    box.querySelector(".dr-cancel").addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      delete box.dataset.key;
-      draftSync(card, c);
-      clampCard(card);
-    });
-    input.focus();
-    return;
-  }
-  if (e.target.closest(".dr-ask")) return; // typing an answer: the card stays as it is
+  if (threadClick(e, c, card, () => {
+    threadSync(card, c);
+    draftSync(card, c); // drafting again: the box or the thread's last line, as the thread is open or shut
+    clampCard(card);
+  })) return;
   if (e.target.closest(".dr-ignore")) {
     await applyUpdate({ id: c.id, draftState: "ignored" }, e.target.closest("button"));
     return;
@@ -6920,10 +7349,12 @@ panelBody.addEventListener("click", async (e) => {
   if (btn?.classList.contains("card-reply")) {
     card.querySelector(".card-more-wrap.open")?.classList.remove("open");
     card.classList.remove("menu-open");
-    if (state.asking?.id === c.id) return;
-    const asker = isMine(c);
-    state.asking = { id: c.id, reply: true, label: asker ? "Send" : "Answer", ph: asker ? "Add a detail or ask again. Enter sends it" : "Your answer. Enter sends it, Esc keeps it here", text: "", focused: true };
-    mountAsk(card, c);
+    /* a reply is written in the thread's box (Nirav, 2026-10-29) */
+    state.thOpen.add(c.id);
+    if (state.thDraft?.id !== c.id) state.thDraft = { id: c.id, text: "", quote: null };
+    state.thDraft.focus = true;
+    threadSync(card, c);
+    clampCard(card);
     return;
   }
   if (btn?.classList.contains("card-resolve")) {
@@ -7184,7 +7615,7 @@ panelBody.addEventListener("keydown", (e) => {
 /* keep the panel current when comments come and go (never rebuilding a menu that is open under the pointer) */
 const _load = loadComments;
 /* nobody is in the middle of something in the panel: a note being typed, a text edited, a "sure?" pending, a menu */
-const panelBusy = () => !!(state.asking || root.querySelector('[contenteditable="true"]') || $(".card-rm.sure") || $(".scope-menu") || $(".card-more-wrap.open") || state.pending);
+const panelBusy = () => !!(state.asking || (state.thDraft?.text && root.activeElement?.classList?.contains("th-in")) || root.querySelector('[contenteditable="true"]') || $(".card-rm.sure") || $(".scope-menu") || $(".card-more-wrap.open") || state.pending);
 /* a click anywhere else closes an open card menu */
 window.addEventListener("pointerdown", (e) => {
   if (e.composedPath().some((n) => n.classList?.contains?.("card-more-wrap"))) return;
