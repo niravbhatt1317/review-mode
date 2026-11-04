@@ -184,7 +184,7 @@ export function applyChange(c, body, who) {
        Claude waits on its question, calls Claude again */
     const cask = claude && body.ask === true ? { ask: true, ...(Array.isArray(body.options) ? { options: body.options.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 60)).slice(0, 4) } : {}) } : {};
     if (claude && c.call && c.call.state !== "done") Object.assign(c.call, cask.ask ? { state: "asked", askAt: at } : { state: "done", doneAt: at });
-    else if (!claude && (mentions.includes("Claude") || c.call?.state === "asked")) c.call = newCall(who, reply, at, { step: at });
+    else if (!claude && (mentions.includes("Claude") || c.call?.state === "asked")) c.call = newCall(who, reply, at, { step: at, ...(c.call?.state === "asked" ? { answers: c.call.askAt } : {}) });
     /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
     if (!isQ) {
       (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...ment, ...qt });

@@ -1781,8 +1781,13 @@ root.innerHTML = `
   .th-reading { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 2px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, #D97757 8%, var(--rv-surface)); font-size: 11.5px; color: #9a5a40; }
   .th-reading .av-claude { width: 16px; height: 16px; flex: none; }
   .th-reading ul { margin: 4px 0 0; padding: 0; list-style: none; line-height: 1.7; color: #7a6457; }
-  .th-reading li::before { content: "✓"; color: #1E8C81; margin-right: 6px; font-size: 10px; }
-  .th-reading li.now::before { content: "…"; color: #c4572f; }
+  .th-reading li { display: flex; align-items: center; gap: 7px; }
+  .th-reading li::before { content: "✓"; flex: none; width: 10px; text-align: center; color: #1E8C81; font-size: 10px; }
+  /* still to read: a small dot on the words' middle, breathing (Nirav, 2026-11-04: the "…" sat on the baseline) */
+  .th-reading li.now::before { content: ""; width: 5px; height: 5px; margin: 0 2.5px; border-radius: 50%; background: #c4572f; animation: rv-rd-dot 1.2s ease-in-out infinite; }
+  @keyframes rv-rd-dot { 50% { opacity: .3; transform: scale(.7); } }
+  @media (prefers-reduced-motion: reduce) { .th-reading li.now::before { animation: none; } }
+  .th-reading .th-connect { margin-left: auto; flex: none; }
   .th-reading.idle { align-items: center; color: var(--rv-ink-3); background: hsl(var(--rv-n10)); }
   .th-rd-t { font-weight: 500; }
   .th-reading:not(.idle) .th-rd-t, .th-last .th-rd-t { background: linear-gradient(90deg, #b07a63 0%, #b07a63 40%, #6e3a26 50%, #b07a63 60%, #b07a63 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; }
@@ -5876,9 +5881,7 @@ const CALL_WAIT_MS = 45_000;
 const callBusy = (c) => (c.call?.state === "waiting" || c.call?.state === "reading") && c.status !== "approved" && Date.now() - (c.call.at || 0) < 30 * 60_000;
 function callBusyHtml(c) {
   const k = c.call;
-  /* a test session (?session=_test) is never read by a Claude session: those answer on the team's hub (2026-11-04) */
-  if (k.state === "waiting" && /^_/.test(window.__reviewSession || "")) return `<div class="th-reading idle">${CLAUDE_AV()}<span>This is a test session: Claude answers @Claude on the team's comments, not here</span></div>`;
-  if (k.state === "waiting" && Date.now() - (k.at || 0) > CALL_WAIT_MS) return `<div class="th-reading idle">${CLAUDE_AV()}<span>Waiting for Claude: no Claude session has picked it up yet</span></div>`;
+  if (k.state === "waiting" && Date.now() - (k.at || 0) > CALL_WAIT_MS) return `<div class="th-reading idle">${CLAUDE_AV()}<span>No Claude session has picked it up yet</span><button type="button" class="th-pick th-connect">Connect Claude</button></div>`;
   const read = k.read || [];
   const rows = k.state === "reading" ? [["The thread", read.includes("thread")], ...(c.shot ? [["The picture", read.includes("picture")]] : []), ["The code and the design system", false]] : [];
   const list = rows.length ? `<ul>${rows.map(([t, ok]) => `<li class="${ok ? "ok" : "now"}">${t}</li>`).join("")}</ul>` : "";
@@ -5907,7 +5910,7 @@ function threadHtml(c, moves = true) {
   const msgs = items.filter((x) => x.msg);
   if (!state.thOpen.has(c.id)) {
     /* Claude at work, or a draft waiting for you: said on the closed line first */
-    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.state === "reading" ? "Claude is reading the thread and the code…" : /^_/.test(window.__reviewSession || "") ? "Test session: Claude answers on the team's comments" : "Sent to Claude…"}</span></button>`;
+    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Sent to Claude…"}</span></button>`;
     if (myDraft(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w"><b>Claude</b> drafted a reply for you: ${esc(myDraft(c).text)}</span><span class="th-tag">Only you</span></button>`;
     /* no replies yet: the drawer card shows its reply box on hover, no trip through ⋯ (Nirav, 2026-11-04) */
     if (!msgs.length) return moves && !isQ(c) && can("answer", c) ? `<div class="th-ghost"><div class="th-ghost-in"><div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="Reply, @ to mention…" aria-label="Reply"><button type="button" class="th-go">Reply</button></div></div></div>` : "";
@@ -6062,6 +6065,7 @@ async function threadSend(c, input, btn, onSent) {
   state.thDraft = { id: c.id, text: "", quote: null, focus: true };
   const crossed = applyEntry(r.entry);
   const now = state.comments.find((x) => x.id === c.id) || r.entry;
+  if (now.call?.state === "waiting" && now.call.step && now.call.step >= Date.now() - 10_000) watchCall(c.id);
   if (onSent) onSent(now);
   else if (crossed) renderPanel();
   else {
@@ -6099,6 +6103,7 @@ function threadClick(e, c, box, onChange) {
     go.click();
     return true;
   }
+  if (t.closest(".th-connect")) return showSheet("callnone"), true;
   /* Claude's draft for you: into your box, or another go */
   const dr = myDraft(c);
   if (dr && t.closest(".th-cd-use")) {
@@ -8233,6 +8238,7 @@ function showSheet(kind, o = {}) {
   };
   const n = o.count ? `${o.count} comment${o.count === 1 ? "" : "s"}` : "";
   const body = {
+    callnone: [ICON.warn, "No Claude session is connected", `<p>Your @Claude is saved on the comment. Claude answers it as soon as a session is connected: run this once, in a terminal in your project folder. After that, plain <code>claude</code> in that folder is connected, every time.</p>${cmdBox(CHANNEL_HINT, true)}`],
     none: [ICON.warn, "Start Claude to send directly", `<p>Run this once, in a terminal in your project folder. It connects Claude to this project and starts it; after that, plain <code>claude</code> in that folder has the plane on, every time. Until then the brief is on your clipboard: paste it into any Claude chat.</p>${cmdBox(CHANNEL_HINT, true)}`],
     intro: [`<span class="cs-intro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${CLAUDE_PATH}"/></svg></span>`, "Connect Claude to this project", `<p>Run this once, in a terminal in your project folder. From then on, plain <code>claude</code> there is connected: the plane next to "Copy for Claude" sends comments straight to it, and Claude works through them for you.</p>${cmdBox(CHANNEL_HINT, '<button type="button" class="cs-gotit">Got it</button>')}`], // Got it beside the command, like Check again
     sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
@@ -8325,6 +8331,7 @@ function pillHtml() {
     sent: [SPIN, `Sent ${n}`, "waiting"],
     late: [WARN, "Not confirmed", ""],
     none: [WARN, "Start Claude", ""],
+    callnone: [WARN, "Connect Claude", ""],
     again: [WARN, "Already with Claude", ""],
     fail: [WARN, "Could not send", ""],
   }[sheetKind];
@@ -8472,7 +8479,19 @@ async function handToClaude(c, btn) {
   const mine = c.status === "progress" && myName(c.assignee);
   if (!mine && !me?.handle) return toast("Could not tell who you are on the team: sign in first", true);
   const r = await applyUpdate({ id: c.id, ...(mine ? {} : { assignTo: me.handle }), withClaude: true, callClaude: "Handed to Claude", callKind: "assigned" }, btn);
-  if (r) toast(`#${c.n}: with you and Claude. Claude reads it and reports back`);
+  if (r) toast(`#${c.n}: with you and Claude. Claude reads it and reports back`), watchCall(c.id);
+}
+/* a call nobody picks up (Nirav, 2026-11-04: ask to connect, as Send to Claude does): ten seconds after it, still
+   waiting and no Claude session on this machine, the drawer offers to connect one. A teammate's session elsewhere
+   would have claimed it by then (it looks every 6 s) */
+function watchCall(id) {
+  setTimeout(async () => {
+    const c = state.comments.find((x) => x.id === id);
+    if (c?.call?.state !== "waiting") return;
+    const q = window.__reviewSession ? `?session=${window.__reviewSession}` : "";
+    const sessions = await rv(`/__review/claude/sessions${q}`).then((r) => r.json()).catch(() => []);
+    if (!Array.isArray(sessions) || !sessions.length) showSheet("callnone");
+  }, 10_000);
 }
 async function mentionClaude(c, words) {
   if (!c?.id) return;
@@ -8480,6 +8499,7 @@ async function mentionClaude(c, words) {
   if (!r?.entry) return toast(`@Claude: could not reach the hub${r?.error ? `: ${r.error}` : ""}`, true);
   if (applyEntry(r.entry) || !refreshCard(r.entry, !!panelBody.querySelector(`.card[data-id="${c.id}"]`))) renderPanel();
   toast(`#${c.n}: Claude will read it and reply in the thread`);
+  watchCall(c.id);
 }
 let sendAsk = null; // what waits on the "Already with Claude" card
 let sendSeq = 0; // each send watches for Claude's yes only while it is the latest: an older one never covers a newer card
