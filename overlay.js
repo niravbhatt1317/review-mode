@@ -1006,6 +1006,8 @@ root.innerHTML = `
   .card-fill .card-shot { border-color: var(--rv-line); }
   .card-fill .card-rm { background: transparent; }
   .card-c .card-line { margin-bottom: 10px; }
+  /* no picture: the thread sits right under the words, the line's own 10px is the gap (Nirav, 2026-11-04: it had 20) */
+  .card-c .card-line + .card-th > :is(.th-last, .th-open), .card-c .card-line + .card-th .th-ghost .th-box { margin-top: 0; }
   /* TRY (Nirav, 2026-10-23): under the pointer the card grows a light strip at its foot with who raised it and where;
      the foot keeps the status and the actions. To go back: the face on the picture (byPicHtml) and the where in footHtml */
   .card-foot .where { display: none; }
