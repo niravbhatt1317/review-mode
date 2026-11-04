@@ -12,7 +12,8 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
+import os from "node:os";
 import { loadConfig } from "../collector/config.js";
 import { storeFor, prepare } from "../collector/stores.js";
 import { withNames, applyChange, mergePeople, draftOpen, callOpen } from "../hub-core.js";
@@ -67,7 +68,8 @@ const TOOLS = [
   { name: "review_reply", description: "Answer a question (one or two plain sentences, from the code it points at). If something should change, say so; the asker can make it a fix.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, ...asProp }, required: ["id", "text"] } },
   { name: "review_picture", description: "Save a comment's picture (the element boxed, its number on it) and return the file path to Read.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" } }, required: ["id"] } },
   { name: "review_suggest", description: "Claude drafts first: leave a short suggestion on a new comment, for a person to accept or ignore. For a fix, what you would change and where (file and line), in one or two plain sentences; for a question, the answer. When you cannot tell what is meant, or the code shows no clear change, set unsure and say in one sentence what you would need to know, instead of guessing. Draft only: change no code and no status.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, unsure: { type: "boolean", description: "True when the text is a question back to the person, not a suggestion" }, ...asProp }, required: ["id", "text"] } },
-  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), or kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft"] }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, ...asProp }, required: ["id", "kind", "text"] } },
+  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan"] }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, ...asProp }, required: ["id", "kind", "text"] } },
+  { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
 const line = (c) => `#${c.n} ${c.id} ${c.status} ${kind(c.severity)}${holder(c) ? ` [${holder(c)}${c.withClaude ? " + Claude" : ""}]` : ""}: ${c.text}${c.note?.text ? ` [note: ${c.note.text}]` : ""}`;
@@ -139,13 +141,16 @@ async function call(name, a = {}) {
     if (!words) throw new Error("Say something: text is empty");
     if (!c.call || c.call.state === "done") return `#${(await numbered(c.id, st))?.n}: nobody is waiting on Claude here, nothing sent`;
     if (a.kind === "draft") applyChange(c, { claudeDraft: { text: words } }, who);
-    else applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : {}) }, who);
+    else applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true } : {}) }, who);
+    if (works.has(c.id)) dropWork(c.id); // a go that ends in words: the work folder goes
     await st.put(c);
     called.delete(callKey(c));
     heard = true;
     const n = (await numbered(c.id, st))?.n;
+    if (a.kind === "plan") return `Plan left on #${(await numbered(c.id, st))?.n}; it waits for a person's Go, then comes back to you`;
     return a.kind === "draft" ? `Draft left on #${n}, only ${withNames(c, ppl).call?.draft?.for || "they"} sees it` : a.kind === "ask" ? `Asked on #${n}; their reply comes back as a new call` : `Answered on #${n}`;
   }
+  if (name === "review_ship") return ship(c, st, a);
   if (name === "review_ack") {
     const d = deliveries.get(a.delivery_id);
     if (d) d.acked = Date.now();
@@ -243,6 +248,32 @@ async function callRound() {
       called.add(callKey(full));
       const named = withNames(full, ppl);
       const k = named.call;
+      if (k.kind === "go") {
+        let w;
+        try {
+          w = { ...prepareWork(full, c.n), plan: k.words, by: full.call.by, sess };
+        } catch (e) {
+          applyChange(full, { reply: `I couldn't start on it: ${String(e.message || e).split("\n")[0]}. Nothing was changed.`, via: "claude" }, full.call.by);
+          await st.put(full);
+          continue;
+        }
+        works.set(full.id, w);
+        const go = [
+          `GO on review comment #${c.n} (${full.id})${sess ? `, TEST SESSION ${sess} (pass session "${sess}" to the review tools)` : ""}: ${k.by} said go to your plan:`,
+          `  "${k.words}"`,
+          ``,
+          `Comment by ${named.by}: "${full.text}" · Page: ${full.pageTitle || full.route || "?"} · Code: ${full.source?.file ? `${full.source.file}${full.source.line ? `:${full.source.line}` : ""}` : "find it from the page"}`,
+          ``,
+          `Make exactly that change, nothing more, in the work folder: ${w.app}`,
+          `(a fresh copy of ${cfg.github.repo} ${cfg.github.base}, branch ${w.branch}). Edit files ONLY there, never in ${ROOT}.`,
+          `Use the design system's tokens and components${cfg.designSystem ? ` (${cfg.designSystem})` : ""}. No installs, no dev server, no git: the review server does the git.`,
+          `When it is done: review_ship with id ${full.id}, a short PR title and a one or two sentence summary in design words.`,
+          `It commits, pushes, opens the PR on the comment and moves it to For approval. If you find you cannot do it as planned,`,
+          `review_talk instead (ask, or answer to say why); the work folder is thrown away. Then carry on with what you were doing.`,
+        ].join("\n");
+        send({ method: "notifications/claude/channel", params: { content: go, meta: { kind: "go", comment: String(c.n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
+        continue;
+      }
       const src = full.source?.file ? `${full.source.file}${full.source.line ? `:${full.source.line}` : ""}${full.source.component ? ` (${full.source.component})` : ""}` : "none recorded: find it from the page and the element";
       const talk = (named.history || []).filter((h) => h.kind === "reply").map((h) => `  ${h.via === "claude" ? "Claude" : h.by} (${ago(h.at)}): ${h.note}${h.ask ? "  [your question]" : ""}`);
       const asked = k.answers ? (named.history || []).find((h) => h.at === k.answers && h.via === "claude") : null; // the question this reply answers
@@ -267,8 +298,9 @@ async function callRound() {
         `- "ask": you cannot tell what they mean, or your message asks them anything at all. One question, with 2 to 4`,
         `  quick picks in options. Anything that waits on their reply is an ask, never an answer: only an ask comes back to you.`,
         `- "draft": they asked for help writing a reply. The words they would send, in their voice.`,
-        `When they ask you to change something, say what you would change and where in design words, and that someone can`,
-        `pick it up with Claude to make it. Do not change code or any status from a call. Then carry on with what you were doing.`,
+        `- "plan": they want something changed. What you will change and where, in design words, one short paragraph; it`,
+        `  waits for a person's Go (every change does), then comes back to you to make.`,
+        `Do not change code or any status from a call. Then carry on with what you were doing.`,
       ].join("\n");
       send({ method: "notifications/claude/channel", params: { content: text, meta: { kind: "call", comment: String(c.n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
     }
@@ -277,9 +309,108 @@ async function callRound() {
 }
 setInterval(callRound, CALL_EVERY).unref?.();
 
+/* ---------- Step 2: Go, the work folder, the PR ---------- */
+/* On Go the review server, not Claude, does the git: a fresh worktree of the GitHub repo's base branch outside the
+   project (Claude never edits the person's own folder), and when Claude is done (review_ship) it commits, pushes and
+   opens the PR. REVIEW_SHIP_DRY=1 stops before the push, for trying it out. */
+const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 180_000, ...opts }).trim();
+const GIT_ROOT = (() => {
+  try {
+    return run("git", ["-C", ROOT, "rev-parse", "--show-toplevel"]);
+  } catch {
+    return null;
+  }
+})();
+const APP_REL = GIT_ROOT ? path.relative(GIT_ROOT, ROOT) : "";
+const WORK_DIR = path.join(os.homedir(), ".review-mode", "work");
+const works = new Map(); // comment id -> { branch, dir, app, remote, plan, by, sess }
+const remoteFor = (repo) => run("git", ["-C", GIT_ROOT, "remote", "-v"]).split("\n").find((l) => new RegExp(`github\\.com[/:]${repo.replace(/[.]/g, "\\.")}(\\.git)?\\s`).test(l))?.split(/\s+/)[0];
+const slug = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 28).replace(/-+$/, "");
+function prepareWork(c, n) {
+  const gh = cfg.github;
+  if (!gh) throw new Error("no GitHub repo is set for this project (github in hub.json)");
+  if (!GIT_ROOT) throw new Error("the project is not in git");
+  const remote = remoteFor(gh.repo);
+  if (!remote) throw new Error(`no git remote of this project points at ${gh.repo}`);
+  run("git", ["-C", GIT_ROOT, "fetch", remote, gh.base]);
+  const branch = `claude/review-${n}-${slug(c.text) || "fix"}-${Date.now().toString(36).slice(-4)}`;
+  const dir = path.join(WORK_DIR, branch.replace(/\//g, "__"));
+  fs.mkdirSync(WORK_DIR, { recursive: true });
+  run("git", ["-C", GIT_ROOT, "worktree", "add", "--no-track", "-b", branch, dir, `${remote}/${gh.base}`]);
+  return { branch, dir, app: path.join(dir, APP_REL), remote };
+}
+function dropWork(id) {
+  const w = works.get(id);
+  works.delete(id);
+  if (!w) return;
+  try {
+    run("git", ["-C", GIT_ROOT, "worktree", "remove", "--force", w.dir]);
+    if (!w.pushed) run("git", ["-C", GIT_ROOT, "branch", "-D", w.branch]);
+  } catch {}
+}
+async function ship(c, st, a) {
+  const w = works.get(c.id);
+  if (!w) throw new Error("No work folder for this comment: only a go call is shipped");
+  const gh = cfg.github;
+  if (!run("git", ["-C", w.dir, "status", "--porcelain"])) throw new Error(`Nothing changed in ${w.app}: make the change there first`);
+  const n = (await numbered(c.id, st))?.n;
+  const ppl = await people();
+  const goer = withNames(c, ppl).call?.by || w.by;
+  const title = String(a.title || "").trim().slice(0, 120) || `Review #${n}`;
+  const summary = String(a.summary || "").trim().slice(0, 600);
+  run("git", ["-C", w.dir, "add", "-A"]);
+  run("git", ["-C", w.dir, "commit", "-q", "-m", `${title}\n\nReview comment #${n}: ${c.text}\nGo by ${goer} to the plan: ${w.plan}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`]);
+  if (process.env.REVIEW_SHIP_DRY === "1") {
+    const files = run("git", ["-C", w.dir, "show", "--stat", "--format=", "HEAD"]);
+    dropWork(c.id);
+    return `DRY RUN: committed on ${w.branch}, not pushed. Files:\n${files}`;
+  }
+  run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
+  w.pushed = true;
+  const page = c.pageTitle || c.route || "the page";
+  const body = [`From review comment #${n} on ${page}${w.sess ? ` (test session ${w.sess})` : ""}: "${c.text}"`, ``, `**The plan, Go by ${goer}:** ${w.plan}`, ``, `**What changed:** ${summary}`, ``, `Made by Claude from the review thread. Claude never merges: the comment is approved in Review mode, and a person merges this.`, ``, `🤖 Generated with [Claude Code](https://claude.com/claude-code)`].join("\n");
+  const url = run("gh", ["pr", "create", "--repo", gh.repo, "--base", gh.base, "--head", w.branch, "--title", title, "--body", body]).split("\n").pop();
+  const prN = Number(url.match(/\/pull\/(\d+)/)?.[1]);
+  dropWork(c.id);
+  const fresh = await st.get(c.id);
+  applyChange(fresh, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open" } }, w.by);
+  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}; the live preview link shows here when it is built (a few minutes).`, via: "claude" }, w.by);
+  if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, w.by);
+  await st.put(fresh);
+  return `Opened ${url}; #${n} is For approval. A person merges it.`;
+}
+/* what GitHub says about each open PR, every 45 s: the preview link (the Preview workflow's comment), merged, closed */
+const PR_EVERY = 45_000;
+async function prRound() {
+  if (!ready || !cfg.github) return;
+  for (const sess of ["", ...localTests()]) {
+    try {
+      const st = storeOf(sess);
+      for (const c of (await st.list()).filter((x) => x.pr?.n && (!x.pr.state || x.pr.state === "open"))) {
+        const repo = c.pr.repo || cfg.github.repo;
+        let info;
+        try {
+          info = JSON.parse(run("gh", ["pr", "view", String(c.pr.n), "--repo", repo, "--json", "state,comments"], { timeout: 30_000 }));
+        } catch {
+          continue;
+        }
+        const note = (info.comments || []).map((x) => x.body || "").find((b) => b.includes("<!-- preview-link -->") && /Preview is ready/i.test(b));
+        const base = note?.match(/https:\/\/[^\s|)]+/)?.[0];
+        const preview = base ? `${base.replace(/\/+$/, "")}${c.route && c.route.startsWith("/") ? c.route : ""}` : c.pr.preview;
+        const state = info.state === "MERGED" ? "merged" : info.state === "CLOSED" ? "closed" : "open";
+        if (preview === c.pr.preview && state === c.pr.state) continue;
+        const full = await st.get(c.id);
+        applyChange(full, { pr: { n: c.pr.n, ...(preview ? { preview } : {}), state } }, defaultAs);
+        await st.put(full);
+      }
+    } catch {}
+  }
+}
+setInterval(prRound, PR_EVERY).unref?.();
+
 /* ---------- MCP over stdio ---------- */
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
-const INSTRUCTIONS = `Review mode (design-review comments on this project's running app). Use the review_* tools to list, read, pick up, finish and answer comments, acting as the person you work for (pass "as" with their GitHub handle; default ${defaultAs}). A comment's source (review_show) is the file and line its element is written at: start there. Briefs sent from the drawer arrive as <channel source="review" delivery_id="...">: call review_ack with the delivery_id first, then follow the brief. Requests to draft (kind="draft") ask only for review_suggest: read the code, leave the suggestion, change nothing, then carry on. A call (kind="call") is someone writing @Claude on a comment: read first, then answer it with review_talk (answer, ask or draft), change nothing, then carry on. Ask the person before review_done. Never approve.`;
+const INSTRUCTIONS = `Review mode (design-review comments on this project's running app). Use the review_* tools to list, read, pick up, finish and answer comments, acting as the person you work for (pass "as" with their GitHub handle; default ${defaultAs}). A comment's source (review_show) is the file and line its element is written at: start there. Briefs sent from the drawer arrive as <channel source="review" delivery_id="...">: call review_ack with the delivery_id first, then follow the brief. Requests to draft (kind="draft") ask only for review_suggest: read the code, leave the suggestion, change nothing, then carry on. A call (kind="call") is someone writing @Claude on a comment: read first, then answer it with review_talk (answer, ask, draft, or plan for a change), change nothing, then carry on. A go call (kind="go") is a person's Go to your plan: make the change only in the work folder it names, then review_ship. Ask the person before review_done. Never approve.`;
 let buf = "";
 let queue = Promise.resolve(); // tool calls, one after another
 process.stdin.setEncoding("utf8");
@@ -314,6 +445,7 @@ async function handle(raw) {
     ready = true;
     setTimeout(draftRound, 5000); // a first round soon after the session opens: comments made while none was open
     setTimeout(callRound, 2000);
+    setTimeout(prRound, 8000);
     return;
   }
   if (m.method === "ping") return send({ id: m.id, result: {} });

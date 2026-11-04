@@ -225,6 +225,14 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
     pick or any reply goes back to Claude, no @ needed), or a draft only the asker sees (Use it, Shorter, Try again).
     The card shows "Claude is reading…" with what it has read, and "Waiting for Claude" when no session has it after
     45 s. Claude is first in Assign and Hand over (and the "/" team step): the person stays on it with Claude.
+  - [x] **Step 2, plan, Go, PR** (done 2026-11-04, PRs on niravbhatt1317/next-gen into staging, `github` in hub.json):
+    a change asked of Claude comes back as a plan with Go and Change the plan (a reply to it); any designer's Go picks
+    it up (them with Claude) and starts a go call. The review server, not Claude, does the git: a fresh worktree of
+    the base branch in ~/.review-mode/work (never the person's folder), and on `review_ship` it commits, pushes and opens
+    the PR, puts it on the comment and moves it to For approval. Every 45 s it reads the PR on GitHub: the Preview
+    workflow's link (to the comment's page) and merged or closed. The card shows Open preview and PR #N. Claude never
+    merges. REVIEW_SHIP_DRY=1 stops before the push. Still to come: before and after pictures, follow-ups on the same
+    PR, Undo, Stop (steps 3 and 4).
 
 ## Ideas from Claude (2026-10-26, to pick from)
 

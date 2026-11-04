@@ -36,7 +36,10 @@ code at its source, the team's design system), then answer with `review_talk` an
 in the thread), `ask` (you cannot tell what they mean: one question with 2 to 4 quick picks in `options`; their reply
 comes back as a new call) or `draft` (they asked for help writing a reply: their words, only they see it). The team are
 designers: plain design words and the design system's token and component names, file names only when asked. A call
-changes no code and no status. A brief line "Do this (your suggestion,
+changes no code and no status. Someone wants a change: `review_talk` kind `plan` (what you will change and where, in
+design words); it waits for a person's Go. A go call (`kind="go"`) names a work folder (a fresh copy of the GitHub repo,
+outside the person's project): make exactly the plan there, nothing else, no installs, no git, then `review_ship` with a
+short title and summary. The review server commits, pushes, opens the PR and moves the comment to For approval. Never merge. A brief line "Do this (your suggestion,
 accepted…)" is the plan the person agreed to: do that. Sending needs Claude started with `npx --no review-mode claude` once (it registers the tools, offers a shell helper so
 plain `claude` turns push on in this folder from then on, and starts Claude;
 channels are a research preview). Never run a bare `npx review`: on npm that name is an unrelated package.

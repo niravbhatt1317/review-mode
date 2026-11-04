@@ -1007,7 +1007,7 @@ root.innerHTML = `
   .card-fill .card-rm { background: transparent; }
   .card-c .card-line { margin-bottom: 10px; }
   /* no picture: the thread sits right under the words, the line's own 10px is the gap (Nirav, 2026-11-04: it had 20) */
-  .card-c .card-line + .card-th > :is(.th-last, .th-open), .card-c .card-line + .card-th .th-ghost .th-box { margin-top: 0; }
+  .card-c .card-line + .card-th > :first-child, .card-c .card-line + .card-th .th-ghost .th-box { margin-top: 0; }
   /* TRY (Nirav, 2026-10-23): under the pointer the card grows a light strip at its foot with who raised it and where;
      the foot keeps the status and the actions. To go back: the face on the picture (byPicHtml) and the where in footHtml */
   .card-foot .where { display: none; }
@@ -1788,6 +1788,17 @@ root.innerHTML = `
   @keyframes rv-rd-dot { 50% { opacity: .3; transform: scale(.7); } }
   @media (prefers-reduced-motion: reduce) { .th-reading li.now::before { animation: none; } }
   .th-reading .th-connect { margin-left: auto; flex: none; }
+  .th-pr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+  .th-pr a, .th-pr .th-pv { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 999px; font: 500 11.5px/24px -apple-system, system-ui, sans-serif; text-decoration: none; white-space: nowrap; }
+  .th-pr svg { width: 11px; height: 11px; }
+  .th-pr a.th-pv { background: hsl(214 98% 44%); color: #fff; }
+  .th-pr a.th-pv:hover { background: hsl(214 98% 38%); }
+  .th-pr .th-pv.building { background: hsl(var(--rv-n10)); color: var(--rv-ink-3); }
+  .th-pr .th-prn { background: hsl(var(--rv-n10)); color: var(--rv-ink); }
+  .th-pr .th-prn:hover { background: hsl(var(--rv-n20)); }
+  .th-pr .th-prn i { width: 6px; height: 6px; border-radius: 50%; background: #1E8C81; }
+  .th-pr .th-prn[data-s="merged"] i { background: #8B3FD9; } .th-pr .th-prn[data-s="closed"] i { background: hsl(var(--rv-n70)); }
+  .pin-tip .th-pr .th-prn, .pin-tip .th-pr .th-pv.building { background: rgba(255,255,255,.08); color: #fff; }
   .th-reading.idle { align-items: center; color: var(--rv-ink-3); background: hsl(var(--rv-n10)); }
   .th-rd-t { font-weight: 500; }
   .th-reading:not(.idle) .th-rd-t, .th-last .th-rd-t { background: linear-gradient(90deg, #b07a63 0%, #b07a63 40%, #6e3a26 50%, #b07a63 60%, #b07a63 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; }
@@ -5840,7 +5851,8 @@ function threadOf(c) {
     const claudeSays = s.via === "claude" && s.kind === "reply";
     /* a question Claude asked on a call: warm, with its quick picks, while the call still waits on it */
     const live = claudeSays && s.ask && c.call?.state === "asked" && c.call.askAt === s.at && c.status !== "approved";
-    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}) });
+    const planLive = claudeSays && s.plan && c.call?.state === "planned" && c.call.planAt === s.at && c.status !== "approved";
+    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}), ...(s.plan && claudeSays ? { plan: true, planLive } : {}) });
     /* a move's reason is a reply, labelled with the move ("You put it back"); a bare move is the history's
        (Nirav, 2026-10-30: the words were written for someone to read) */
     else if (s.note && s.kind !== "mention") out.push({ msg: true, at: s.at, by: s.by, words: s.note, move: stepVerb(c, s, from), st: s.status, mk: moveKey(s, from), pill: movePill(c, s, from, doer) });
@@ -5881,6 +5893,8 @@ const CALL_WAIT_MS = 45_000;
 const callBusy = (c) => (c.call?.state === "waiting" || c.call?.state === "reading") && c.status !== "approved" && Date.now() - (c.call.at || 0) < 30 * 60_000;
 function callBusyHtml(c) {
   const k = c.call;
+  /* Go: Claude is making the change in its own copy of the code; the PR comes back here */
+  if (k.kind === "go") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is making the change…" : "Sent to Claude…"}</span><ul><li class="${k.state === "reading" ? "ok" : "now"}">A fresh copy of the code</li><li class="now">The change, as planned</li><li class="now">The PR and its preview link</li></ul></div></div>`;
   /* a new draft for you: one line, no reading list (the thread is read already) */
   if (k.kind === "draft" && (k.state === "reading" || Date.now() - (k.at || 0) <= CALL_WAIT_MS)) return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.redo === "shorter" || /^Make your draft shorter/.test(k.words || "") ? "Claude is writing a shorter one…" : "Claude is writing a new draft…"}</span></div></div>`;
   if (k.state === "waiting" && Date.now() - (k.at || 0) > CALL_WAIT_MS) return `<div class="th-reading idle">${CLAUDE_AV()}<span>No Claude session has picked it up yet</span><button type="button" class="th-pick th-connect">Connect Claude</button></div>`;
@@ -5888,6 +5902,16 @@ function callBusyHtml(c) {
   const rows = k.state === "reading" ? [["The thread", read.includes("thread")], ...(c.shot ? [["The picture", read.includes("picture")]] : []), ["The code and the design system", false]] : [];
   const list = rows.length ? `<ul>${rows.map(([t, ok]) => `<li class="${ok ? "ok" : "now"}">${t}</li>`).join("")}</ul>` : "";
   return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is reading…" : "Sent to Claude…"}</span>${list}</div></div>`;
+}
+/* THE PR ON THE COMMENT (step 2): the live preview first (the real page, to try the whole flow), then the PR and its
+   state; the preview link comes once the Preview workflow has built it */
+function prRowHtml(c) {
+  const p = c.pr;
+  if (!p?.n) return "";
+  const st = p.state || "open";
+  const ext = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>';
+  const pv = st !== "open" ? "" : p.preview ? `<a class="th-pv" href="${esc(p.preview)}" target="_blank" rel="noopener">Open preview${ext}</a>` : `<span class="th-pv building">Preview is building…</span>`;
+  return `<div class="th-pr">${pv}<a class="th-prn" data-s="${esc(st)}" href="${esc(p.url)}" target="_blank" rel="noopener"><i></i>PR #${p.n} · ${st === "merged" ? "merged" : st === "closed" ? "closed" : "open"}${ext}</a></div>`;
 }
 /* a reply Claude drafted for one person: only they see it, to use as their own */
 const myDraft = (c) => (c.call?.draft && isMe(c.call.draft.for) && c.status !== "approved" ? c.call.draft : null);
@@ -5912,8 +5936,9 @@ function threadHtml(c, moves = true) {
   const msgs = items.filter((x) => x.msg);
   if (!state.thOpen.has(c.id)) {
     /* Claude at work, or a draft waiting for you: said on the closed line first */
-    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.kind === "draft" ? "Claude is writing a new draft…" : c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Sent to Claude…"}</span></button>`;
-    if (myDraft(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w"><b>Claude</b> drafted a reply for you: ${esc(myDraft(c).text)}</span><span class="th-tag">Only you</span></button>`;
+    const prRow = prRowHtml(c);
+    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.kind === "go" ? "Claude is making the change…" : c.call.kind === "draft" ? "Claude is writing a new draft…" : c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Sent to Claude…"}</span></button>` + prRow;
+    if (myDraft(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w"><b>Claude</b> drafted a reply for you: ${esc(myDraft(c).text)}</span><span class="th-tag">Only you</span></button>` + prRow;
     /* no replies yet: the drawer card shows its reply box on hover, no trip through ⋯ (Nirav, 2026-11-04) */
     if (!msgs.length) return moves && !isQ(c) && can("answer", c) ? `<div class="th-ghost"><div class="th-ghost-in"><div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="Reply, @ to mention…" aria-label="Reply"><button type="button" class="th-go">Reply</button></div></div></div>` : "";
     const last = msgs.find((x) => x.ask) || msgs[msgs.length - 1]; // Claude's question waiting comes first, even under a later reply
@@ -5921,7 +5946,7 @@ function threadHtml(c, moves = true) {
     const pill = msgs.length === 1 ? "" : `<span class="th-n" title="${msgs.length} replies">${thFaces(c, msgs)}${msgs.length}</span>`;
     /* Claude's question waiting: the line in Claude's warm tint, "Answer" when nothing else would sit there */
     const tag = last.ask && msgs.length === 1 && talksToClaude(c) ? '<span class="th-tag">Answer</span>' : "";
-    return `<button type="button" class="th-last${last.ask ? " ask" : ""}" aria-label="Open the thread, ${msgs.length} ${msgs.length === 1 ? "reply" : "replies"}">${thLastFace(c, last)}<span class="th-w"><b>${thName(last.by)}</b> ${last.sug ? "suggested: " : ""}${mentionHtml(last.words)}</span>${tag}${pill}</button>`;
+    return `<button type="button" class="th-last${last.ask ? " ask" : ""}" aria-label="Open the thread, ${msgs.length} ${msgs.length === 1 ? "reply" : "replies"}">${thLastFace(c, last)}<span class="th-w"><b>${thName(last.by)}</b> ${last.sug ? "suggested: " : ""}${mentionHtml(last.words)}</span>${tag}${pill}</button>` + prRow;
   }
   const rows = items.map((x) => {
     if (x.sys) {
@@ -5932,7 +5957,7 @@ function threadHtml(c, moves = true) {
     const q = x.quote ? `<button type="button" class="th-quote" data-at="${x.quote.at}">${TH_ARROW}<b>${thName(x.quote.by)}</b><span>${esc(x.quote.text)}</span></button>` : "";
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
     const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words">${mentionHtml(x.words)}</div>`;
-    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
+    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.planLive ? `<div class="th-picks"><button type="button" class="th-pick pri th-plan-go">Go</button><button type="button" class="th-pick th-plan-change">Change the plan</button></div>` : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
   if (callBusy(c)) rows.push(callBusyHtml(c));
@@ -5956,7 +5981,7 @@ function threadHtml(c, moves = true) {
     const hint = a.assignTo ? `<div class="th-hint">Enter ${a.label === "Assign" ? "assigns it" : "hands it over"}, with or without a note</div>` : "";
     return `<div class="th-open"><div class="th-list">${shown.join("")}</div>${askBar(a, c)}<div class="th-box th-move-box" data-c="${MOVE_IC[askKey(a, c)][0]}"><input class="th-in" type="text" maxlength="600" placeholder="${ph}" aria-label="${esc(a.label)}: ${ph}"><button type="button" class="th-go">${esc(a.label)}</button></div>${hint}</div>`;
   }
-  return `<div class="th-open"><div class="th-list">${shown.join("")}</div>${quoting}<div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="${answering ? "Answer Claude…" : "Reply, @ to mention…"}" aria-label="${answering ? "Answer Claude" : "Reply"}"><button type="button" class="th-go">Reply</button></div></div>`;
+  return `<div class="th-open"><div class="th-list">${shown.join("")}</div>${prRowHtml(c)}${quoting}<div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="${answering ? "Answer Claude…" : "Reply, @ to mention…"}" aria-label="${answering ? "Answer Claude" : "Reply"}"><button type="button" class="th-go">Reply</button></div></div>`;
 }
 /* the thread block on a card (the drawer's or the pin card's), and its reply box wired */
 function threadSync(box, c, onSent) {
@@ -6106,6 +6131,26 @@ function threadClick(e, c, box, onChange) {
     return true;
   }
   if (t.closest(".th-connect")) return showSheet("callnone"), true;
+  if (t.closest(".th-pr a")) return true; // the link opens itself, in a new tab
+  /* Go: the plan is agreed; Claude makes it (every change waits for a person's go, Nirav 2026-11-04) */
+  const planStep = (c.history || []).find((h) => h.at === c.call?.planAt && h.via === "claude");
+  if (planStep && t.closest(".th-plan-go")) {
+    const was = c.call;
+    c.call = { ...was, state: "waiting", kind: "go", at: Date.now(), read: [] };
+    onChange();
+    applyUpdate({ id: c.id, reply: "Go", go: true, quote: { at: planStep.at, by: "Claude", text: String(planStep.note || "").slice(0, 140) } }).then((r) => {
+      if (!r) c.call = was;
+      else toast(`#${c.n}: Claude is making the change`), watchCall(c.id);
+      onChange();
+    });
+    return true;
+  }
+  /* Change the plan: a reply to it, which goes back to Claude */
+  if (planStep && t.closest(".th-plan-change")) {
+    state.thDraft = { id: c.id, text: "", quote: { at: planStep.at, by: "Claude", text: String(planStep.note || "").slice(0, 140) }, focus: true };
+    onChange();
+    return true;
+  }
   /* Claude's draft for you: into your box, or another go */
   const dr = myDraft(c);
   /* Send it (Nirav, 2026-11-04: one click, not into the box again): posted as your reply, its @names told */

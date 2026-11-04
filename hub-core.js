@@ -125,6 +125,11 @@ export function applyChange(c, body, who) {
   if (body.claudeDraft && typeof body.claudeDraft.text === "string" && body.claudeDraft.text.trim() && c.call)
     Object.assign(c.call, { state: "done", doneAt: Date.now(), draft: { for: c.call.by, text: body.claudeDraft.text.trim().slice(0, 1200), at: Date.now() } });
   if (body.draftUsed === true && c.call?.draft) c.call.draft = null;
+  /* the PR Claude opened for it (the review server opens it), and what GitHub says later: the preview, merged or closed */
+  if (body.pr && typeof body.pr === "object") {
+    const n = Number(body.pr.n);
+    if (Number.isFinite(n) && n > 0) c.pr = { ...(c.pr?.n === n ? c.pr : {}), n, url: String(body.pr.url || c.pr?.url || "").slice(0, 300), ...(body.pr.branch ? { branch: String(body.pr.branch).slice(0, 120) } : {}), ...(body.pr.repo ? { repo: String(body.pr.repo).slice(0, 120) } : {}), ...(body.pr.preview ? { preview: String(body.pr.preview).slice(0, 300) } : {}), ...(body.pr.state ? { state: String(body.pr.state).slice(0, 20) } : {}), at: c.pr?.n === n ? c.pr.at : Date.now() };
+  }
   if (typeof text === "string" && text.trim()) {
     c.text = sentence(text);
     /* an edit's mentions replace the comment's; a name newly mentioned gets a step of its own, so it is news */
@@ -182,13 +187,26 @@ export function applyChange(c, body, who) {
       : {};
     /* Claude's message settles the call (a question back leaves it "asked"); a person's @Claude, or any reply while
        Claude waits on its question, calls Claude again */
+    /* STEP 2, PLAN AND GO (Nirav, 2026-11-04): Claude's plan for a change waits for a person's "go" (any designer, every
+       change, never skipped); Go starts the work: In progress with Claude, and a call of kind "go" carrying the plan */
+    const plan = claude && body.plan === true && !body.ask;
+    const go = !claude && body.go === true && c.call?.state === "planned" && !isQ;
     const cask = claude && body.ask === true ? { ask: true, ...(Array.isArray(body.options) ? { options: body.options.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 60)).slice(0, 4) } : {}) } : {};
-    if (claude && c.call && c.call.state !== "done") Object.assign(c.call, cask.ask ? { state: "asked", askAt: at } : { state: "done", doneAt: at });
+    if (claude && c.call && c.call.state !== "done") Object.assign(c.call, cask.ask ? { state: "asked", askAt: at } : plan ? { state: "planned", planAt: at } : { state: "done", doneAt: at });
+    else if (go) {
+      const p = (c.history || []).find((h) => h.at === c.call.planAt && h.via === "claude");
+      c.call = newCall(who, p?.note || "", at, { kind: "go", step: at, planAt: c.call.planAt });
+    }
     /* replying to one of Claude's messages (its quote) talks to Claude too, @ or not (Nirav, 2026-11-04) */
-    else if (!claude && (mentions.includes("Claude") || c.call?.state === "asked" || qt.quote?.by === "Claude")) c.call = newCall(who, reply, at, { step: at, ...(c.call?.state === "asked" ? { answers: c.call.askAt } : {}) });
+    else if (!claude && !go && (mentions.includes("Claude") || c.call?.state === "asked" || qt.quote?.by === "Claude")) c.call = newCall(who, reply, at, { step: at, ...(c.call?.state === "asked" ? { answers: c.call.askAt } : {}) });
     /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
     if (!isQ) {
-      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...ment, ...qt });
+      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...(plan ? { plan: true } : {}), ...(go ? { go: true } : {}), ...ment, ...qt });
+      /* Go on a New comment picks it up: the person who said go is on it, with Claude */
+      if (go && from === "open") {
+        Object.assign(c, { status: "progress", assignee: who, pickedAt: at, withClaude: true });
+        c.history.push({ at: at + 1, by: who, status: "progress", from, via: "claude" });
+      } else if (go) c.withClaude = true;
       c.edited = Date.now();
       return c;
     }
