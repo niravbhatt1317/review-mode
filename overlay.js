@@ -438,7 +438,7 @@ root.innerHTML = `
   .mention-hl .mention { display: inline; padding: 0; margin: 0; font-size: inherit; line-height: inherit; color: hsl(214 90% 42%); background: hsl(214 98% 50% / .08); box-shadow: 0 0 0 2px hsl(214 98% 50% / .08); border-radius: 2px; font-weight: inherit; } /* the sent reply's tag: blue words on the light tint; same size and weight as the typed words, so nothing drifts */
   .mention-hl .mention.m-claude { color: #b4532f; background: rgba(217,119,87,.12); box-shadow: 0 0 0 2px rgba(217,119,87,.12); }
   :host([data-theme="dark"]) .mention-hl .mention, .pin-tip .mention-hl .mention, .composer .mention-hl .mention { color: hsl(214 100% 80%); background: hsl(214 98% 60% / .15); box-shadow: 0 0 0 2px hsl(214 98% 60% / .15); }
-  .mention-pop .mp-sub { margin-left: auto; padding-left: 10px; font-size: 11px; color: var(--rv-ink-3); white-space: nowrap; }
+  .mention-pop .mp-sub { margin-left: auto; padding-left: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--rv-ink-3); white-space: nowrap; } /* never past the list's edge (Nirav, 2026-11-04) */
   .mention-pop { max-width: 340px; }
   .mention-pop.dark { --rv-surface: hsl(216 36% 23%); --rv-ink: hsl(216 30% 92%); --rv-ink-3: hsl(216 25% 65%); --rv-line: rgba(255,255,255,.1); --rv-hover: rgba(255,255,255,.08); box-shadow: 0 14px 32px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25); }
   .mention.m-claude { background: rgba(217,119,87,.16); color: hsl(15 65% 42%); }
@@ -5263,7 +5263,7 @@ function mentionWord(name, list = teamCache.list) {
 /* @all and @Claude (Nirav, 2026-10-29): everyone on the team, and Claude (the comment goes to the connected Claude
    session); kept in `mentions` as "all" and "Claude" */
 const MENTION_SPECIAL = [
-  { name: "Claude", word: "Claude", kind: "claude", sub: "Reads the thread and the code, then answers" },
+  { name: "Claude", word: "Claude", kind: "claude", sub: "Reads it, then answers" },
   { name: "all", word: "all", kind: "all", sub: "Everyone on the team" },
 ];
 const hasWord = (text, w) => new RegExp(`(^|[^\\p{L}\\d@])@${reEsc(w)}(?![\\p{L}\\d])`, "iu").test(text);
