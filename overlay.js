@@ -1838,6 +1838,11 @@ root.innerHTML = `
   .pin-tip .th-sugg { background: rgba(255,255,255,.06); color: hsl(216 30% 84%); }
   .pin-tip .th-again, .pin-tip .th-last .th-tag { color: #f0a488; }
   .pin-tip .th-again > span:last-child { animation: none; color: #f0a488; background: none; }
+  .th-link { color: hsl(214 98% 42%); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+  .th-link.chip { display: inline-flex; align-items: center; gap: 4px; height: 20px; margin: 1px 0; padding: 0 8px; border-radius: 999px; background: hsl(214 98% 44% / .1); text-decoration: none; font-weight: 500; font-size: 11.5px; vertical-align: 1px; white-space: nowrap; }
+  .th-link.chip:hover { background: hsl(214 98% 44% / .16); }
+  .th-link.chip svg { width: 10px; height: 10px; }
+  .pin-tip .th-link { color: #8fbcff; }
   .th-words { margin-top: 1px; font-size: 12.5px; line-height: 1.45; color: var(--rv-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
   .th-quote { display: flex; gap: 4px; align-items: center; max-width: 100%; margin: 1px 0 2px; padding: 0; border: 0; background: none; font: 11px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); text-align: left; cursor: pointer; opacity: .85; } /* a quiet "in reply to" line over the words, not a block that fights them (Nirav, 2026-10-30) */
   .th-quote svg { width: 11px; height: 11px; flex: 0 0 auto; transform: scaleY(-1); } /* the arrow turned to point up, at what it answers */
@@ -5325,6 +5330,16 @@ function mentionHtml(text, list = teamCache.list, editing = false) {
   const re = new RegExp(`(^|[^\\p{L}\\d@])@(${words.map((w) => reEsc(esc(w))).join("|")})(?![\\p{L}\\d])`, "giu");
   return html.replace(re, (m, pre, w) => `${pre}<span class="mention${w.toLowerCase() === "claude" ? " m-claude" : ""}"${editing ? ' contenteditable="false"' : ""}>@${w}</span>`);
 }
+/* LINKS IN THE THREAD (Nirav, 2026-11-05: Claude's mock link was plain text): a web address is a link, opening in a
+   new tab; a Claude artifact reads "Open the mock", a pull request "PR #N"; the words around it stay as they are */
+const EXT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>';
+function linkHtml(html) {
+  return html.replace(/https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g, (url) => {
+    const raw = url.replace(/&amp;/g, "&");
+    const label = /^https:\/\/claude\.ai\/(code\/)?artifact\//.test(raw) ? "Open the mock" : /github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/.test(raw) ? `PR #${raw.match(/\/pull\/(\d+)/)[1]}` : /pages\.dev/.test(raw) ? "Open the preview" : null;
+    return label ? `<a class="th-link chip" href="${url}" target="_blank" rel="noopener" title="${url}">${label}${EXT_SVG}</a>` : `<a class="th-link" href="${url}" target="_blank" rel="noopener">${url}</a>`;
+  });
+}
 /* the list under a box while @ is being typed: arrows move, Enter or Tab picks, Esc closes it (and only it) */
 const mentionPop = document.createElement("div");
 mentionPop.className = "mention-pop ui";
@@ -5952,7 +5967,7 @@ function prRowHtml(c) {
 const myDraft = (c) => (c.call?.draft && isMe(c.call.draft.for) && c.status !== "approved" ? c.call.draft : null);
 function myDraftHtml(c) {
   const d = myDraft(c);
-  return `<div class="th-cdraft">${CLAUDE_AV()}<div class="th-body"><div class="th-who"><b>Claude</b><span class="th-at">${esc(agoText(d.at))} · only you see this</span></div><div class="th-cd-box"><div class="th-cd-l">Draft reply</div>${mentionHtml(d.text)}</div><div class="th-picks"><button type="button" class="th-pick pri th-cd-send">Send it</button><button type="button" class="th-pick th-cd-use">Edit</button><button type="button" class="th-pick th-cd-short">Shorter</button><button type="button" class="th-pick th-cd-again">Try again</button></div></div></div>`;
+  return `<div class="th-cdraft">${CLAUDE_AV()}<div class="th-body"><div class="th-who"><b>Claude</b><span class="th-at">${esc(agoText(d.at))} · only you see this</span></div><div class="th-cd-box"><div class="th-cd-l">Draft reply</div>${linkHtml(mentionHtml(d.text))}</div><div class="th-picks"><button type="button" class="th-pick pri th-cd-send">Send it</button><button type="button" class="th-pick th-cd-use">Edit</button><button type="button" class="th-pick th-cd-short">Shorter</button><button type="button" class="th-pick th-cd-again">Try again</button></div></div></div>`;
 }
 /* drafting again with an answer: told at the end of the open thread, not in the box (Nirav, 2026-11-04) */
 const claudeAgain = (c) => !!c.draft?.thread?.length && (c.draft.state === "reply" || (c.draft.state === "drafting" && Date.now() - (c.draft.at || 0) < DRAFT_LIVE_MS));
@@ -5991,7 +6006,7 @@ function threadHtml(c, moves = true) {
     }
     const q = x.quote ? `<button type="button" class="th-quote" data-at="${x.quote.at}">${TH_ARROW}<b>${thName(x.quote.by)}</b><span>${esc(x.quote.text)}</span></button>` : "";
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
-    const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words">${mentionHtml(x.words)}</div>`;
+    const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words">${linkHtml(mentionHtml(x.words))}</div>`;
     return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
@@ -6166,7 +6181,7 @@ function threadClick(e, c, box, onChange) {
     return true;
   }
   if (t.closest(".th-connect")) return showSheet("callnone"), true;
-  if (t.closest(".th-pr a")) return true; // the link opens itself, in a new tab
+  if (t.closest(".th-pr a, .th-link")) return true; // the link opens itself, in a new tab
   /* Go: the plan is agreed; Claude makes it (every change waits for a person's go, Nirav 2026-11-04) */
   const planStep = (c.history || []).find((h) => h.at === c.call?.planAt && h.via === "claude");
   if (planStep && t.closest(".th-plan-go")) {
