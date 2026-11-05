@@ -231,8 +231,7 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
     the base branch in ~/.review-mode/work (never the person's folder), and on `review_ship` it commits, pushes and opens
     the PR, puts it on the comment and moves it to For approval. Every 45 s it reads the PR on GitHub: the Preview
     workflow's link (to the comment's page) and merged or closed. The card shows Open preview and PR #N. Claude never
-    merges. REVIEW_SHIP_DRY=1 stops before the push. Still to come: before and after pictures, follow-ups on the same
-    PR, Undo, Stop (steps 3 and 4).
+    merges. REVIEW_SHIP_DRY=1 stops before the push. Still to come: follow-ups on the same PR, Undo (step 4).
   - [x] **A live preview before Go** (Nirav, 2026-11-05, done the same day): Claude decides per plan, by written rules
     (how it looks or behaves, layout, a shared piece, or not sure: preview; words, an exact token swap, non-visual,
     an obvious one-liner: no preview) and says which and why. A preview plan's change goes on a DRAFT PR; the plan shows
@@ -240,6 +239,17 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
     and the comment For approval, nothing redone; Go while it builds ships it when built. A text plan has Show me live.
     Change the plan builds on the draft's branch. "previews" in hub.json: auto (default), always, never. Work folders a
     stopped session left (2 h old, unchanged) are cleared at start.
+  - [x] **Step 3, before and after** (Nirav, 2026-11-05, done the same day): once a preview is built for the branch's
+    latest commit, the review server opens the comment's page on staging and on the preview in a hidden Chrome
+    (`mcp/snap.mjs`; signed in by `previewLogin` in hub.json), replays the comment's recorded clicks, finds its element
+    and takes the same-sized picture with room around it; the whole window when the element isn't there. The pair sits
+    under Claude's plan or Done message (small ones on the closed card); a click opens them big, side by side or Slide.
+    Claude gets a CHECK brief and answers `review_checked`: ok, wrong (its question in the thread), nothing to see, or
+    missed (the pictures don't show the change: "try it live"). Not yet: pictures of a state (hover, focus), one pair
+    per page when a change touches several, a picked area instead of the whole window for comments with no element.
+  - [x] **Go and Stop, who can press them** (Nirav, 2026-11-05): Go is the asker or an approver, Stop the asker,
+    whoever said Go or an approver; the hub checks it. Stop before start puts the plan back; mid-change Claude says
+    what it had done and asks Throw it away / Carry on / Push what's done (`review_drop`). Notices for both.
 
 ## Ideas from Claude (2026-10-26, to pick from)
 

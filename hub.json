@@ -7,6 +7,7 @@
   "designSystem": "github.com/niravbhatt1317/nextgen-design-system",
   "github": { "repo": "niravbhatt1317/next-gen", "base": "staging" },
   "previews": "auto",
+  "previewLogin": { "sessionStorage": { "merged-ui.session": { "name": "Review", "email": "review@example.com" } } },
   "people": {
     "niravbhatt1317": "Nirav",
     "kisu1311": "Kishan",

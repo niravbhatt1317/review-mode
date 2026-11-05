@@ -1521,6 +1521,39 @@ root.innerHTML = `
   .card-rm { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); border-radius: 6px; padding: 3px 9px; font: 500 11px/1.2 -apple-system, system-ui, sans-serif; cursor: pointer; flex: 0 0 auto; }
   .card-rm:hover { border-color: hsl(353 84% 47%); color: hsl(353 84% 47%); background: hsl(var(--rv-danger-bg)); }
   .card-rm.sure { border-color: hsl(353 84% 47%); color: #fff; background: hsl(353 84% 47%); }
+  /* BEFORE AND AFTER (step 3): the pair under Claude's message, and the big compare view */
+  .th-ba { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; margin-top: 7px; }
+  .ba-pic { position: relative; display: block; padding: 0; border: 0; border-radius: 8px; overflow: hidden; background: hsl(var(--rv-n10)); box-shadow: inset 0 0 0 1px var(--rv-line); cursor: zoom-in; aspect-ratio: var(--ar, 16 / 9); }
+  .ba-pic img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .ba-pic:hover, .ba-pic:focus-visible { box-shadow: inset 0 0 0 1px var(--rv-line), 0 0 0 2px hsl(214 98% 44% / .35); outline: none; }
+  .ba-lb { position: absolute; left: 5px; top: 5px; height: 16px; padding: 0 6px; border-radius: 999px; font-size: 9.5px; font-weight: 600; line-height: 16px; color: #fff; background: rgba(29,43,62,.72); }
+  .ba-pic.af .ba-lb { background: #1E8C81; }
+  .ba-note { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
+  .ba-note.ok { color: #1E8C81; }
+  .th-last .ba-mini { display: inline-flex; gap: 2px; margin-left: 6px; flex: 0 0 auto; }
+  .th-last .ba-mini img { width: 30px; height: 20px; border-radius: 3px; object-fit: cover; box-shadow: inset 0 0 0 1px var(--rv-line); }
+  .ba-view { position: fixed; inset: 0; pointer-events: auto; background: rgba(12,20,32,.82); display: none; align-items: center; justify-content: center; z-index: 5; }
+  .ba-view.on { display: flex; }
+  .bav-frame { width: min(1200px, calc(100vw - 48px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; gap: 10px; color: #fff; }
+  .bav-top { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .bav-seg { display: inline-flex; margin-left: auto; padding: 2px; border-radius: 999px; background: rgba(255,255,255,.12); }
+  .bav-seg button { height: 24px; padding: 0 11px; border: 0; border-radius: 999px; background: none; color: #c9d3e3; font: inherit; font-size: 12px; cursor: pointer; }
+  .bav-seg button.on { background: #fff; color: #1d2b3e; }
+  .bav-x { width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(255,255,255,.12); color: #fff; font-size: 18px; line-height: 28px; cursor: pointer; }
+  .bav-body { min-height: 0; }
+  .bav-side { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .bav-side figure { margin: 0; position: relative; border-radius: 10px; overflow: hidden; background: #fff; }
+  .bav-side img, .bav-slide img { display: block; width: 100%; max-height: calc(100vh - 150px); object-fit: contain; background: #fff; }
+  .bav-side figcaption, .bav-slide .bav-l { position: absolute; top: 8px; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 20px; color: #fff; background: rgba(29,43,62,.75); }
+  .bav-side figcaption { left: 8px; }
+  .bav-side figure + figure figcaption, .bav-slide .bav-l.af { background: #1E8C81; }
+  .bav-slide { position: relative; border-radius: 10px; overflow: hidden; background: #fff; --x: 50%; }
+  .bav-slide .bav-top-img { position: absolute; inset: 0; clip-path: inset(0 calc(100% - var(--x)) 0 0); }
+  .bav-slide .bav-top-img img { height: 100%; }
+  .bav-slide .bav-line { position: absolute; top: 0; bottom: 0; left: var(--x); width: 2px; margin-left: -1px; background: #0262DF; pointer-events: none; }
+  .bav-slide .bav-l { left: 8px; } .bav-slide .bav-l.af { left: auto; right: 8px; }
+  .bav-slide input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+  .bav-cap { font-size: 12px; color: #9fb0cc; }
   .lightbox { position: fixed; inset: 0; pointer-events: auto; background: rgba(12,20,32,.8); display: none; align-items: center; justify-content: center; z-index: 4; user-select: none; -webkit-user-select: none; }
   .lightbox.on { display: flex; }
   /* the frame is exactly as wide as the picture: caption and foot share its edges */
@@ -1944,6 +1977,7 @@ root.innerHTML = `
   <div class="panel-sync" hidden><span class="ring"></span><span class="txt"></span></div>
   <div class="panel-body"></div>
 </aside>
+<div class="ba-view ui" role="dialog" aria-label="Before and after"><div class="bav-frame"><div class="bav-top"><b class="bav-t">Before and after</b><span class="bav-seg"><button type="button" data-mode="side" class="on">Side by side</button><button type="button" data-mode="slide">Slide</button></span><button type="button" class="bav-x" aria-label="Close">×</button></div><div class="bav-body"></div><div class="bav-cap"></div></div></div>
 <div class="lightbox ui" role="dialog" aria-label="Picture">
   <div class="lb-frame">
     <div class="lb-top"><span class="lb-n"></span><span class="lb-sev"></span><span class="lb-text"></span><span class="lb-count"></span><button class="lb-prev" title="Previous (←)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button><button class="lb-next" title="Next (→)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button><button class="lb-close" title="Close (Esc)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
@@ -2409,6 +2443,14 @@ window.addEventListener(
       e.stopPropagation();
       e.preventDefault();
       mentionClose();
+      return;
+    }
+    if (baView.classList.contains("on")) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        closeBa();
+      }
       return;
     }
     if (lightbox.classList.contains("on")) {
@@ -5983,6 +6025,45 @@ function callBusyHtml(c) {
   const list = rows.length ? `<ul>${rows.map(([t, ok]) => `<li class="${ok ? "ok" : "now"}">${t}</li>`).join("")}</ul>` : "";
   return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is reading…" : "Sent to Claude…"}</span>${list}</div></div>`;
 }
+/* BEFORE AND AFTER (step 3, Nirav 2026-11-05): the pair the review server took of the spot, on staging and on the
+   preview, under the Claude message it belongs to; a click opens them big, side by side or one over the other */
+const picUrl = (file) => `/__review/shot/${file}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`;
+const picsOf = (c, at) => (c.pics || []).filter((p) => p.at === at && !p.hidden).at(-1) || null;
+function picsHtml(c, p) {
+  if (p.missed) return `<div class="ba-note">Claude couldn't get the change into a picture, so try it live.</div>`;
+  const draft = c.pr?.draft && c.pr.planAt === p.at;
+  const ar = p.w && p.h ? ` style="--ar:${p.w} / ${p.h}"` : "";
+  const note = p.wrong ? "" : p.checked ? `<div class="ba-note ok">✓ Claude checked the after against the plan</div>`
+    : Date.now() - (p.takenAt || 0) < 5 * 60_000 ? `<div class="ba-note">Claude is checking the after against the plan…</div>` : "";
+  const lost = !p.found?.before || !p.found?.after ? `<div class="ba-note">The spot wasn't found on ${!p.found?.before && !p.found?.after ? "either page" : !p.found?.before ? "staging" : "the preview"}, so this is the whole window.</div>` : "";
+  return `<div class="th-ba" data-sha="${esc(p.sha)}"><button type="button" class="ba-pic" data-which="before"${ar}><img src="${esc(picUrl(p.before))}" alt="Before, on staging" loading="lazy"><span class="ba-lb">Before · staging</span></button><button type="button" class="ba-pic af" data-which="after"${ar}><img src="${esc(picUrl(p.after))}" alt="After, on the preview" loading="lazy"><span class="ba-lb">${draft ? "Planned · preview" : "After · preview"}</span></button></div>${lost}${note}`;
+}
+const baView = $(".ba-view");
+function openBa(c, p, mode = "side") {
+  baView.dataset.id = c.id;
+  baView.dataset.sha = p.sha;
+  baView.querySelectorAll(".bav-seg button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+  const b = esc(picUrl(p.before)), a = esc(picUrl(p.after));
+  baView.querySelector(".bav-t").textContent = `Before and after · #${c.n}`;
+  baView.querySelector(".bav-body").innerHTML = mode === "side"
+    ? `<div class="bav-side"><figure><img src="${b}" alt="Before"><figcaption>Before · staging</figcaption></figure><figure><img src="${a}" alt="After"><figcaption>After · preview</figcaption></figure></div>`
+    : `<div class="bav-slide"><img src="${a}" alt="After"><div class="bav-top-img"><img src="${b}" alt="Before"></div><span class="bav-line"></span><span class="bav-l">Before</span><span class="bav-l af">After</span><input type="range" min="0" max="100" value="50" aria-label="Before to after"></div>`;
+  baView.querySelector(".bav-cap").textContent = mode === "side" ? "Esc closes." : "Drag across to wipe from before to after. Esc closes.";
+  const range = baView.querySelector(".bav-slide input");
+  range?.addEventListener("input", () => baView.querySelector(".bav-slide").style.setProperty("--x", `${range.value}%`));
+  baView.classList.add("on");
+}
+const closeBa = () => baView.classList.remove("on");
+baView.addEventListener("click", (e) => {
+  const m = e.target.closest(".bav-seg button");
+  if (m) {
+    const c = [...state.comments, ...(state.done || [])].find((x) => x.id === baView.dataset.id);
+    const p = c?.pics?.find((x) => x.sha === baView.dataset.sha);
+    if (c && p) openBa(c, p, m.dataset.mode);
+    return;
+  }
+  if (e.target.closest(".bav-x") || e.target === baView) closeBa();
+});
 /* THE PLAN'S BUTTONS (Nirav, 2026-11-05): Go; the live preview to try first (Claude built it, or is building it), or Show
    me live to ask for one; Change the plan. Go never waits on the preview */
 function planButtons(c, x) {
@@ -6037,7 +6118,7 @@ function threadHtml(c, moves = true) {
     const pill = msgs.length === 1 ? "" : `<span class="th-n" title="${msgs.length} replies">${thFaces(c, msgs)}${msgs.length}</span>`;
     /* Claude's question waiting: the line in Claude's warm tint, "Answer" when nothing else would sit there */
     const tag = last.ask && msgs.length === 1 && talksToClaude(c) ? '<span class="th-tag">Answer</span>' : "";
-    return `<button type="button" class="th-last${last.ask ? " ask" : ""}" aria-label="Open the thread, ${msgs.length} ${msgs.length === 1 ? "reply" : "replies"}">${thLastFace(c, last)}<span class="th-w"><b>${thName(last.by)}</b> ${last.sug ? "suggested: " : ""}${mentionHtml(last.words)}</span>${tag}${pill}</button>` + prRow;
+    return `<button type="button" class="th-last${last.ask ? " ask" : ""}" aria-label="Open the thread, ${msgs.length} ${msgs.length === 1 ? "reply" : "replies"}">${thLastFace(c, last)}<span class="th-w"><b>${thName(last.by)}</b> ${last.sug ? "suggested: " : ""}${mentionHtml(last.words)}</span>${last.claude && picsOf(c, last.at) && !picsOf(c, last.at).missed ? `<span class="ba-mini"><img src="${esc(picUrl(picsOf(c, last.at).before))}" alt=""><img src="${esc(picUrl(picsOf(c, last.at).after))}" alt=""></span>` : ""}${tag}${pill}</button>` + prRow;
   }
   const newest = [...items].reverse().find((x) => !x.sys)?.at;
   const rows = items.map((x) => {
@@ -6050,7 +6131,7 @@ function threadHtml(c, moves = true) {
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
     const long = !x.sug && x.at !== newest && !x.ask && !x.planLive && isLong(x.words, 280), open = state.longOpen.has(`${c.id}:${x.at}`);
     const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
-    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
+    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.claude && picsOf(c, x.at) ? picsHtml(c, picsOf(c, x.at)) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
   if (callBusy(c)) rows.push(callBusyHtml(c));
@@ -6227,6 +6308,12 @@ function threadClick(e, c, box, onChange) {
   if (t.closest(".th-pr a, .th-link")) return true; // the link opens itself, in a new tab
   /* Go: the plan is agreed; Claude makes it (every change waits for a person's go, Nirav 2026-11-04) */
   const planStep = (c.history || []).find((h) => h.at === c.call?.planAt && h.via === "claude");
+  const bp = t.closest(".ba-pic");
+  if (bp) {
+    const p = (c.pics || []).find((x) => x.sha === bp.closest(".th-ba")?.dataset.sha);
+    if (p) openBa(c, p);
+    return true;
+  }
   if (t.closest(".th-stop")) {
     const was = c.call;
     c.call = { ...was, state: was.state === "reading" ? "stopped" : "planned", stoppedBy: state.me || "You" };

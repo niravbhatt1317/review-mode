@@ -15,6 +15,7 @@ import path from "node:path";
 import { execSync, execFileSync } from "node:child_process";
 import os from "node:os";
 import { loadConfig } from "../collector/config.js";
+import { snap } from "./snap.mjs";
 import { storeFor, prepare } from "../collector/stores.js";
 import { withNames, applyChange, mergePeople, draftOpen, callOpen } from "../hub-core.js";
 
@@ -72,6 +73,7 @@ const TOOLS = [
   { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
   { name: "review_preview", description: "After a plan with preview (or a preview call): you made the planned change in the work folder named. The review server commits it, pushes the branch and opens (or updates) a DRAFT pull request, whose live preview link shows on the plan. The plan still waits for a person's Go.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changes" }, session: { type: "string" } }, required: ["id", "title"] } },
   { name: "review_drop", description: "After a Stop, when they chose to throw your work away: the work folder goes, nothing is pushed, and your plan waits for Go again. Says so in the thread.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string" } }, required: ["id"] } },
+  { name: "review_checked", description: "After a CHECK brief: you looked at the before and after pictures against your plan. ok true: they match (the pair is marked checked). ok false: say in text what you see that is wrong, one question with options; it goes in the thread as your question. nothing true: nothing on screen changes with this plan (a link, a screen reader label), so the pictures are hidden. missed true: the pictures don't show the part you changed (another tab, scrolled away, a closed drawer), so they are hidden and the thread says to try it live.", inputSchema: { type: "object", properties: { id: { type: "string" }, ok: { type: "boolean" }, nothing: { type: "boolean" }, missed: { type: "boolean" }, text: { type: "string" }, options: { type: "array", items: { type: "string" } }, session: { type: "string" } }, required: ["id", "ok"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
 const line = (c) => `#${c.n} ${c.id} ${c.status} ${kind(c.severity)}${holder(c) ? ` [${holder(c)}${c.withClaude ? " + Claude" : ""}]` : ""}: ${c.text}${c.note?.text ? ` [note: ${c.note.text}]` : ""}`;
@@ -171,6 +173,27 @@ async function call(name, a = {}) {
     throw new Error(`${withNames(c, await people()).call.stoppedBy || "Someone"} pressed Stop: do not ship. Say what you had done with review_talk (kind "ask", options Throw it away / Carry on / Push what's done) and wait for their answer`);
   if (name === "review_ship") return works.get(c.id)?.mode === "preview" ? previewBuild(c, st, a) : ship(c, st, a);
   if (name === "review_preview") return previewBuild(c, st, a);
+  if (name === "review_checked") {
+    const p = c.pics?.at(-1);
+    if (!p) throw new Error("No pictures on this comment to check");
+    if (a.ok === true || a.nothing === true || a.missed === true) {
+      applyChange(c, { picsChecked: true }, who);
+      if (a.nothing === true) c.pics.at(-1).hidden = true;
+      if (a.missed === true) c.pics.at(-1).missed = true;
+      await st.put(c);
+      return a.nothing ? "Pictures hidden: nothing on screen changes." : a.missed ? "Pictures hidden: the thread says to try it live." : "Marked checked: the after matches your plan.";
+    }
+    const words = String(a.text || "").trim();
+    if (!words) throw new Error("Say what is wrong in text");
+    p.wrong = Date.now();
+    applyChange(c, { reply: words, via: "claude", ask: true, options: Array.isArray(a.options) ? a.options : [] }, who);
+    const step = c.history.at(-1);
+    if (c.call && c.call.state !== "asked") Object.assign(c.call, { state: "asked", askAt: step.at }); // their answer comes back to you
+    else if (!c.call) c.call = { state: "asked", at: step.at, by: c.pr?.for || who, words: "", read: [], askAt: step.at };
+    if (!step.for && c.pr?.for) step.for = c.pr.for;
+    await st.put(c);
+    return `Asked on #${(await numbered(c.id, st))?.n}; their answer comes back as a call.`;
+  }
   if (name === "review_drop") {
     dropWork(c.id);
     applyChange(c, { reply: "Thrown away, nothing was pushed. The plan still waits for Go.", via: "claude" }, who);
@@ -501,7 +524,7 @@ async function ship(c, st, a) {
 async function finishGo(c, st, prN, url, summary, by) {
   const fresh = await st.get(c.id);
   applyChange(fresh, { pr: { n: prN, draft: false } }, by);
-  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview link shows here in about a minute"}.`, via: "claude", prN }, by);
+  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview and before and after pictures show here in a minute or two"}.`, via: "claude", prN }, by);
   if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, by);
   await st.put(fresh);
   return `PR ${url} is ready; #${(await numbered(c.id, st))?.n} is For approval. A person merges it.`;
@@ -578,6 +601,7 @@ async function prRound() {
         const preview = base ? `${base.replace(/\/+$/, "")}${c.route && c.route.startsWith("/") ? c.route : ""}` : c.pr.preview;
         const state = info.state === "MERGED" ? "merged" : info.state === "CLOSED" ? "closed" : "open";
         if (state === "open" && !note && Date.now() - (c.pr.builtAt || c.pr.at || 0) < 10 * 60_000) building = true; // never fast for a PR with no preview
+        if (state === "open" && base && head && c.route && !(c.pics || []).some((p) => p.sha === head) && !snapping.has(c.id) && (snapFails.get(`${c.id}:${head}`) || 0) < 2) picsFor(c.id, sess, base.replace(/\/+$/, ""), head);
         if (preview === c.pr.preview && state === c.pr.state && !!info.isDraft === !!c.pr.draft) continue;
         const full = await st.get(c.id);
         applyChange(full, { pr: { n: c.pr.n, ...(preview ? { preview } : {}), state, draft: !!info.isDraft } }, defaultAs);
@@ -586,6 +610,50 @@ async function prRound() {
     } catch {}
   }
   prBuilding = building;
+}
+/* BEFORE AND AFTER (step 3, Nirav 2026-11-05): once a preview is built for the branch's latest commit, the same spot on
+   staging and on the preview, put on Claude's message (the plan for a draft, "Done" for a PR), then Claude is asked to
+   check the after against its plan. Pictures are taken in the background: the PR round does not wait for them */
+const snapping = new Set();
+const snapFails = new Map(); // "<id>:<sha>" -> tries that failed: twice and it stops trying
+const PICS_DIR = path.join(os.homedir(), ".review-mode", "pics");
+async function picsFor(id, sess, base, sha) {
+  snapping.add(id);
+  try {
+    const st = storeOf(sess);
+    const c = await st.get(id);
+    if (!c?.pr?.n) return;
+    const staging = (cfg.github?.staging || base.replace(/\/\/pr-\d+\./, "//")).replace(/\/+$/, "");
+    if (staging === base) return; // not a pr-N preview: nothing to compare with
+    const msg = c.pr.draft ? (c.history || []).find((h) => h.at === c.pr.planAt && h.via === "claude") : [...(c.history || [])].reverse().find((h) => h.via === "claude" && h.note && (h.pr === c.pr.n || (/^Done\b/.test(h.note) && h.at >= (c.pr.at || 0) - 5000))); // older "Done" messages carry no PR number
+    if (!msg) return; // the "Done" message comes with the PR: the next round
+    const r = await snap({ before: staging + c.route, after: base + c.route, comment: c, login: cfg.previewLogin });
+    const stem = `${c.id}.ba-${sha}`;
+    await st.putFile(`${stem}-before.jpg`, r.before);
+    await st.putFile(`${stem}-after.jpg`, r.after);
+    fs.mkdirSync(PICS_DIR, { recursive: true });
+    const local = { before: path.join(PICS_DIR, `${stem}-before.jpg`), after: path.join(PICS_DIR, `${stem}-after.jpg`) };
+    fs.writeFileSync(local.before, r.before);
+    fs.writeFileSync(local.after, r.after);
+    const full = await st.get(id);
+    applyChange(full, { pics: { at: msg.at, sha, before: `${stem}-before.jpg`, after: `${stem}-after.jpg`, w: r.w, h: r.h, found: r.found, pr: c.pr.n } }, defaultAs);
+    await st.put(full);
+    if (!canHear()) return;
+    const n = (await numbered(id, st))?.n;
+    send({ method: "notifications/claude/channel", params: { content: [
+      `CHECK on review comment #${n} (${id})${sess ? `, TEST SESSION ${sess} (pass session "${sess}" to the review tools)` : ""}: the before and after pictures of the spot are in the thread.`,
+      `Your plan: "${msg.note}"`,
+      `Read both: before (staging) ${local.before} · after (the preview) ${local.after}${!r.found.before || !r.found.after ? ` (the spot was not found on the ${!r.found.before && !r.found.after ? "two pages" : !r.found.before ? "staging page" : "preview"}: the whole window was taken)` : ""}.`,
+      `Then review_checked with id ${id}: ok true when the after shows your plan; nothing true when nothing on screen changes with this plan;`,
+      `missed true when the pictures don't show the part you changed at all (it is on another tab, scrolled away, in a closed drawer);`,
+      `ok false with text (what you see that is wrong, in design words, one or two sentences) and 2 or 3 options when it doesn't. Then carry on.`,
+    ].join("\n"), meta: { kind: "check", comment: String(n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
+  } catch (e) {
+    snapFails.set(`${id}:${sha}`, (snapFails.get(`${id}:${sha}`) || 0) + 1);
+    process.stderr.write(`[review] before and after for ${id}: ${String(e?.message || e).split("\n")[0]}\n`);
+  } finally {
+    snapping.delete(id);
+  }
 }
 /* a building preview right after a push: the next round soon, not in 45 s */
 const prSoon = () => { prBuilding = true; };

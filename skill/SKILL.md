@@ -44,7 +44,10 @@ may come with a live preview (`preview: true`, the brief says when): the reply n
 there, then `review_preview`; the server opens a draft PR whose preview shows on the plan, and Go makes it the PR. A STOP
 brief means someone pressed Stop: no more edits, never ship; say what you had done with `review_talk` kind "ask"
 (Throw it away / Carry on / Push what's done). Their answer comes back as a call: `review_ship` (or `review_preview`) to
-finish or push, `review_drop` to throw it away. Show changes
+finish or push, `review_drop` to throw it away. A CHECK brief comes once a preview is built: Read the before (staging)
+and after (preview) pictures it names, then `review_checked`: ok true when the after shows the plan, ok false with what
+is wrong and options, nothing true when nothing on screen changes, missed true when the pictures don't show the changed
+part (another tab, a closed drawer). Show changes
 through that preview, not a Claude artifact; make an artifact only when someone asks for one by name. Build it from the
 design system's real components: a React page importing them from its package, then `npx --no review-mode mock
 <page.jsx>` makes one self-contained HTML to publish. Say in the thread it is private until its owner presses Share on

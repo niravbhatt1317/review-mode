@@ -156,6 +156,18 @@ export function applyChange(c, body, who, ctx = {}) {
     return c;
   }
   if (body.stopSent === true && c.call?.state === "stopped") c.call.stopSent = Date.now();
+  /* BEFORE AND AFTER (step 3, Nirav 2026-11-05): the review server's pictures of the spot on staging and on the preview,
+     on the message of Claude's they belong to (the plan, or "Done"); the latest six kept. Claude checks them against its
+     plan: "picsChecked" marks a pair as matching and ends the check call */
+  if (body.pics && typeof body.pics === "object" && body.pics.before && body.pics.after) {
+    const p = body.pics;
+    c.pics = [...(c.pics || []).filter((x) => !(x.at === p.at && x.sha === p.sha)), { at: Number(p.at) || 0, sha: String(p.sha || "").slice(0, 12), before: String(p.before).slice(0, 120), after: String(p.after).slice(0, 120), w: Number(p.w) || 0, h: Number(p.h) || 0, found: { before: !!p.found?.before, after: !!p.found?.after }, pr: Number(p.pr) || null, takenAt: Date.now() }].slice(-6);
+  }
+  if (body.picsChecked === true) {
+    const p = c.pics?.at(-1);
+    if (p) p.checked = Date.now();
+    if (c.call?.kind === "check" && c.call.state !== "done") Object.assign(c.call, { state: "done", doneAt: Date.now() });
+  }
   if (body.replan === true) replan(c, Date.now());
   /* the PR Claude opened for it (the review server opens it), and what GitHub says later: the preview, merged or closed */
   if (body.pr && typeof body.pr === "object") {
@@ -568,6 +580,10 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
       else fresh();
       return c;
     },
+    /* any other picture of a comment (Claude's before and after, step 3): named <id>.<something>, kept with it */
+    async putFile(name, bytes, type = "image/jpeg") {
+      await upload(name, bytes, type);
+    },
     async putThumb(id, jpg) {
       await upload(`${id}.t.jpg`, jpg, "image/jpeg");
       const [row] = await rest("PATCH", `review_comments?id=eq.${encodeURIComponent(id)}`, { thumb: true });
@@ -583,7 +599,7 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
         e.status = 403;
         throw e;
       }
-      await removeFiles([c.shot, c.thumb].filter(Boolean)).catch(() => {});
+      await removeFiles([c.shot, c.thumb, ...(c.pics || []).flatMap((p) => [p.before, p.after])].filter(Boolean)).catch(() => {});
       drop(c.id);
     },
     /* a picture's bytes: from the cache, else downloaded once and kept */
