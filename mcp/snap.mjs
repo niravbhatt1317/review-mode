@@ -57,7 +57,9 @@ const FIND = `(() => {
     if (!e) return null;
     e.scrollIntoView({ block: "center", inline: "nearest" });
     const r = e.getBoundingClientRect();
-    return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    const a = e.closest("a[href]");
+    const away = !!a && (() => { try { const u = new URL(a.href, location.href); return u.origin === location.origin && u.pathname !== location.pathname; } catch { return false; } })();
+    return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2, away };
   };
 })()`;
 
@@ -120,12 +122,14 @@ async function open(t, url, c, login) {
   await t.ev(FIND);
   const mouse = async (type, x, y) => t.send("Input.dispatchMouseEvent", { type, x, y, button: type === "mouseMoved" ? "none" : "left", clickCount: 1, buttons: type === "mousePressed" ? 1 : 0 });
   /* Claude's steps first (how to reach the comment's view: "click Internal", "click All clients"), then the trail */
-  for (const s of [...(c.snapSteps || []).map((x) => ({ ...x, loose: true })), ...(c.trail || []).slice(-12)]) {
+  /* then the way here (clicks on the pages before: a view picked elsewhere), then this page's own clicks */
+  const lead = (c.lead || []).filter((x) => x.kind === "click" || x.kind === "select").map((x) => ({ ...x, lead: true }));
+  for (const s of [...(c.snapSteps || []).map((x) => ({ ...x, loose: true })), ...lead, ...(c.trail || []).slice(-12)]) {
     const b = await t.ev(`JSON.stringify(window.__snapBox(${JSON.stringify(s)}))`).then((v) => (v ? JSON.parse(v) : null));
     if (s.kind === "key") {
       await t.send("Input.dispatchKeyEvent", { type: "keyDown", key: s.key, code: s.code });
       await t.send("Input.dispatchKeyEvent", { type: "keyUp", key: s.key, code: s.code });
-    } else if (!b) continue; // a step that is not on this page (any more): the next
+    } else if (!b || (s.lead && b.away)) continue; // not on this page (any more), or a link that would leave it: the next
     else if (s.kind === "click" || s.kind === "dblclick" || s.kind === "contextmenu") {
       await mouse("mouseMoved", b.cx, b.cy);
       await mouse("mousePressed", b.cx, b.cy);

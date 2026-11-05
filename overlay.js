@@ -2977,6 +2977,7 @@ async function save() {
     text,
     mentions: mentionsIn(text),
     trail: state.trail.slice(-20),
+    lead: (state.lead || []).slice(-20), // the clicks on the pages before (the way here)
     overlay: host.parentNode !== document.body || !!closestDeep(el, "dialog[open],:popover-open,[popover],[role=dialog],[role=alertdialog],[role=menu],[role=listbox],[role=tooltip],[data-radix-popper-content-wrapper]"),
     mark: state.pending.mark || null,
     scrolls: scrollsOf(el),
@@ -3125,7 +3126,7 @@ window.__reviewWhy = (id, fresh) => { /* read-only, for drives: why a pin is or 
   }
   return out;
 };
-window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: lastCheck, persona: state.persona, approver: isApprover(), sign: canSign(), busy: panelBusy(), stale: !!state.stale, draft: state.thDraft, thOpen: [...state.thOpen] }); // read-only, for drives
+window.__reviewPeek = () => ({ known: state.known?.size, unread: [...state.unread], mine: [...state.mine], comments: state.comments.map((c) => c.id), tick: lastCheck, persona: state.persona, approver: isApprover(), sign: canSign(), busy: panelBusy(), stale: !!state.stale, draft: state.thDraft, thOpen: [...state.thOpen], lead: state.lead || [], trail: state.trail }); // read-only, for drives
 $(".panel-sync").addEventListener("click", () => {
   const first = panelBody.querySelector(".card.unread");
   if (first) return first.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -8963,8 +8964,8 @@ window.addEventListener(
     if (e.composedPath().includes(host) || e.button !== 0 || state.alt || state.sticky) return;
     state.flash = null; // the go-to pin (shown over hidden pins, or kept out of its row's "+3") goes on the next click
     if (location.pathname !== state.trailRoute) {
+      newPage(); // before the route moves on: its clicks are kept as the way here
       state.trailRoute = location.pathname;
-      state.trail = [];
     }
     const el = e.target instanceof Element ? e.target.closest("button,a,[role],tr,td,th,label,summary,input,select,li") || e.target : null;
     if (!el || el === document.body || el === document.documentElement) return;
@@ -8973,10 +8974,17 @@ window.addEventListener(
   },
   true
 );
+/* THE WAY HERE (Nirav, 2026-11-05: #166 was made in "All clients", picked on another page, and its pictures missed it):
+   a new page starts the comment's click list over, but the clicks before it (not hovers) are kept as the way here, the
+   last 20 across pages, so the hidden browser of the before and after can reach the same view. */
+function newPage() {
+  if (state.trail?.length) state.lead = [...(state.lead || []), ...state.trail.filter((s) => s.kind !== "hover").map((s) => ({ ...s, route: state.trailRoute }))].slice(-20);
+  state.trail = [];
+}
 const pushStep = (step) => {
   if (location.pathname !== state.trailRoute) {
+    newPage(); // before the route moves on: its clicks are kept as the way here
     state.trailRoute = location.pathname;
-    state.trail = [];
   }
   const last = state.trail.at(-1);
   /* typing into the same field: keep one step with the final value */
@@ -9040,8 +9048,8 @@ new MutationObserver((muts) => {
 }).observe(document.body, { childList: true, subtree: true });
 setInterval(() => {
   if (location.pathname !== state.trailRoute) {
+    newPage(); // before the route moves on: its clicks are kept as the way here
     state.trailRoute = location.pathname;
-    state.trail = [];
     if (state.scope.kind === "here" && panel.classList.contains("on") && !panelBusy()) renderPanel();
   }
 }, 250);
