@@ -6270,8 +6270,8 @@ function threadClick(e, c, box, onChange) {
     thSlide(box, onChange);
     return true;
   }
-  if (t.closest(".th-long")) {
-    const k = `${c.id}:${t.closest(".th-msg")?.dataset.at}`;
+  if (t.closest(".th-msg .th-long")) { // the activity's own Show more is the card's (Nirav, 2026-11-05: it did nothing)
+    const k = `${c.id}:${t.closest(".th-msg").dataset.at}`;
     if (state.longOpen.has(k)) state.longOpen.delete(k);
     else state.longOpen.add(k);
     onChange();
