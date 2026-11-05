@@ -97,8 +97,15 @@ practice that works like memory and never goes stale. Corrections go into that f
 
 ## Rules and safety (decided)
 
-- **Who can say "go": every designer.** The designers build this product, so any of them can have Claude change code
-  (Nirav, 2026-11-04).
+- **Who can say "go": the person who asked Claude, or an approver** (Nirav, 2026-11-05, changing "every designer" of
+  2026-11-04). Whoever asked knows what they meant; anyone could otherwise push a plan the asker was still checking.
+  Everyone else sees Go greyed, with "Only Kishan or Nirav can say Go. You can still reply.", and can still write in
+  the thread. The hub checks it too, so it can't be got round.
+- **Who can press Stop: the person who asked, whoever said Go, or an approver** (Nirav, 2026-11-05). A brake shouldn't
+  be locked to one person who might be away, but it isn't for anyone either. Stop before Claude started puts the plan
+  back to wait for Go; mid-change, Claude says what it had done and asks: Throw it away, Carry on, Push what's done.
+- **Notices for Go and Stop** (Nirav, 2026-11-05): when an approver says Go on your plan you hear "said Go on your
+  plan"; when someone stops Claude on a change you asked for or said Go to, you hear "stopped Claude".
 - **Claude never merges.** It opens the PR; a person merges. Nirav, as design lead, does the final merge.
 - **No skipping the confirm step.** Every change waits for "go", even a one-line fix. How often it asks (Nirav asked
   2026-11-04 whether asking every time makes sense; Claude's proposal):
@@ -168,6 +175,9 @@ Claude's proposal, to settle with Nirav:
 - Each person chooses what reaches them (with "Told outside the browser").
 
 ## Pictures
+
+- `2026-11-04-claude-buddy/3-before-and-after.png`: step 3 (before and after in the thread, compare big, the closed
+  card, before Go, hover states, several pages, when the after is wrong) and Stop.
 
 - `2026-11-04-claude-buddy/1-claude-as-a-teammate.png`: step 1 (a question, asking when unsure, help me reply,
   assign to Claude).

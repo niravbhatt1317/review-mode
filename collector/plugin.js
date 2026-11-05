@@ -163,7 +163,7 @@ export default function review(options = {}) {
           }
           if (url === "/__review/people") {
             await approverIs(store, reviewer); // fills the members cache
-            return send(res, 200, teamOf(await peopleFor(store), membersCache.map));
+            return send(res, 200, teamOf(await peopleFor(store), membersCache.map, cfg.approvers || []));
           }
           if (url === "/__review" || url === "/__review/") return send(res, 200, listPage(), "text/html");
           if (url.startsWith("/__review/shot/")) {
@@ -192,7 +192,8 @@ export default function review(options = {}) {
             if (!c) return send(res, 404, { error: "no such comment" });
             c.text = sentence(c.text);
             normalise(c);
-            applyChange(c, body, reviewer);
+            /* Go and Stop: the asker, whoever said Go, or an approver (the hub's members table, else hub.json) */
+            applyChange(c, body, reviewer, { approvers: (await approverIs(store, reviewer)) ? [reviewer] : [] });
             await store.put(c);
             if (!c.n) c.n = prepare(await store.list()).find((x) => x.id === body.id)?.n;
             return send(res, 200, { ok: true, entry: shownWith(await peopleFor(store))(c) });

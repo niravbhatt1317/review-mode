@@ -113,7 +113,18 @@ export const newId = () => `${Date.now().toString(36)}-${Math.random().toString(
    "Reopen" and "send back" move it back. A note on a move back stays on the comment through the rework and the
    next For approval, so whoever picks it up sees why it came back and the reviewer can check the change against
    their own ask; it clears on Approve (and stays in history). */
-export function applyChange(c, body, who) {
+/* WHO SAYS GO AND STOP (Nirav, 2026-11-05): Go is said by the person who asked Claude or an approver (the design lead);
+   Stop by them or whoever said Go. ctx.approvers comes from the server; without it (the CLI, Claude's own moves) no check */
+const sameWho = (a, b) => !!a && !!b && lc(a) === lc(b);
+export const mayGo = (c, who, approvers) => !approvers || approvers.some((x) => sameWho(x, who)) || sameWho(c.call?.by, who);
+export const mayStop = (c, who, approvers) => !approvers || approvers.some((x) => sameWho(x, who)) || sameWho(c.call?.by, who) || sameWho(c.call?.asker, who);
+const refuse = (msg) => { throw Object.assign(new Error(msg), { status: 403 }); };
+/* the plan that waits for Go again (a Stop before Claude started, or its work thrown away): the latest plan step */
+function replan(c, at) {
+  const p = [...(c.history || [])].reverse().find((h) => h.plan && h.via === "claude");
+  if (p) c.call = { state: "planned", at, by: p.for || c.call?.asker || c.call?.by, words: "", read: [], planAt: p.at, ...(c.call?.builtAt ? { builtAt: c.call.builtAt } : {}) };
+}
+export function applyChange(c, body, who, ctx = {}) {
   const { text, severity, status, resolved, note } = body;
   /* @MENTIONS (Nirav, 2026-10-29): the names a reply or a note mentions ride on its step, so they get a notice */
   const mentions = Array.isArray(body.mentions) ? [...new Set(body.mentions.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 80)))].slice(0, 10) : [];
@@ -130,6 +141,22 @@ export function applyChange(c, body, who) {
   if (body.claudeDraft && typeof body.claudeDraft.text === "string" && body.claudeDraft.text.trim() && c.call)
     Object.assign(c.call, { state: "done", doneAt: Date.now(), draft: { for: c.call.by, text: body.claudeDraft.text.trim().slice(0, 1200), at: Date.now() } });
   if (body.draftUsed === true && c.call?.draft) c.call.draft = null;
+  /* STOP (Nirav, 2026-11-05): Claude making a change or a preview is stopped at once. Not started yet: the plan simply
+     waits for Go again. Started: "stopped" until Claude says what it had done and asks what next (Throw it away, Carry
+     on, Push what's done); the review server tells it */
+  if (body.stop === true && c.call && (c.call.kind === "go" || c.call.kind === "preview") && (c.call.state === "waiting" || c.call.state === "reading")) {
+    if (!mayStop(c, who, ctx.approvers)) refuse("Only the person who asked Claude, whoever said Go, or an approver can stop it");
+    const at = Date.now();
+    const tell = [...new Set([c.call.by, c.call.asker].filter((x) => x && !sameWho(x, who)))];
+    const started = c.call.state === "reading";
+    (c.history ||= []).push({ at, by: who, status: c.status, from: c.status, kind: "reply", note: started ? "Stopped Claude" : "Stopped Claude before it started", stop: true, ...(tell.length ? { tell } : {}) });
+    if (started) Object.assign(c.call, { state: "stopped", stoppedBy: who, stoppedAt: at });
+    else replan(c, at);
+    c.edited = Date.now();
+    return c;
+  }
+  if (body.stopSent === true && c.call?.state === "stopped") c.call.stopSent = Date.now();
+  if (body.replan === true) replan(c, Date.now());
   /* the PR Claude opened for it (the review server opens it), and what GitHub says later: the preview, merged or closed */
   if (body.pr && typeof body.pr === "object") {
     const n = Number(body.pr.n);
@@ -201,18 +228,20 @@ export function applyChange(c, body, who) {
        change, never skipped); Go starts the work: In progress with Claude, and a call of kind "go" carrying the plan */
     const plan = claude && body.plan === true && !body.ask;
     const go = !claude && body.go === true && c.call?.state === "planned" && !isQ;
+    if (go && !mayGo(c, who, ctx.approvers)) refuse("Only the person who asked Claude or an approver can say Go");
+    const planAsker = go ? c.call.by : null;
     const forWho = claude && c.call?.by ? { for: c.call.by } : {}; // who called Claude: Claude's message is news for them
     const cask = claude && body.ask === true ? { ask: true, ...(Array.isArray(body.options) ? { options: body.options.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 60)).slice(0, 4) } : {}) } : {};
     if (claude && c.call && c.call.state !== "done") Object.assign(c.call, cask.ask ? { state: "asked", askAt: at } : plan ? { state: "planned", planAt: at } : { state: "done", doneAt: at });
     else if (go) {
       const p = (c.history || []).find((h) => h.at === c.call.planAt && h.via === "claude");
-      c.call = newCall(who, p?.note || "", at, { kind: "go", step: at, planAt: c.call.planAt });
+      c.call = newCall(who, p?.note || "", at, { kind: "go", step: at, planAt: c.call.planAt, asker: planAsker });
     }
     /* replying to one of Claude's messages (its quote) talks to Claude too, @ or not (Nirav, 2026-11-04) */
     else if (!claude && !go && (mentions.includes("Claude") || c.call?.state === "asked" || qt.quote?.by === "Claude")) c.call = newCall(who, reply, at, { step: at, ...(c.call?.state === "asked" ? { answers: c.call.askAt } : {}) });
     /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
     if (!isQ) {
-      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true, ...(body.preview === true ? { preview: true } : {}) } : {}), ...(go ? { go: true } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...ment, ...qt });
+      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true, ...(body.preview === true ? { preview: true } : {}) } : {}), ...(go ? { go: true, ...(planAsker && !sameWho(planAsker, who) ? { tell: [planAsker] } : {}) } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...ment, ...qt });
       /* Go on a New comment picks it up: the person who said go is on it, with Claude */
       if (go && from === "open") {
         Object.assign(c, { status: "progress", assignee: who, pickedAt: at, withClaude: true });
@@ -282,10 +311,10 @@ export function withNames(c, people = {}) {
   const name = (id) => (id && (typeof find(id) === "string" ? find(id) : find(id)?.name)) || id;
   const out = { ...c, by: name(c.by), assignee: name(c.assignee), doneBy: name(c.doneBy), approvedBy: name(c.approvedBy) };
   if (c.note) out.note = { ...c.note, by: name(c.note.by), ...(c.note.toWho ? { toWho: name(c.note.toWho) } : {}) };
-  if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by), ...(h.toWho ? { toWho: name(h.toWho) } : {}), ...(h.for ? { for: name(h.for) } : {}) }));
+  if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by), ...(h.toWho ? { toWho: name(h.toWho) } : {}), ...(h.for ? { for: name(h.for) } : {}), ...(h.tell ? { tell: h.tell.map(name) } : {}) }));
   /* Claude's part of the thread names its people too: who answered, who accepted or set it aside (2026-11-04) */
   if (c.pr?.for) out.pr = { ...c.pr, for: name(c.pr.for) };
-  if (c.call) out.call = { ...c.call, by: name(c.call.by), ...(c.call.draft ? { draft: { ...c.call.draft, for: name(c.call.draft.for) } } : {}) };
+  if (c.call) out.call = { ...c.call, by: name(c.call.by), ...(c.call.asker ? { asker: name(c.call.asker) } : {}), ...(c.call.stoppedBy ? { stoppedBy: name(c.call.stoppedBy) } : {}), ...(c.call.draft ? { draft: { ...c.call.draft, for: name(c.call.draft.for) } } : {}) };
   if (c.draft) out.draft = { ...c.draft, ...(c.draft.decidedBy ? { decidedBy: name(c.draft.decidedBy) } : {}), ...(Array.isArray(c.draft.thread) ? { thread: c.draft.thread.map((t) => ({ ...t, by: name(t.by) })) } : {}) };
   return out;
 }
@@ -331,10 +360,10 @@ export function waitingOf(members = null, people = {}) {
 export const roleIn = (members, handle) => (!members ? "member" : members[lc(handle)] || "waiting");
 export const isApproverIn = (members, handle) => !!members && members[lc(handle)] === "approver";
 /* the people a comment can be handed to: the team's map and everyone signed in, without the waiting list */
-export function teamOf(people = {}, members = null) {
+export function teamOf(people = {}, members = null, approvers = []) {
   return Object.entries(people)
     .filter(([h]) => !members || (members[lc(h)] && members[lc(h)] !== "waiting" && members[lc(h)] !== "refused"))
-    .map(([handle, p]) => ({ handle, name: p.name, avatar: p.avatar || null }))
+    .map(([handle, p]) => ({ handle, name: p.name, avatar: p.avatar || null, ...((members ? members[lc(handle)] === "approver" : approvers.some((x) => lc(x) === lc(handle))) ? { approver: true } : {}) })) // who can always say Go
     .filter((p, i, all) => all.findIndex((q) => q.handle.toLowerCase() === p.handle.toLowerCase()) === i) // case twins once
     .sort((a, b) => a.name.localeCompare(b.name));
 }

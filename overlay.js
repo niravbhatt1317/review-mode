@@ -1802,6 +1802,13 @@ root.innerHTML = `
   .pin-tip .th-pr .th-prn, .pin-tip .th-pr .th-pv.building { background: rgba(255,255,255,.08); color: #fff; }
   .th-reading.idle { align-items: center; color: var(--rv-ink-3); background: hsl(var(--rv-n10)); }
   .th-rd-t { font-weight: 500; }
+  .th-rd-b { flex: 1; min-width: 0; }
+  .th-rd-h { display: flex; align-items: center; gap: 8px; }
+  .th-stop { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--rv-surface); box-shadow: inset 0 0 0 1px #e8c9bb; color: #b4532f; font-family: inherit; font-size: 11px; font-weight: 500; line-height: 22px; cursor: pointer; flex: 0 0 auto; }
+  .th-stop i { width: 7px; height: 7px; border-radius: 1.5px; background: currentColor; }
+  .th-stop:hover, .th-stop:focus-visible { background: #fff4ef; box-shadow: inset 0 0 0 1px #d97757; outline: none; }
+  .th-pick:disabled { opacity: .45; cursor: not-allowed; }
+  .th-only { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
   .th-reading:not(.idle) .th-rd-t, .th-last .th-rd-t { background: linear-gradient(90deg, #b07a63 0%, #b07a63 40%, #6e3a26 50%, #b07a63 60%, #b07a63 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; }
   @media (prefers-reduced-motion: reduce) { .th-rd-t { animation: none !important; color: #9a5a40 !important; } }
   .th-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -3256,8 +3263,8 @@ function noticeSave(m) {
 /* SMART WORDING (Nirav, 2026-10-27): who, what, which. One to three comments by number, more as a count ("20 of your
    comments", never a long list); Claude credited when the move was made with it; several kinds by one person in one
    sentence ("Pranjal picked up 2 and sent back #9"), the most pressing first. */
-const NOTICE_RANK = { cask: 0, cplan: 0, mention: 1, all: 2, cdraft: 3, back: 3, reopen: 4, putback: 5, hand: 6, cpr: 6, cpreview: 6, done: 7, cans: 7, answer: 8, cmerged: 8, approved: 9, pick: 10, new: 11 };
-const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", reopen: "prog", putback: "new", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new", cask: "claude", cplan: "claude", cans: "claude", cdraft: "claude", cpr: "claude", cpreview: "claude", cmerged: "appr" };
+const NOTICE_RANK = { cask: 0, cplan: 0, mention: 1, all: 2, cdraft: 3, cstop: 3, back: 3, cgo: 5, reopen: 4, putback: 5, hand: 6, cpr: 6, cpreview: 6, done: 7, cans: 7, answer: 8, cmerged: 8, approved: 9, pick: 10, new: 11 };
+const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", reopen: "prog", putback: "new", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new", cask: "claude", cplan: "claude", cans: "claude", cdraft: "claude", cpr: "claude", cpreview: "claude", cmerged: "appr", cgo: "claude", cstop: "prog" };
 const numsOf = (ns) => (ns.length === 1 ? `#${ns[0]}` : ns.length <= 3 ? `${ns.slice(0, -1).map((n) => `#${n}`).join(", ")} and #${ns[ns.length - 1]}` : `${ns.length} comments`);
 function noticePhrase(kind, ns) {
   const n = ns.length, nums = numsOf(ns), many = n > 3;
@@ -3281,13 +3288,16 @@ function noticePhrase(kind, ns) {
     case "cpr": return `opened a PR for ${nums}`;
     case "cpreview": return `has the preview of ${nums} ready to try`;
     case "cmerged": return `reports the PR for ${nums} was merged`;
+    /* someone else said Go on your plan, or stopped Claude on a change of yours (Nirav, 2026-11-05) */
+    case "cgo": return `said Go on your plan for ${nums}`;
+    case "cstop": return `stopped Claude on ${nums}`;
   }
   return "";
 }
 /* the short form, for several kinds in one sentence: "picked up 2", "sent back #9" */
 function noticeShort(kind, ns) {
   const x = ns.length === 1 ? `#${ns[0]}` : String(ns.length);
-  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, putback: `put back ${x}`, reopen: `reopened ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}`, cans: `answered you on ${x}`, cask: `asks you on ${x}`, cplan: `has a plan for ${x}`, cdraft: `drafted a reply on ${x}`, cpr: `opened a PR for ${x}`, cpreview: `has a preview of ${x}`, cmerged: `reports ${x} merged` }[kind]; // "added 2" alone read oddly
+  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, putback: `put back ${x}`, reopen: `reopened ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}`, cans: `answered you on ${x}`, cask: `asks you on ${x}`, cplan: `has a plan for ${x}`, cdraft: `drafted a reply on ${x}`, cpr: `opened a PR for ${x}`, cpreview: `has a preview of ${x}`, cmerged: `reports ${x} merged`, cgo: `said Go on ${x}`, cstop: `stopped Claude on ${x}` }[kind]; // "added 2" alone read oddly
 }
 function noticeSentence(who, parts, claude) {
   const name = String(who).split(/\s+/)[0] + (claude && who !== "Claude" ? ", with Claude," : "");
@@ -3325,6 +3335,7 @@ function noticesNow() {
       const kind =
         s.claudeKind ? s.claudeKind
         : byClaude ? (!isMe(s.for) ? null : s.ask ? "cask" : s.plan ? "cplan" : s.pr ? "cpr" : "cans")
+        : s.tell?.some(isMe) && (s.go || s.stop) ? (s.go ? "cgo" : "cstop")
         : s.mentions?.some(isMe) ? "mention" // a mention outranks what the step also did
         : s.mentions?.includes("all") ? "all"
         : s.kind === "reply" ? (isQ(c) && mine(c) ? "answer" : null)
@@ -5946,12 +5957,24 @@ const claudeAsk = (c) => (claudeWaits(c) ? { at: c.draft.at, by: "Claude", text:
 /* CLAUDE AS A TEAMMATE (Nirav, 2026-11-04, step 1): someone wrote @Claude; a connected Claude session claims the call
    and reads first. The thread says so, with what Claude has read; a call nobody claims for a while says it waits */
 const CALL_WAIT_MS = 45_000;
-const callBusy = (c) => (c.call?.state === "waiting" || c.call?.state === "reading") && c.status !== "approved" && Date.now() - (c.call.at || 0) < 30 * 60_000;
+const callBusy = (c) => (c.call?.state === "waiting" || c.call?.state === "reading" || c.call?.state === "stopped") && c.status !== "approved" && Date.now() - (c.call.at || 0) < 30 * 60_000;
+/* WHO SAYS GO AND STOP (Nirav, 2026-11-05): Go is the person who asked Claude or an approver; Stop is them or whoever
+   said Go. Everyone else sees Go greyed with who can, and can still say anything in the thread (the hub checks too) */
+const canGo = (c) => isApprover() || isMe(c.call?.by);
+const canStop = (c) => isApprover() || isMe(c.call?.by) || isMe(c.call?.asker);
+function onlyWho(names, verb) {
+  const all = [...new Set([...names.filter(Boolean), ...teamCache.list.filter((p) => p.approver).map((p) => p.name)])];
+  return `Only ${all.length > 1 ? `${all.slice(0, -1).join(", ")} or ${all.at(-1)}` : all[0] || "an approver"} can ${verb}`;
+}
+const STOP_BTN = '<button type="button" class="th-stop" aria-label="Stop Claude"><i></i>Stop</button>';
 function callBusyHtml(c) {
   const k = c.call;
+  /* stopped mid-change: Claude says what it had done and asks what next */
+  if (k.state === "stopped") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">Stopped by ${esc(isMe(k.stoppedBy) ? "you" : k.stoppedBy || "someone")}. Claude is saying what it had done…</span></div></div>`;
+  const stop = k.state === "reading" || k.state === "waiting" ? (canStop(c) ? STOP_BTN : "") : "";
   /* Go: Claude is making the change in its own copy of the code; the PR comes back here */
-  if (k.kind === "go") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is making the change…" : "Sent to Claude…"}</span><ul><li class="${k.state === "reading" ? "ok" : "now"}">A fresh copy of the code</li><li class="now">The change, as planned</li><li class="now">The PR and its preview link</li></ul></div></div>`;
-  if (k.kind === "preview") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is building a live preview…" : "Sent to Claude…"}</span><ul><li class="${k.state === "reading" ? "ok" : "now"}">A fresh copy of the code</li><li class="now">The change, as planned</li><li class="now">A draft PR and its preview (about 2 min)</li></ul></div></div>`;
+  if (k.kind === "go") return `<div class="th-reading">${CLAUDE_AV()}<div class="th-rd-b"><span class="th-rd-h"><span class="th-rd-t">${k.state === "reading" ? "Claude is making the change…" : "Sent to Claude…"}</span>${stop}</span><ul><li class="${k.state === "reading" ? "ok" : "now"}">A fresh copy of the code</li><li class="now">The change, as planned</li><li class="now">The PR and its preview link</li></ul></div></div>`;
+  if (k.kind === "preview") return `<div class="th-reading">${CLAUDE_AV()}<div class="th-rd-b"><span class="th-rd-h"><span class="th-rd-t">${k.state === "reading" ? "Claude is building a live preview…" : "Sent to Claude…"}</span>${stop}</span><ul><li class="${k.state === "reading" ? "ok" : "now"}">A fresh copy of the code</li><li class="now">The change, as planned</li><li class="now">A draft PR and its preview (about 2 min)</li></ul></div></div>`;
   /* a new draft for you: one line, no reading list (the thread is read already) */
   if (k.kind === "draft" && (k.state === "reading" || Date.now() - (k.at || 0) <= CALL_WAIT_MS)) return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.redo === "shorter" || /^Make your draft shorter/.test(k.words || "") ? "Claude is writing a shorter one…" : "Claude is writing a new draft…"}</span></div></div>`;
   if (k.state === "waiting" && Date.now() - (k.at || 0) > CALL_WAIT_MS) return `<div class="th-reading idle">${CLAUDE_AV()}<span>No Claude session has picked it up yet</span><button type="button" class="th-pick th-connect">Connect Claude</button></div>`;
@@ -5968,7 +5991,8 @@ function planButtons(c, x) {
   const live = built && c.pr.preview ? `<a class="th-pick th-try" href="${esc(c.pr.preview)}" target="_blank" rel="noopener">Try it live${ext}</a>`
     : x.previewPlan || built ? `<span class="th-pick th-try building">Preview in about ${built ? "1 min" : "2 min"}</span>`
     : `<button type="button" class="th-pick th-plan-live">Show me live</button>`;
-  return `<div class="th-picks"><button type="button" class="th-pick pri th-plan-go">Go</button>${live}<button type="button" class="th-pick th-plan-change">Change the plan</button></div>`;
+  const go = canGo(c) ? `<button type="button" class="th-pick pri th-plan-go">Go</button>` : `<button type="button" class="th-pick pri th-plan-go" disabled title="${esc(onlyWho([c.call?.by], "say Go"))}">Go</button>`;
+  return `<div class="th-picks">${go}${live}<button type="button" class="th-pick th-plan-change">Change the plan</button></div>${canGo(c) ? "" : `<div class="th-only">${esc(onlyWho([c.call?.by], "say Go"))}. You can still reply.</div>`}`;
 }
 /* THE PR ON THE COMMENT (step 2): the live preview first (the real page, to try the whole flow), then the PR and its
    state; the preview link comes once the Preview workflow has built it */
@@ -6004,7 +6028,7 @@ function threadHtml(c, moves = true) {
   if (!state.thOpen.has(c.id)) {
     /* Claude at work, or a draft waiting for you: said on the closed line first */
     const prRow = prRowHtml(c);
-    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.kind === "go" ? "Claude is making the change…" : c.call.kind === "preview" ? "Claude is building a live preview…" : c.call.kind === "draft" ? "Claude is writing a new draft…" : c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Sent to Claude…"}</span></button>` + prRow;
+    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.state === "stopped" ? "Stopped. Claude is saying what it had done…" : c.call.kind === "go" ? "Claude is making the change…" : c.call.kind === "preview" ? "Claude is building a live preview…" : c.call.kind === "draft" ? "Claude is writing a new draft…" : c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Sent to Claude…"}</span></button>` + prRow;
     if (myDraft(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w"><b>Claude</b> drafted a reply for you: ${esc(myDraft(c).text)}</span><span class="th-tag">Only you</span></button>` + prRow;
     /* no replies yet: the drawer card shows its reply box on hover, no trip through ⋯ (Nirav, 2026-11-04) */
     if (!msgs.length) return moves && !isQ(c) && can("answer", c) ? `<div class="th-ghost"><div class="th-ghost-in"><div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="Reply, @ to mention…" aria-label="Reply"><button type="button" class="th-go">Reply</button></div></div></div>` : "";
@@ -6203,6 +6227,18 @@ function threadClick(e, c, box, onChange) {
   if (t.closest(".th-pr a, .th-link")) return true; // the link opens itself, in a new tab
   /* Go: the plan is agreed; Claude makes it (every change waits for a person's go, Nirav 2026-11-04) */
   const planStep = (c.history || []).find((h) => h.at === c.call?.planAt && h.via === "claude");
+  if (t.closest(".th-stop")) {
+    const was = c.call;
+    c.call = { ...was, state: was.state === "reading" ? "stopped" : "planned", stoppedBy: state.me || "You" };
+    onChange();
+    applyUpdate({ id: c.id, stop: true }).then((r) => {
+      if (!r) c.call = was;
+      else toast(`#${c.n}: Claude stopped`);
+      onChange();
+    });
+    return true;
+  }
+  if (planStep && t.closest(".th-plan-go:disabled")) return true;
   if (planStep && t.closest(".th-plan-go")) {
     const was = c.call;
     c.call = { ...was, state: "waiting", kind: "go", at: Date.now(), read: [] };

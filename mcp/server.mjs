@@ -71,6 +71,7 @@ const TOOLS = [
   { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan"] }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, ...asProp }, required: ["id", "kind", "text"] } },
   { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
   { name: "review_preview", description: "After a plan with preview (or a preview call): you made the planned change in the work folder named. The review server commits it, pushes the branch and opens (or updates) a DRAFT pull request, whose live preview link shows on the plan. The plan still waits for a person's Go.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changes" }, session: { type: "string" } }, required: ["id", "title"] } },
+  { name: "review_drop", description: "After a Stop, when they chose to throw your work away: the work folder goes, nothing is pushed, and your plan waits for Go again. Says so in the thread.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string" } }, required: ["id"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
 const line = (c) => `#${c.n} ${c.id} ${c.status} ${kind(c.severity)}${holder(c) ? ` [${holder(c)}${c.withClaude ? " + Claude" : ""}]` : ""}: ${c.text}${c.note?.text ? ` [note: ${c.note.text}]` : ""}`;
@@ -143,9 +144,10 @@ async function call(name, a = {}) {
     if (!c.call || c.call.state === "done") return `#${(await numbered(c.id, st))?.n}: nobody is waiting on Claude here, nothing sent`;
     if (a.kind === "draft") applyChange(c, { claudeDraft: { text: words } }, who);
     else {
+      const stopped = c.call.state === "stopped" || (works.has(c.id) && !["go", "preview"].includes(c.call.kind)); // after a Stop: the folder waits for their answer
       const live = a.kind === "plan" && cfg.previews !== "never" && (a.preview === true || cfg.previews === "always");
       applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true, ...(live ? { preview: true } : {}) } : {}) }, who);
-      if (works.has(c.id)) dropWork(c.id); // a go that ends in words: the work folder goes
+      if (works.has(c.id) && !stopped) dropWork(c.id); // a go that ends in words: the work folder goes
       if (live) {
         await st.put(c);
         const n = (await numbered(c.id, st))?.n;
@@ -165,8 +167,18 @@ async function call(name, a = {}) {
     if (a.kind === "plan") return `Plan left on #${(await numbered(c.id, st))?.n}; it waits for a person's Go, then comes back to you`;
     return a.kind === "draft" ? `Draft left on #${n}, only ${withNames(c, ppl).call?.draft?.for || "they"} sees it` : a.kind === "ask" ? `Asked on #${n}; their reply comes back as a new call` : `Answered on #${n}`;
   }
-  if (name === "review_ship") return ship(c, st, a);
+  if (c.call?.state === "stopped" && (name === "review_ship" || name === "review_preview"))
+    throw new Error(`${withNames(c, await people()).call.stoppedBy || "Someone"} pressed Stop: do not ship. Say what you had done with review_talk (kind "ask", options Throw it away / Carry on / Push what's done) and wait for their answer`);
+  if (name === "review_ship") return works.get(c.id)?.mode === "preview" ? previewBuild(c, st, a) : ship(c, st, a);
   if (name === "review_preview") return previewBuild(c, st, a);
+  if (name === "review_drop") {
+    dropWork(c.id);
+    applyChange(c, { reply: "Thrown away, nothing was pushed. The plan still waits for Go.", via: "claude" }, who);
+    applyChange(c, { replan: true }, who);
+    await st.put(c);
+    called.delete(callKey(c));
+    return `Work on #${(await numbered(c.id, st))?.n} thrown away; the plan waits for Go again.`;
+  }
   if (name === "review_ack") {
     const d = deliveries.get(a.delivery_id);
     if (d) d.acked = Date.now();
@@ -256,6 +268,30 @@ async function callRound() {
     for (const sess of ["", ...localTests()]) {
     const st = storeOf(sess);
     const all = prepare(await st.list());
+    /* STOP (Nirav, 2026-11-05): someone pressed Stop while Claude worked. Claude is told at once; with no work folder
+       here (another session, or a restart) the review server answers for it and the plan waits for Go again */
+    for (const c of all.filter((x) => x.call?.state === "stopped" && !x.call.stopSent)) {
+      const full = await st.get(c.id);
+      if (!full || full.call?.state !== "stopped" || full.call.stopSent) continue;
+      const w = works.get(full.id);
+      const by = withNames(full, ppl).call.stoppedBy || "Someone";
+      if (!w) {
+        applyChange(full, { reply: "Stopped. Nothing was changed. The plan still waits for Go.", via: "claude" }, defaultAs);
+        applyChange(full, { replan: true }, defaultAs);
+        await st.put(full);
+        continue;
+      }
+      applyChange(full, { stopSent: true }, defaultAs);
+      await st.put(full);
+      const changed = (() => { try { return run("git", ["-C", w.dir, "status", "--porcelain"]); } catch { return ""; } })();
+      send({ method: "notifications/claude/channel", params: { content: [
+        `STOP on review comment #${c.n} (${full.id})${sess ? `, TEST SESSION ${sess} (pass session "${sess}" to the review tools)` : ""}: ${by} pressed Stop.`,
+        `Stop working on it now: no more edits in ${w.app}, do not ship.`,
+        changed ? `Files changed so far:\n${changed}` : `Nothing is changed in the work folder yet.`,
+        `Then review_talk kind "ask" (as "${defaultAs}"): one or two sentences on what you had done (or that nothing was changed), with options`,
+        `${changed ? `["Throw it away", "Carry on", "Push what's done"]` : `["Throw it away", "Carry on"]`}. Their answer comes back as a call; the work folder waits for it.`,
+      ].join("\n"), meta: { kind: "stop", comment: String(c.n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
+    }
     for (const c of all.filter((x) => callOpen(x.call) && !called.has(callKey(x))).slice(0, 3)) {
       const full = await st.get(c.id);
       if (!full || !callOpen(full.call)) continue;
@@ -370,7 +406,12 @@ async function callRound() {
         `  Explaining a change you would make is always a plan (so it carries Go and Show me live), never an answer.`,
         `  Asking them anything is always an ask (with quick picks), never an answer.`,
         ...(full.pr?.draft && full.pr.state === "open" ? [`  There is a draft PR #${full.pr.n} from your earlier plan: a new plan with a preview builds on its branch.`] : []),
-        `Do not change code or any status from a call. Then carry on with what you were doing.`,
+        ...(works.has(full.id) ? [
+        `AFTER A STOP: your work folder for this change is still there (${works.get(full.id).app}). Their reply says what next:`,
+        `  carry on: finish exactly the plan there, then review_ship (or review_preview for a preview); push what's done: review_ship`,
+        `  (review_preview for a preview) with what is there; throw it away: review_drop. Anything else: answer or ask as usual.`] : [
+        `Do not change code or any status from a call.`]),
+        `Then carry on with what you were doing.`,
       ].join("\n");
       send({ method: "notifications/claude/channel", params: { content: text, meta: { kind: "call", comment: String(c.n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
     }

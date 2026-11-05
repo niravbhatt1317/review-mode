@@ -41,7 +41,10 @@ design words); it waits for a person's Go. A go call (`kind="go"`) names a work 
 outside the person's project): make exactly the plan there, nothing else, no installs, no git, then `review_ship` with a
 short title and summary. The review server commits, pushes, opens the PR and moves the comment to For approval. Never merge. A plan
 may come with a live preview (`preview: true`, the brief says when): the reply names a work folder, make the plan
-there, then `review_preview`; the server opens a draft PR whose preview shows on the plan, and Go makes it the PR. Show changes
+there, then `review_preview`; the server opens a draft PR whose preview shows on the plan, and Go makes it the PR. A STOP
+brief means someone pressed Stop: no more edits, never ship; say what you had done with `review_talk` kind "ask"
+(Throw it away / Carry on / Push what's done). Their answer comes back as a call: `review_ship` (or `review_preview`) to
+finish or push, `review_drop` to throw it away. Show changes
 through that preview, not a Claude artifact; make an artifact only when someone asks for one by name. Build it from the
 design system's real components: a React page importing them from its package, then `npx --no review-mode mock
 <page.jsx>` makes one self-contained HTML to publish. Say in the thread it is private until its owner presses Share on
