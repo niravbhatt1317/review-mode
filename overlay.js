@@ -1843,6 +1843,12 @@ root.innerHTML = `
   .th-link.chip:hover { background: hsl(214 98% 44% / .16); }
   .th-link.chip svg { width: 10px; height: 10px; }
   .pin-tip .th-link { color: #8fbcff; }
+  .th-words.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .hs-words.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .th-long { display: block; margin-top: 2px; border: 0; padding: 0; background: none; font: inherit; font-size: 12px; font-weight: 500; color: var(--rv-ink-2); cursor: pointer; }
+  .th-long:hover, .th-long:focus-visible { color: var(--rv-ink); text-decoration: underline; outline: none; }
+  .pin-tip .th-long { color: hsl(216 20% 70%); }
+  .hs-body .th-long { align-self: flex-start; justify-self: start; width: max-content; text-align: left; }
   .th-words { margin-top: 1px; font-size: 12.5px; line-height: 1.45; color: var(--rv-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
   .th-quote { display: flex; gap: 4px; align-items: center; max-width: 100%; margin: 1px 0 2px; padding: 0; border: 0; background: none; font: 11px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-3); text-align: left; cursor: pointer; opacity: .85; } /* a quiet "in reply to" line over the words, not a block that fights them (Nirav, 2026-10-30) */
   .th-quote svg { width: 11px; height: 11px; flex: 0 0 auto; transform: scaleY(-1); } /* the arrow turned to point up, at what it answers */
@@ -5805,7 +5811,7 @@ function histHtml(c) {
     return full.slice(0, full.length - named.length);
   };
   const row = (st, by, line, at, words, withClaude) =>
-    `<li class="hs-step"${at ? ` data-at="${at}"` : ""}><span class="gh-shape" data-s="${st}"></span>${by ? `<span class="hs-face">${face(by)}${withClaude ? CLAUDE_AV("hs-claude") : ""}</span>` : ""}<span class="hs-body"><span class="hs-line">${by ? `<b>${isMe(by) ? "You" : esc(by)}</b> ` : ""}${line}</span>${words ? `<span class="hs-words">“${mentionHtml(words)}”</span>` : ""}</span><span class="hs-when"${at ? ` title="${esc(new Date(at).toLocaleString())}"` : ""}>${esc(agoText(at))}</span></li>`;
+    `<li class="hs-step"${at ? ` data-at="${at}"` : ""}><span class="gh-shape" data-s="${st}"></span>${by ? `<span class="hs-face">${face(by)}${withClaude ? CLAUDE_AV("hs-claude") : ""}</span>` : ""}<span class="hs-body"><span class="hs-line">${by ? `<b>${isMe(by) ? "You" : esc(by)}</b> ` : ""}${line}</span>${words ? (() => { const long = isLong(words, 150), open = state.longOpen.has(`${c.id}:${at}`); return `<span class="hs-words${long && !open ? " clamp" : ""}">“${mentionHtml(words)}”</span>${long ? longBtn(open) : ""}`; })() : ""}</span><span class="hs-when"${at ? ` title="${esc(new Date(at).toLocaleString())}"` : ""}>${esc(agoText(at))}</span></li>`;
   const cap = (h, name) => (name ? h : h[0].toUpperCase() + h.slice(1)); // "Picked it up" when nobody is named
   const out = []; // who added it is the strip's own line, where the thread starts
   let was = "open";
@@ -5837,6 +5843,11 @@ function histHtml(c) {
 state.thOpen = new Set(); // comments whose thread is open
 state.thDraft = null; // { id, text, quote }: the reply being written, kept through a redraw
 state.thAll = new Set(); // long threads unfolded
+/* LONG MESSAGES FOLD (Nirav, 2026-11-05): an older long message shows its first 4 lines, an activity line its first 2,
+   with Show more; the newest message, Claude's question and a plan waiting for Go always show whole */
+state.longOpen = new Set(); // "<comment id>:<at>" opened
+const isLong = (t, chars) => String(t || "").length > chars || (String(t || "").match(/\n/g) || []).length >= 3;
+const longBtn = (open) => `<button type="button" class="th-long" aria-expanded="${open}">${open ? "Show less" : "Show more"}</button>`;
 /* which move a step's words came with, for the badge on the closed line's face */
 function moveKey(s, from) {
   if (s.kind === "hand") return from === "open" ? "assign" : "hand";
@@ -5999,6 +6010,7 @@ function threadHtml(c, moves = true) {
     const tag = last.ask && msgs.length === 1 && talksToClaude(c) ? '<span class="th-tag">Answer</span>' : "";
     return `<button type="button" class="th-last${last.ask ? " ask" : ""}" aria-label="Open the thread, ${msgs.length} ${msgs.length === 1 ? "reply" : "replies"}">${thLastFace(c, last)}<span class="th-w"><b>${thName(last.by)}</b> ${last.sug ? "suggested: " : ""}${mentionHtml(last.words)}</span>${tag}${pill}</button>` + prRow;
   }
+  const newest = [...items].reverse().find((x) => !x.sys)?.at;
   const rows = items.map((x) => {
     if (x.sys) {
       const who = x.by ? `<b>${thName(x.by)}</b> ` : "";
@@ -6007,7 +6019,8 @@ function threadHtml(c, moves = true) {
     }
     const q = x.quote ? `<button type="button" class="th-quote" data-at="${x.quote.at}">${TH_ARROW}<b>${thName(x.quote.by)}</b><span>${esc(x.quote.text)}</span></button>` : "";
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
-    const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words">${linkHtml(mentionHtml(x.words))}</div>`;
+    const long = !x.sug && x.at !== newest && !x.ask && !x.planLive && isLong(x.words, 280), open = state.longOpen.has(`${c.id}:${x.at}`);
+    const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
     return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
@@ -6255,6 +6268,13 @@ function threadClick(e, c, box, onChange) {
     const ask = talksToClaude(c) && claudeAsk(c);
     if (ask && !(state.thDraft?.id === c.id && state.thDraft.quote)) state.thDraft = { id: c.id, text: state.thDraft?.id === c.id ? state.thDraft.text : "", quote: ask, focus: true };
     thSlide(box, onChange);
+    return true;
+  }
+  if (t.closest(".th-long")) {
+    const k = `${c.id}:${t.closest(".th-msg")?.dataset.at}`;
+    if (state.longOpen.has(k)) state.longOpen.delete(k);
+    else state.longOpen.add(k);
+    onChange();
     return true;
   }
   if (t.closest(".th-more")) {
@@ -7741,6 +7761,14 @@ panelBody.addEventListener("click", async (e) => {
     /* New: picked up with Claude; already yours: only the mark that Claude is on it too */
     const now = await applyUpdate(c.status === "progress" ? { id: c.id, withClaude: true, draftState: "accepted" } : { id: c.id, status: "progress", via: "claude", draftState: "accepted" }, b);
     if (now) sendToClaude($('.panel-copy[data-kind="send"]'), [{ ...now, n: c.n }]); // Claude does what it suggested
+    return;
+  }
+  if (e.target.closest(".hs-step .th-long")) {
+    const k = `${c.id}:${e.target.closest(".hs-step").dataset.at}`;
+    if (state.longOpen.has(k)) state.longOpen.delete(k);
+    else state.longOpen.add(k);
+    histSync(card, c);
+    roomFor(card);
     return;
   }
   if (e.target.closest(".hs-more")) {

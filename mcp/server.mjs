@@ -343,6 +343,8 @@ async function callRound() {
         `Read first: review_show ${full.id}${sess ? ` (session ${sess})` : ""} (the whole record), review_picture then Read the file (what it looks like),`,
         `the code at the source, ${cfg.designSystem ? `and the team's design system (${cfg.designSystem}${/github\.com\//.test(cfg.designSystem) ? "; read it with gh, its TOKENS.md and component-catalog.json first" : ""}): use its tokens and components by name` : "and the project's design system or tokens"}.`,
         `Then answer with review_talk (as "${defaultAs}"), ONE of:`,
+        `(Keep every message short: the point in the first sentence, 3 sentences at most, more only when they ask. Long`,
+        `messages fold after 4 lines in the thread, so what comes first is what people read.)`,
         `- "answer": a short message in the thread. Everyone on this team is a designer: plain design words ("the gap`,
         `  between the title and the icon", "the spacing token space-2"), no code talk unless they ask for files.`,
         `- "ask": you cannot tell what they mean, or your message asks them anything at all. One question, with 2 to 4`,
