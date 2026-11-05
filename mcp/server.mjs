@@ -74,6 +74,7 @@ const TOOLS = [
   { name: "review_preview", description: "After a plan with preview (or a preview call): you made the planned change in the work folder named. The review server commits it, pushes the branch and opens (or updates) a DRAFT pull request, whose live preview link shows on the plan. The plan still waits for a person's Go.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changes" }, session: { type: "string" } }, required: ["id", "title"] } },
   { name: "review_drop", description: "After a Stop, when they chose to throw your work away: the work folder goes, nothing is pushed, and your plan waits for Go again. Says so in the thread.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string" } }, required: ["id"] } },
   { name: "review_checked", description: "After a CHECK brief: you looked at the before and after pictures against your plan. ok true: they match (the pair is marked checked). ok false: say in text what you see that is wrong, one question with options; it goes in the thread as your question. nothing true: nothing on screen changes with this plan (a link, a screen reader label), so the pictures are hidden. missed true: the pictures don't show the part you changed (another tab, scrolled away, a closed drawer), so they are hidden and the thread says to try it live.", inputSchema: { type: "object", properties: { id: { type: "string" }, ok: { type: "boolean" }, nothing: { type: "boolean" }, missed: { type: "boolean" }, text: { type: "string" }, options: { type: "array", items: { type: "string" } }, session: { type: "string" } }, required: ["id", "ok"] } },
+  { name: "review_resnap", description: "After a CHECK brief whose pictures missed the spot: take them again, with the clicks that reach the comment's view from a fresh page load (by their visible words: \"click Internal\", \"click All clients\", \"hover Try again\", \"press Escape\") and, if the spot's own words differ there, target (its visible words). Remembered for this comment's later pictures. Answers with the new pictures' paths: Read them, then review_checked.", inputSchema: { type: "object", properties: { id: { type: "string" }, steps: { type: "array", items: { type: "string" } }, target: { type: "string" }, session: { type: "string" } }, required: ["id", "steps"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
 const line = (c) => `#${c.n} ${c.id} ${c.status} ${kind(c.severity)}${holder(c) ? ` [${holder(c)}${c.withClaude ? " + Claude" : ""}]` : ""}: ${c.text}${c.note?.text ? ` [note: ${c.note.text}]` : ""}`;
@@ -173,6 +174,25 @@ async function call(name, a = {}) {
     throw new Error(`${withNames(c, await people()).call.stoppedBy || "Someone"} pressed Stop: do not ship. Say what you had done with review_talk (kind "ask", options Throw it away / Carry on / Push what's done) and wait for their answer`);
   if (name === "review_ship") return works.get(c.id)?.mode === "preview" ? previewBuild(c, st, a) : ship(c, st, a);
   if (name === "review_preview") return previewBuild(c, st, a);
+  if (name === "review_resnap") {
+    const p = c.pics?.at(-1);
+    if (!p || !c.pr?.preview) throw new Error("No pictures or preview on this comment to retake");
+    const key = `${c.id}:${p.sha}:resnap`;
+    if ((snapFails.get(key) || 0) >= 3) throw new Error("Already retaken 3 times: answer review_checked with missed true");
+    snapFails.set(key, (snapFails.get(key) || 0) + 1);
+    const steps = (Array.isArray(a.steps) ? a.steps : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 8).map((x) => {
+      const m = x.match(/^(click|hover|press)\s+(.+)$/i);
+      if (!m) return { kind: "click", textKey: x.slice(0, 80) };
+      const kind = m[1].toLowerCase();
+      return kind === "press" ? { kind: "key", key: m[2].trim(), code: m[2].trim() } : { kind, textKey: m[2].trim().replace(/^["']|["']$/g, "").slice(0, 80) };
+    });
+    c.snapSteps = steps;
+    if (a.target) c.snapTarget = String(a.target).trim().slice(0, 80);
+    await st.put(c);
+    const r = await picsFor(c.id, a.session || "", new URL(c.pr.preview).origin, p.sha, true);
+    if (!r) throw new Error("The pictures could not be taken again");
+    return `Retaken with ${steps.length} step${steps.length === 1 ? "" : "s"}: the spot was ${r.found.before && r.found.after ? "found on both pages" : `not found on ${!r.found.before && !r.found.after ? "either page" : !r.found.before ? "staging" : "the preview"} (the whole window)`}. Read before ${r.local.before} and after ${r.local.after}, then review_checked.`;
+  }
   if (name === "review_checked") {
     const p = c.pics?.at(-1);
     if (!p) throw new Error("No pictures on this comment to check");
@@ -617,7 +637,7 @@ async function prRound() {
 const snapping = new Set();
 const snapFails = new Map(); // "<id>:<sha>" -> tries that failed: twice and it stops trying
 const PICS_DIR = path.join(os.homedir(), ".review-mode", "pics");
-async function picsFor(id, sess, base, sha) {
+async function picsFor(id, sess, base, sha, quiet = false) {
   snapping.add(id);
   try {
     const st = storeOf(sess);
@@ -628,6 +648,19 @@ async function picsFor(id, sess, base, sha) {
     const msg = c.pr.draft ? (c.history || []).find((h) => h.at === c.pr.planAt && h.via === "claude") : [...(c.history || [])].reverse().find((h) => h.via === "claude" && h.note && (h.pr === c.pr.n || (/^Done\b/.test(h.note) && h.at >= (c.pr.at || 0) - 5000))); // older "Done" messages carry no PR number
     if (!msg) return; // the "Done" message comes with the PR: the next round
     const r = await snap({ before: staging + c.route, after: base + c.route, comment: c, login: cfg.previewLogin });
+    if (quiet) { // a retake Claude asked for: it gets the pictures back in the tool's answer
+      const stem0 = `${c.id}.ba-${sha}`;
+      await st.putFile(`${stem0}-before.jpg`, r.before);
+      await st.putFile(`${stem0}-after.jpg`, r.after);
+      fs.mkdirSync(PICS_DIR, { recursive: true });
+      const loc = { before: path.join(PICS_DIR, `${stem0}-before.jpg`), after: path.join(PICS_DIR, `${stem0}-after.jpg`) };
+      fs.writeFileSync(loc.before, r.before);
+      fs.writeFileSync(loc.after, r.after);
+      const full = await st.get(id);
+      applyChange(full, { pics: { at: msg.at, sha, before: `${stem0}-before.jpg`, after: `${stem0}-after.jpg`, w: r.w, h: r.h, found: r.found, pr: c.pr.n } }, defaultAs);
+      await st.put(full);
+      return { found: r.found, local: loc };
+    }
     const stem = `${c.id}.ba-${sha}`;
     await st.putFile(`${stem}-before.jpg`, r.before);
     await st.putFile(`${stem}-after.jpg`, r.after);
@@ -645,7 +678,9 @@ async function picsFor(id, sess, base, sha) {
       `Your plan: "${msg.note}"`,
       `Read both: before (staging) ${local.before} · after (the preview) ${local.after}${!r.found.before || !r.found.after ? ` (the spot was not found on the ${!r.found.before && !r.found.after ? "two pages" : !r.found.before ? "staging page" : "preview"}: the whole window was taken)` : ""}.`,
       `Then review_checked with id ${id}: ok true when the after shows your plan; nothing true when nothing on screen changes with this plan;`,
-      `missed true when the pictures don't show the part you changed at all (it is on another tab, scrolled away, in a closed drawer);`,
+      `missed true when the pictures don't show the part you changed at all, and you can't say how to get there. If the spot wasn't found`,
+      `or it's in another view (another tab, a customer or "All clients", a drawer), FIRST try review_resnap: the clicks that get there from a`,
+      `fresh page load as a signed-in test user (read the code to know them), by their visible words, and the words of the spot; then check those.`,
       `ok false with text (what you see that is wrong, in design words, one or two sentences) and 2 or 3 options when it doesn't. Then carry on.`,
     ].join("\n"), meta: { kind: "check", comment: String(n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
   } catch (e) {

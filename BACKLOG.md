@@ -245,7 +245,9 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
     and takes the same-sized picture with room around it; the whole window when the element isn't there. The pair sits
     under Claude's plan or Done message (small ones on the closed card); a click opens them big, side by side or Slide.
     Claude gets a CHECK brief and answers `review_checked`: ok, wrong (its question in the thread), nothing to see, or
-    missed (the pictures don't show the change: "try it live"). Not yet: pictures of a state (hover, focus), one pair
+    missed (the pictures don't show the change: "try it live"). When the spot isn't found or sits in another view (the console keeps "All
+    clients" or a customer in memory only), Claude reads the code and gives the clicks to get there (`review_resnap`),
+    remembered for the comment. Not yet: pictures of a state (hover, focus), one pair
     per page when a change touches several, a picked area instead of the whole window for comments with no element.
   - [x] **Go and Stop, who can press them** (Nirav, 2026-11-05): Go is the asker or an approver, Stop the asker,
     whoever said Go or an approver; the hub checks it. Stop before start puts the plan back; mid-change Claude says

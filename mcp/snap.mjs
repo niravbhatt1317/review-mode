@@ -17,7 +17,7 @@ const CHROMES = [
   "/usr/bin/chromium",
 ].filter(Boolean);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const PAD = 48; // room around the element, so it is seen in place
+const PAD = 72; // room around the element, so it is seen in place
 
 /* runs inside the page: find a recorded step's element (its address, else its words among clickable things) */
 const FIND = `(() => {
@@ -42,6 +42,13 @@ const FIND = `(() => {
       const pool = Array.from(document.querySelectorAll("button, a, [role], tr, td, th, li, label, summary, input, p, span, div, h1, h2, h3, h4"));
       const byText = pool.filter((e) => seen(e) && txt(e) === key);
       if (byText.length) return byText.sort((a, b) => a.getBoundingClientRect().width * a.getBoundingClientRect().height - b.getBoundingClientRect().width * b.getBoundingClientRect().height)[0];
+    }
+    if (step.loose && key.length >= 2) {
+      const pool = Array.from(document.querySelectorAll("button, a, [role=option], [role=menuitem], [role=tab], [role=button], [role=row], li, label, summary, tr, td, th, span, div, p, h1, h2, h3, h4"));
+      const area = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height; };
+      const near = pool.filter((e) => seen(e) && (txt(e) === key || txt(e).startsWith(key))).sort((a, b) => area(a) - area(b));
+      const pick = near[0] || pool.filter((e) => seen(e) && txt(e).includes(key)).sort((a, b) => area(a) - area(b))[0];
+      if (pick) return pick.closest("button, a, [role=option], [role=menuitem], [role=tab], [role=button], li, tr, label, summary") || pick;
     }
     return hits[0] || null;
   };
@@ -112,7 +119,8 @@ async function open(t, url, c, login) {
   await wait(2500); // the app draws its data
   await t.ev(FIND);
   const mouse = async (type, x, y) => t.send("Input.dispatchMouseEvent", { type, x, y, button: type === "mouseMoved" ? "none" : "left", clickCount: 1, buttons: type === "mousePressed" ? 1 : 0 });
-  for (const s of (c.trail || []).slice(-12)) {
+  /* Claude's steps first (how to reach the comment's view: "click Internal", "click All clients"), then the trail */
+  for (const s of [...(c.snapSteps || []).map((x) => ({ ...x, loose: true })), ...(c.trail || []).slice(-12)]) {
     const b = await t.ev(`JSON.stringify(window.__snapBox(${JSON.stringify(s)}))`).then((v) => (v ? JSON.parse(v) : null));
     if (s.kind === "key") {
       await t.send("Input.dispatchKeyEvent", { type: "keyDown", key: s.key, code: s.code });
@@ -129,7 +137,8 @@ async function open(t, url, c, login) {
     await wait(700);
   }
   await wait(600);
-  const box = await t.ev(`JSON.stringify(window.__snapBox(${JSON.stringify({ selector: c.selector, textKey: c.textKey })}))`).then((v) => (v ? JSON.parse(v) : null));
+  const box = await t.ev(`JSON.stringify(window.__snapBox(${JSON.stringify({ selector: c.selector, textKey: c.textKey })}))`).then((v) => (v ? JSON.parse(v) : null))
+    || (c.snapTarget ? await t.ev(`JSON.stringify(window.__snapBox(${JSON.stringify({ textKey: c.snapTarget, loose: true })}))`).then((v) => (v ? JSON.parse(v) : null)) : null); // Claude's words for the spot
   return { box, vw, vh };
 }
 export async function snap({ before, after, comment: c, login, timeout = 90_000 }) {
