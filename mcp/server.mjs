@@ -357,6 +357,11 @@ async function callRound() {
         `  layout (moves, wraps, other widths), a shared piece (a common component or style: other pages change too), or`,
         `  when you are not sure it will look right. NO PREVIEW for words only, a value swapped for its exact token with`,
         `  nothing visible changing, non-visual fixes (a link, a click, a screen reader label), or an obvious one-liner.`]),
+        ...(cfg.previews === "never" ? [] : [
+        `  When they ask to SEE it ("show me", "an image", "how will it look", "can I try it"), that is a plan with`,
+        `  preview: true, whatever the rules above say: never answer that you can only write words.`]),
+        `  Explaining a change you would make is always a plan (so it carries Go and Show me live), never an answer.`,
+        `  Asking them anything is always an ask (with quick picks), never an answer.`,
         ...(full.pr?.draft && full.pr.state === "open" ? [`  There is a draft PR #${full.pr.n} from your earlier plan: a new plan with a preview builds on its branch.`] : []),
         `Do not change code or any status from a call. Then carry on with what you were doing.`,
       ].join("\n");
