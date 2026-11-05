@@ -1882,6 +1882,7 @@ root.innerHTML = `
   .th-hint { margin: 5px 0 0 12px; font-size: 10.5px; color: var(--rv-ink-3); }
   .th-box { display: flex; align-items: center; gap: 4px; margin-top: 8px; padding: 3px 3px 3px 12px; border: 1px solid var(--rv-line-2); border-radius: 999px; background: var(--rv-surface); transition: border-color .12s, box-shadow .12s; }
   .th-quoting + .th-box { margin-top: 0; border-radius: 0 0 12px 12px; }
+  .th-box { scroll-margin: 64px 0 24px; } /* scrolled to: room for the quote bar above, a little air below */
   .th-box:focus-within { border-color: hsl(214 98% 44%); box-shadow: 0 0 0 3px hsl(214 98% 44% / .12); }
   .th-in { flex: 1; min-width: 0; height: 24px; border: 0; padding: 0; background: transparent; color: var(--rv-ink); font: 12.5px/1.3 -apple-system, system-ui, sans-serif; outline: none; }
   .th-in::placeholder { color: var(--rv-ink-3); }
@@ -6271,6 +6272,8 @@ function threadClick(e, c, box, onChange) {
     const ask = claudeAsk(c);
     state.thDraft = { id: c.id, text: was, quote: ask && ask.at === at ? ask : { at, by: m.dataset.by === "Claude" ? "Claude" : m.dataset.by, text }, focus: true };
     onChange();
+    /* the box may be far below a long thread: it slides into view, so you see where your reply goes (Nirav, 2026-11-05) */
+    requestAnimationFrame(() => box.querySelector(".th-box")?.scrollIntoView({ block: "nearest", behavior: "smooth" })); // the box, its quote bar above it
     return true;
   }
   if (t.closest(".th-mx")) {
@@ -6284,11 +6287,21 @@ function threadClick(e, c, box, onChange) {
   }
   const qt = t.closest(".th-quote");
   if (qt) {
-    const to = [...box.querySelectorAll(".th-msg")].find((m) => m.dataset.at === qt.dataset.at);
-    if (to) {
-      to.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    /* to the quoted message (Nirav, 2026-11-05): up the thread, smoothly, and lit for a moment; folded under "Show
+       earlier replies", the thread unfolds first */
+    const find = () => [...box.querySelectorAll(".th-msg")].find((m) => m.dataset.at === qt.dataset.at);
+    const light = (to) => {
+      to.scrollIntoView({ block: "center", behavior: "smooth" });
       to.classList.add("glow");
-      setTimeout(() => to.classList.remove("glow"), 1200);
+      setTimeout(() => to.classList.remove("glow"), 1600);
+    };
+    const to = find();
+    const folded = !to && !state.thAll.has(c.id) && threadOf(c).some((x) => x.msg && String(x.at) === qt.dataset.at);
+    if (to) light(to);
+    else if (folded) {
+      state.thAll.add(c.id);
+      onChange();
+      requestAnimationFrame(() => { const now = find(); if (now) light(now); });
     } else if (box.classList.contains("card") && hasHist(c)) { // it quotes a move's reason: that lives in the history now
       const fresh = !state.histOpen.has(c.id);
       state.histOpen.add(c.id);
