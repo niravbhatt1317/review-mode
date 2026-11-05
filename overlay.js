@@ -3427,7 +3427,7 @@ $(".note-drop").addEventListener("click", (e) => {
   const to = !e.target.closest(".note-x") && g.steps.map((x) => state.comments.find((c) => c.id === x.c.id)).find(Boolean);
   if (to) {
     noticeDrop(false);
-    showInList(to);
+    showInList(to, noticeAt(g.steps, to.id));
   } else updateNotices();
 });
 window.addEventListener("pointerdown", (e) => {
@@ -3616,9 +3616,10 @@ island.addEventListener("click", () => {
   const one = ev?.ids?.length === 1 ? state.comments.find((c) => c.id === ev.ids[0]) : null;
   if (one) {
     const m = noticeMemo();
-    for (const g of noticesNow()) for (const { c, s } of g.steps) if (c.id === one.id) m.gone.add(`${c.id}:${s.at}`);
+    const steps = noticesNow().flatMap((g) => g.steps);
+    for (const { c, s } of steps) if (c.id === one.id) m.gone.add(`${c.id}:${s.at}`);
     noticeSave(m);
-    showInList(one);
+    showInList(one, noticeAt(steps, one.id));
     updateNotices();
     return;
   }
@@ -4550,12 +4551,16 @@ pinsEl.addEventListener("pointerup", (e) => {
   if (c) showInList(c);
 });
 /* the list, opened and scrolled to one comment; a scope or tag that would hide it is widened first */
-async function showInList(c) {
+/* A NOTICE OPENS ITS MESSAGE (Nirav, 2026-11-05: it only went to the card): the newest step of that notice with words
+   (a reply, Claude's answer, ask or plan) opens the thread, scrolled to that message and lit for a moment */
+const noticeAt = (steps, id) => Math.max(0, ...steps.filter(({ c, s }) => c.id === id && (s.note || s.kind === "reply")).map(({ s }) => s.at || 0)) || null;
+async function showInList(c, at = null) {
   if (state.filter.size && !state.filter.has(c.severity)) state.filter.clear();
   const sc = state.scope;
   const group = (c.module && c.module.group) || moduleOf(c.route).group || "Other";
   if ((sc.kind === "route" && sc.route !== (c.route || "").split("?")[0]) || (sc.kind === "group" && sc.group !== group)) state.scope = { kind: "all" }; // "here" follows the page and needs no widening
-  state.spot = { id: c.id, until: performance.now() + 2400 };
+  state.spot = { id: c.id, until: performance.now() + 2400, ...(at ? { at: String(at) } : {}) };
+  if (at) state.thOpen.add(c.id);
   if (state.status?.size && !state.status.has(c.status)) state.status = new Set(); // the card must be in the filter
   tip.classList.remove("on");
   delete tip.dataset.id;
@@ -7230,11 +7235,27 @@ function renderPanel() {
       /* centred on every render in that moment (the list is rebuilt once the comments reload), and again as the
          pictures above it load and push it down; the user's own scroll ends it */
       const spot = state.spot;
-      card.scrollIntoView({ block: "center" });
+      /* from a notice: its message, unfolded if it sits under Show earlier, lit once */
+      const msgOf = () => (spot.at ? card.querySelector(`.th-msg[data-at="${spot.at}"]`) : null);
+      if (spot.at && !msgOf() && card.querySelector(".th-more") && !state.thAll.has(spot.id)) {
+        state.thAll.add(spot.id);
+        const c = state.comments.find((x) => x.id === spot.id);
+        if (c) threadSync(card, c);
+      }
+      const to = msgOf() || card;
+      to.scrollIntoView({ block: "center" });
+      if (to !== card) {
+        spot.litAt ||= performance.now(); // lit for 1.8 s, through the redraws as the list reloads
+        const left = 1800 - (performance.now() - spot.litAt);
+        if (left > 0) {
+          to.classList.add("glow");
+          setTimeout(() => to.classList.remove("glow"), left);
+        }
+      }
       for (const img of panelBody.querySelectorAll(".card-shot"))
         if (!img.complete)
           img.addEventListener("load", () => {
-            if (state.spot === spot && performance.now() < spot.until && card.isConnected) card.scrollIntoView({ block: "center" });
+            if (state.spot === spot && performance.now() < spot.until && card.isConnected) (msgOf() || card).scrollIntoView({ block: "center" });
           }, { once: true });
     }
   }
