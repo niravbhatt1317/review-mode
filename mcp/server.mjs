@@ -359,7 +359,12 @@ async function callRound() {
         `  nothing visible changing, non-visual fixes (a link, a click, a screen reader label), or an obvious one-liner.`]),
         ...(cfg.previews === "never" ? [] : [
         `  When they ask to SEE it ("show me", "an image", "how will it look", "can I try it"), that is a plan with`,
-        `  preview: true, whatever the rules above say: never answer that you can only write words.`]),
+        `  preview: true, whatever the rules above say: never answer that you can only write words.`,
+        `  Show a change through that live preview (anyone on the team can open it), not a Claude artifact. Only when`,
+        `  they ask for an artifact or a mock by name, make one: write the page in React from the design system's own`,
+        `  components (import them from its package, never look-alikes), run npx --no review-mode mock <page.jsx>, publish`,
+        `  the HTML it makes, and put its link in an answer, saying it is private: only`,
+        `  ${defaultAs} (whose Claude made it) can open it until they press Share on it in claude.ai.`]),
         `  Explaining a change you would make is always a plan (so it carries Go and Show me live), never an answer.`,
         `  Asking them anything is always an ask (with quick picks), never an answer.`,
         ...(full.pr?.draft && full.pr.state === "open" ? [`  There is a draft PR #${full.pr.n} from your earlier plan: a new plan with a preview builds on its branch.`] : []),
@@ -432,6 +437,7 @@ async function ship(c, st, a) {
   }
   run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
   w.pushed = true;
+  prSoon();
   if (c.pr?.draft && c.pr.branch === w.branch && c.pr.state === "open") {
     run("gh", ["pr", "ready", String(c.pr.n), "--repo", gh.repo]);
     run("gh", ["pr", "edit", String(c.pr.n), "--repo", gh.repo, "--title", title]);
@@ -452,7 +458,7 @@ async function ship(c, st, a) {
 async function finishGo(c, st, prN, url, summary, by) {
   const fresh = await st.get(c.id);
   applyChange(fresh, { pr: { n: prN, draft: false } }, by);
-  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview link shows here when it is built (a few minutes)"}.`, via: "claude", prN }, by);
+  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview link shows here in about a minute"}.`, via: "claude", prN }, by);
   if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, by);
   await st.put(fresh);
   return `PR ${url} is ready; #${(await numbered(c.id, st))?.n} is For approval. A person merges it.`;
@@ -474,6 +480,7 @@ async function previewBuild(c, st, a) {
   }
   run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
   w.pushed = true;
+  prSoon();
   let prN = c.pr?.draft && c.pr.branch === w.branch && c.pr.state === "open" ? c.pr.n : 0, url = prN ? c.pr.url : "";
   if (!prN) {
     const body = [`A live preview of Claude's plan for review comment #${n} (${c.pageTitle || c.route || "the page"}): "${c.text}"`, ``, `**The plan:** ${w.plan}`, ``, `Draft until someone says Go in the review thread. Claude never merges.`, ``, `🤖 Generated with [Claude Code](https://claude.com/claude-code)`].join("\n");
@@ -483,10 +490,10 @@ async function previewBuild(c, st, a) {
   dropWork(c.id);
   const fresh = await st.get(c.id);
   applyChange(fresh, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open", draft: true, for: w.by, ...(fresh.pr?.n === prN ? {} : {}) } }, w.by);
-  if (fresh.pr) Object.assign(fresh.pr, { planAt: fresh.call?.planAt || null, preview: null, previewAt: null }); // a new build: its link comes again
+  if (fresh.pr) Object.assign(fresh.pr, { planAt: fresh.call?.planAt || null, preview: null, previewAt: null, builtAt: Date.now() }); // a new build: its link comes again
   if (fresh.call?.kind === "preview") applyChange(fresh, { callState: "planned" }, w.by);
   await st.put(fresh);
-  return `Draft PR ${url}: its live preview shows on the plan in a few minutes. The plan waits for Go.`;
+  return `Draft PR ${url}: its live preview shows on the plan in about a minute. The plan waits for Go.`;
 }
 /* a session that stopped mid-work leaves its folder: at start, work folders untouched for 2 h with nothing changed go */
 function sweepWork() {
@@ -503,10 +510,13 @@ function sweepWork() {
   }
 }
 setTimeout(sweepWork, 15_000).unref?.();
-/* what GitHub says about each open PR, every 45 s: the preview link (the Preview workflow's comment), merged, closed */
-const PR_EVERY = 45_000;
+/* what GitHub says about each open PR: the preview link (the Preview workflow's comment), merged, closed. Every 45 s,
+   and every 10 s while a preview is building (it takes about a minute; Nirav, 2026-11-05: no waiting on our side) */
+const PR_EVERY = 45_000, PR_BUILDING = 10_000;
+let prBuilding = false;
 async function prRound() {
   if (!ready || !cfg.github) return;
+  let building = false;
   for (const sess of ["", ...localTests()]) {
     try {
       const st = storeOf(sess);
@@ -524,6 +534,7 @@ async function prRound() {
         const base = note?.match(/https:\/\/[^\s|)]+/)?.[0];
         const preview = base ? `${base.replace(/\/+$/, "")}${c.route && c.route.startsWith("/") ? c.route : ""}` : c.pr.preview;
         const state = info.state === "MERGED" ? "merged" : info.state === "CLOSED" ? "closed" : "open";
+        if (state === "open" && !note && Date.now() - (c.pr.builtAt || c.pr.at || 0) < 10 * 60_000) building = true; // never fast for a PR with no preview
         if (preview === c.pr.preview && state === c.pr.state && !!info.isDraft === !!c.pr.draft) continue;
         const full = await st.get(c.id);
         applyChange(full, { pr: { n: c.pr.n, ...(preview ? { preview } : {}), state, draft: !!info.isDraft } }, defaultAs);
@@ -531,8 +542,16 @@ async function prRound() {
       }
     } catch {}
   }
+  prBuilding = building;
 }
-setInterval(prRound, PR_EVERY).unref?.();
+/* a building preview right after a push: the next round soon, not in 45 s */
+const prSoon = () => { prBuilding = true; };
+(function prLoop() {
+  setTimeout(async () => {
+    await prRound().catch(() => {});
+    prLoop();
+  }, prBuilding ? PR_BUILDING : PR_EVERY).unref?.();
+})();
 
 /* ---------- MCP over stdio ---------- */
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");

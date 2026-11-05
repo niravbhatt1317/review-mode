@@ -5935,7 +5935,7 @@ function callBusyHtml(c) {
   const k = c.call;
   /* Go: Claude is making the change in its own copy of the code; the PR comes back here */
   if (k.kind === "go") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is making the change…" : "Sent to Claude…"}</span><ul><li class="${k.state === "reading" ? "ok" : "now"}">A fresh copy of the code</li><li class="now">The change, as planned</li><li class="now">The PR and its preview link</li></ul></div></div>`;
-  if (k.kind === "preview") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is building a live preview…" : "Sent to Claude…"}</span><ul><li class="${k.state === "reading" ? "ok" : "now"}">A fresh copy of the code</li><li class="now">The change, as planned</li><li class="now">A draft PR and its preview (a few minutes)</li></ul></div></div>`;
+  if (k.kind === "preview") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is building a live preview…" : "Sent to Claude…"}</span><ul><li class="${k.state === "reading" ? "ok" : "now"}">A fresh copy of the code</li><li class="now">The change, as planned</li><li class="now">A draft PR and its preview (about 2 min)</li></ul></div></div>`;
   /* a new draft for you: one line, no reading list (the thread is read already) */
   if (k.kind === "draft" && (k.state === "reading" || Date.now() - (k.at || 0) <= CALL_WAIT_MS)) return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.redo === "shorter" || /^Make your draft shorter/.test(k.words || "") ? "Claude is writing a shorter one…" : "Claude is writing a new draft…"}</span></div></div>`;
   if (k.state === "waiting" && Date.now() - (k.at || 0) > CALL_WAIT_MS) return `<div class="th-reading idle">${CLAUDE_AV()}<span>No Claude session has picked it up yet</span><button type="button" class="th-pick th-connect">Connect Claude</button></div>`;
@@ -5950,7 +5950,7 @@ function planButtons(c, x) {
   const ext = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>';
   const built = c.pr?.draft && c.pr.state === "open" && c.pr.planAt === x.planAt;
   const live = built && c.pr.preview ? `<a class="th-pick th-try" href="${esc(c.pr.preview)}" target="_blank" rel="noopener">Try it live${ext}</a>`
-    : x.previewPlan || built ? `<span class="th-pick th-try building">Preview is building…</span>`
+    : x.previewPlan || built ? `<span class="th-pick th-try building">Preview in about ${built ? "1 min" : "2 min"}</span>`
     : `<button type="button" class="th-pick th-plan-live">Show me live</button>`;
   return `<div class="th-picks"><button type="button" class="th-pick pri th-plan-go">Go</button>${live}<button type="button" class="th-pick th-plan-change">Change the plan</button></div>`;
 }
@@ -5961,7 +5961,7 @@ function prRowHtml(c) {
   if (!p?.n || (p.draft && c.call?.state === "planned")) return ""; // a draft's preview is on the plan's buttons
   const st = p.state || "open";
   const ext = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>';
-  const pv = st !== "open" ? "" : p.preview ? `<a class="th-pv" href="${esc(p.preview)}" target="_blank" rel="noopener">${p.draft ? "Try it live" : "Open preview"}${ext}</a>` : `<span class="th-pv building">Preview is building…</span>`;
+  const pv = st !== "open" ? "" : p.preview ? `<a class="th-pv" href="${esc(p.preview)}" target="_blank" rel="noopener">${p.draft ? "Try it live" : "Open preview"}${ext}</a>` : `<span class="th-pv building">Preview in about 1 min</span>`;
   return `<div class="th-pr">${pv}<a class="th-prn" data-s="${esc(st)}" href="${esc(p.url)}" target="_blank" rel="noopener"><i></i>${p.draft ? "Draft PR" : "PR"} #${p.n} · ${st === "merged" ? "merged" : st === "closed" ? "closed" : "open"}${ext}</a></div>`;
 }
 /* a reply Claude drafted for one person: only they see it, to use as their own */

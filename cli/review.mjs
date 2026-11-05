@@ -13,6 +13,8 @@
 //   npx --no review-mode reply <id> <text…>         answer a question (or follow it up); --claude marks Claude's answer
 //   npx --no review-mode resolve <id>               close a question (the asker's Got it)
 //   npx --no review-mode pull <id> [<id>…]          the full pictures to .review/sessions/<project>/export/
+//   npx --no review-mode mock <page.jsx> [out.html] a mock made of the project's real design system components, as ONE
+//                                         self-contained page (for a Claude artifact)
 // The project and the hub come from review.config.json (REVIEW_PROJECT overrides the project).
 import fs from "node:fs";
 import path from "node:path";
@@ -158,6 +160,53 @@ if (cmd === "claude") {
   /* the MCP server Claude Code starts from .mcp.json (tools, and "Send to Claude" when channels are on) */
   await import("../mcp/server.mjs");
   await new Promise(() => {}); // it runs until Claude Code closes it; nothing below is for it
+} else if (cmd === "mock") {
+  /* MOCKS FROM THE REAL DESIGN SYSTEM (Nirav, 2026-11-05: Claude's artifact had none of the design system's components).
+     A Claude artifact is one standalone page, so the page is bundled with the project's own React and design system
+     package (its components and styles.css) into a single HTML file, nothing loaded from elsewhere. */
+  const [entry, outArg] = args;
+  if (!entry || !fs.existsSync(entry)) {
+    console.error("usage: npx --no review-mode mock <page.jsx> [out.html]   (the page imports from the design system package)");
+    process.exit(1);
+  }
+  const root = cfg.root;
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  const dsName = String(cfg.designSystem || "").replace(/\/+$/, "").split("/").pop();
+  const ds = Object.keys(deps).find((d) => dsName && d.split("/").pop() === dsName);
+  const nm = path.join(root, "node_modules");
+  const { createRequire } = await import("node:module");
+  const req = createRequire(path.join(root, "package.json"));
+  const { build } = await import(req.resolve("vite"));
+  const tmp = fs.mkdtempSync(path.join((await import("node:os")).tmpdir(), "review-mock-"));
+  const abs = path.resolve(entry);
+  const dsDir = ds ? path.dirname(req.resolve(`${ds}/package.json`)) : null;
+  fs.writeFileSync(path.join(tmp, "index.html"), `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module" src="${abs}"></script></body></html>`);
+  await build({
+    root: tmp,
+    logLevel: "error",
+    configFile: false,
+    resolve: {
+      alias: {
+        react: path.join(nm, "react"),
+        "react-dom": path.join(nm, "react-dom"),
+        ...(ds ? { [`${ds}/styles.css`]: path.join(dsDir, "dist", "styles.css"), [ds]: dsDir } : {}),
+      },
+      dedupe: ["react", "react-dom"],
+    },
+    esbuild: { jsx: "automatic", jsxImportSource: path.join(nm, "react") },
+    server: { fs: { allow: [root, tmp, path.dirname(abs)] } },
+    build: { outDir: path.join(tmp, "out"), assetsInlineLimit: 1e9, cssCodeSplit: false, modulePreload: false, rollupOptions: { output: Number(req("vite/package.json").version.split(".")[0]) >= 8 ? { codeSplitting: false } : { inlineDynamicImports: true } } }, // one script
+  });
+  const assets = path.join(tmp, "out", "assets");
+  const read = (ext) => fs.readdirSync(assets).filter((f) => f.endsWith(ext)).map((f) => fs.readFileSync(path.join(assets, f), "utf8")).join("\n");
+  const title = path.basename(entry).replace(/\.[jt]sx?$/, "").replace(/[-_]+/g, " ");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${read(".css")}</style></head><body><div id="root"></div><script type="module">${read(".js").replace(/<\/script/gi, "<\\/script")}</script></body></html>`;
+  const out = path.resolve(outArg || abs.replace(/\.[jt]sx?$/, ".html"));
+  fs.writeFileSync(out, html);
+  fs.rmSync(tmp, { recursive: true, force: true });
+  console.log(`${out} (${Math.round(html.length / 1024)} KB)${ds ? `, made with ${ds}` : ", no design system package found in package.json"}`);
+  process.exit(0);
 } else if (cmd === "init") {
   const root = cfg.root;
   const pkgPath = path.join(root, "package.json");

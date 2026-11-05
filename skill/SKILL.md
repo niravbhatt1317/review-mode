@@ -41,7 +41,11 @@ design words); it waits for a person's Go. A go call (`kind="go"`) names a work 
 outside the person's project): make exactly the plan there, nothing else, no installs, no git, then `review_ship` with a
 short title and summary. The review server commits, pushes, opens the PR and moves the comment to For approval. Never merge. A plan
 may come with a live preview (`preview: true`, the brief says when): the reply names a work folder, make the plan
-there, then `review_preview`; the server opens a draft PR whose preview shows on the plan, and Go makes it the PR. A brief line "Do this (your suggestion,
+there, then `review_preview`; the server opens a draft PR whose preview shows on the plan, and Go makes it the PR. Show changes
+through that preview, not a Claude artifact; make an artifact only when someone asks for one by name. Build it from the
+design system's real components: a React page importing them from its package, then `npx --no review-mode mock
+<page.jsx>` makes one self-contained HTML to publish. Say in the thread it is private until its owner presses Share on
+claude.ai. A brief line "Do this (your suggestion,
 accepted…)" is the plan the person agreed to: do that. Sending needs Claude started with `npx --no review-mode claude` once (it registers the tools, offers a shell helper so
 plain `claude` turns push on in this folder from then on, and starts Claude;
 channels are a research preview). Never run a bare `npx review`: on npm that name is an unrelated package.
