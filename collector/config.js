@@ -41,6 +41,7 @@ export function loadConfig(from = process.cwd()) {
     port: Number(own.port) || 4178,
     designSystem: [local.designSystem, own.designSystem, hub.designSystem].find((x) => typeof x === "string" && x.trim())?.trim() || null, // the team's design system (hub.json; a project may name its own), for Claude's briefs
     github: (() => { const g = local.github || own.github || hub.github; return g?.repo ? { repo: String(g.repo), base: String(g.base || "main") } : null; })(), // where Claude opens its PRs (step 2)
+    previews: (() => { const v = local.previews || own.previews || hub.previews; return v === "always" || v === "never" ? v : "auto"; })(), // a live preview with a plan: Claude decides (auto), always, never
     drafts: own.drafts !== false && process.env.REVIEW_DRAFTS !== "0", // Claude drafts first (mcp/server.mjs); "drafts": false turns it off
     hub: hub.url && hub.anonKey ? { url: String(hub.url).replace(/\/+$/, ""), key: hub.anonKey } : null,
     people,

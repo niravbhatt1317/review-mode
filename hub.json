@@ -6,6 +6,7 @@
   "approvers": ["niravbhatt1317"],
   "designSystem": "github.com/niravbhatt1317/nextgen-design-system",
   "github": { "repo": "niravbhatt1317/next-gen", "base": "staging" },
+  "previews": "auto",
   "people": {
     "niravbhatt1317": "Nirav",
     "kisu1311": "Kishan",

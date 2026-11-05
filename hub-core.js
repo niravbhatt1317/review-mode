@@ -119,7 +119,12 @@ export function applyChange(c, body, who) {
   const mentions = Array.isArray(body.mentions) ? [...new Set(body.mentions.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 80)))].slice(0, 10) : [];
   const ment = mentions.length ? { mentions } : {};
   /* the call's own moves, none of them a step in the history */
-  if (typeof body.callClaude === "string" && body.callClaude.trim()) c.call = newCall(who, body.callClaude, Date.now(), body.callKind ? { kind: String(body.callKind).slice(0, 20) } : {});
+  if (typeof body.callClaude === "string" && body.callClaude.trim()) {
+    /* "Show me live" on a plan (Nirav, 2026-11-05): the plan stays the plan, Claude builds its preview, then it waits for Go */
+    const keep = body.callKind === "preview" && c.call?.planAt ? { planAt: c.call.planAt } : {};
+    c.call = newCall(who, body.callClaude, Date.now(), { ...(body.callKind ? { kind: String(body.callKind).slice(0, 20) } : {}), ...keep });
+  }
+  if (body.callState === "planned" && c.call?.planAt) Object.assign(c.call, { state: "planned", builtAt: Date.now() });
   if (body.callState === "reading" && callOpen(c.call)) Object.assign(c.call, { state: "reading", claimedAt: Date.now() });
   if (typeof body.claudeRead === "string" && c.call && !c.call.read?.includes(body.claudeRead)) c.call.read = [...(c.call.read || []), body.claudeRead.slice(0, 20)];
   if (body.claudeDraft && typeof body.claudeDraft.text === "string" && body.claudeDraft.text.trim() && c.call)
@@ -129,7 +134,7 @@ export function applyChange(c, body, who) {
   if (body.pr && typeof body.pr === "object") {
     const n = Number(body.pr.n);
     const had = c.pr?.n === n ? c.pr : null;
-    if (Number.isFinite(n) && n > 0) c.pr = { ...(c.pr?.n === n ? c.pr : {}), n, url: String(body.pr.url || c.pr?.url || "").slice(0, 300), ...(body.pr.branch ? { branch: String(body.pr.branch).slice(0, 120) } : {}), ...(body.pr.repo ? { repo: String(body.pr.repo).slice(0, 120) } : {}), ...(body.pr.preview ? { preview: String(body.pr.preview).slice(0, 300) } : {}), ...(body.pr.state ? { state: String(body.pr.state).slice(0, 20) } : {}), ...(body.pr.for ? { for: String(body.pr.for).slice(0, 80) } : had?.for ? { for: had.for } : {}), at: c.pr?.n === n ? c.pr.at : Date.now() };
+    if (Number.isFinite(n) && n > 0) c.pr = { ...(c.pr?.n === n ? c.pr : {}), n, url: String(body.pr.url || c.pr?.url || "").slice(0, 300), ...(body.pr.branch ? { branch: String(body.pr.branch).slice(0, 120) } : {}), ...(body.pr.repo ? { repo: String(body.pr.repo).slice(0, 120) } : {}), ...(body.pr.preview ? { preview: String(body.pr.preview).slice(0, 300) } : {}), ...(body.pr.state ? { state: String(body.pr.state).slice(0, 20) } : {}), ...(typeof body.pr.draft === "boolean" ? { draft: body.pr.draft } : {}), ...(body.pr.for ? { for: String(body.pr.for).slice(0, 80) } : had?.for ? { for: had.for } : {}), at: c.pr?.n === n ? c.pr.at : Date.now() };
     if (c.pr?.n === n && c.pr.preview && !had?.preview) c.pr.previewAt = Date.now();
     if (c.pr?.n === n && c.pr.state === "merged" && had?.state !== "merged") c.pr.mergedAt = Date.now();
     if (had?.previewAt && !c.pr.previewAt) c.pr.previewAt = had.previewAt;
@@ -207,7 +212,7 @@ export function applyChange(c, body, who) {
     else if (!claude && !go && (mentions.includes("Claude") || c.call?.state === "asked" || qt.quote?.by === "Claude")) c.call = newCall(who, reply, at, { step: at, ...(c.call?.state === "asked" ? { answers: c.call.askAt } : {}) });
     /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
     if (!isQ) {
-      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true } : {}), ...(go ? { go: true } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...ment, ...qt });
+      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true, ...(body.preview === true ? { preview: true } : {}) } : {}), ...(go ? { go: true } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...ment, ...qt });
       /* Go on a New comment picks it up: the person who said go is on it, with Claude */
       if (go && from === "open") {
         Object.assign(c, { status: "progress", assignee: who, pickedAt: at, withClaude: true });

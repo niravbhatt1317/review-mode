@@ -68,8 +68,9 @@ const TOOLS = [
   { name: "review_reply", description: "Answer a question (one or two plain sentences, from the code it points at). If something should change, say so; the asker can make it a fix.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, ...asProp }, required: ["id", "text"] } },
   { name: "review_picture", description: "Save a comment's picture (the element boxed, its number on it) and return the file path to Read.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" } }, required: ["id"] } },
   { name: "review_suggest", description: "Claude drafts first: leave a short suggestion on a new comment, for a person to accept or ignore. For a fix, what you would change and where (file and line), in one or two plain sentences; for a question, the answer. When you cannot tell what is meant, or the code shows no clear change, set unsure and say in one sentence what you would need to know, instead of guessing. Draft only: change no code and no status.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, unsure: { type: "boolean", description: "True when the text is a question back to the person, not a suggestion" }, ...asProp }, required: ["id", "text"] } },
-  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan"] }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, ...asProp }, required: ["id", "kind", "text"] } },
+  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan"] }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, ...asProp }, required: ["id", "kind", "text"] } },
   { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
+  { name: "review_preview", description: "After a plan with preview (or a preview call): you made the planned change in the work folder named. The review server commits it, pushes the branch and opens (or updates) a DRAFT pull request, whose live preview link shows on the plan. The plan still waits for a person's Go.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changes" }, session: { type: "string" } }, required: ["id", "title"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
 const line = (c) => `#${c.n} ${c.id} ${c.status} ${kind(c.severity)}${holder(c) ? ` [${holder(c)}${c.withClaude ? " + Claude" : ""}]` : ""}: ${c.text}${c.note?.text ? ` [note: ${c.note.text}]` : ""}`;
@@ -141,8 +142,22 @@ async function call(name, a = {}) {
     if (!words) throw new Error("Say something: text is empty");
     if (!c.call || c.call.state === "done") return `#${(await numbered(c.id, st))?.n}: nobody is waiting on Claude here, nothing sent`;
     if (a.kind === "draft") applyChange(c, { claudeDraft: { text: words } }, who);
-    else applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true } : {}) }, who);
-    if (works.has(c.id)) dropWork(c.id); // a go that ends in words: the work folder goes
+    else {
+      const live = a.kind === "plan" && cfg.previews !== "never" && (a.preview === true || cfg.previews === "always");
+      applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true, ...(live ? { preview: true } : {}) } : {}) }, who);
+      if (works.has(c.id)) dropWork(c.id); // a go that ends in words: the work folder goes
+      if (live) {
+        await st.put(c);
+        const n = (await numbered(c.id, st))?.n;
+        try {
+          const w = prepareWork(c, n, draftBranch(c));
+          works.set(c.id, { ...w, plan: words, by: c.call.by, sess: a.session || "", mode: "preview" });
+          return `Plan left on #${n}. Now build its live preview: make exactly the planned change in ${w.app} (a fresh copy, branch ${w.branch}; never ${ROOT}; no installs, no git), then review_preview with id ${c.id} and a short PR title. The plan waits for a person's Go meanwhile.`;
+        } catch (e) {
+          return `Plan left on #${n}, but the live preview could not start: ${String(e.message || e).split("\n")[0]}. The plan still works with Go.`;
+        }
+      }
+    }
     await st.put(c);
     called.delete(callKey(c));
     heard = true;
@@ -151,6 +166,7 @@ async function call(name, a = {}) {
     return a.kind === "draft" ? `Draft left on #${n}, only ${withNames(c, ppl).call?.draft?.for || "they"} sees it` : a.kind === "ask" ? `Asked on #${n}; their reply comes back as a new call` : `Answered on #${n}`;
   }
   if (name === "review_ship") return ship(c, st, a);
+  if (name === "review_preview") return previewBuild(c, st, a);
   if (name === "review_ack") {
     const d = deliveries.get(a.delivery_id);
     if (d) d.acked = Date.now();
@@ -248,10 +264,43 @@ async function callRound() {
       called.add(callKey(full));
       const named = withNames(full, ppl);
       const k = named.call;
+      /* Go on the plan whose preview is built: the draft becomes the PR, nothing to redo */
+      if (k.kind === "go" && full.pr?.draft && full.pr.state === "open" && full.pr.planAt && full.pr.planAt === full.call.planAt && !works.has(full.id)) {
+        try {
+          run("gh", ["pr", "ready", String(full.pr.n), "--repo", full.pr.repo || cfg.github.repo]);
+          await finishGo(full, st, full.pr.n, full.pr.url, (k.words || "").replace(/^plan:\s*/i, ""), full.call.by);
+        } catch (e) {
+          applyChange(full, { reply: `I couldn't mark PR #${full.pr.n} ready: ${String(e.message || e).split("\n")[0]}.`, via: "claude" }, full.call.by);
+          await st.put(full);
+        }
+        continue;
+      }
+      if ((k.kind === "go" || k.kind === "preview") && works.has(full.id)) continue; // Claude is building it already: review_preview ships or shows it
+      if (k.kind === "preview") {
+        const p = (named.history || []).find((h) => h.at === full.call.planAt && h.via === "claude");
+        let w;
+        try {
+          w = { ...prepareWork(full, c.n, draftBranch(full)), plan: p?.note || k.words, by: full.call.by, sess, mode: "preview" };
+        } catch (e) {
+          applyChange(full, { callState: "planned" }, full.call.by);
+          applyChange(full, { reply: `I couldn't build a live preview: ${String(e.message || e).split("\n")[0]}. The plan still works with Go.`, via: "claude" }, full.call.by);
+          await st.put(full);
+          continue;
+        }
+        works.set(full.id, w);
+        send({ method: "notifications/claude/channel", params: { content: [
+          `LIVE PREVIEW for review comment #${c.n} (${full.id})${sess ? `, TEST SESSION ${sess} (pass session "${sess}" to the review tools)` : ""}: ${k.by} asked to see your plan live:`,
+          `  "${w.plan}"`,
+          ``,
+          `Make exactly that change in the work folder: ${w.app} (branch ${w.branch}). Edit files ONLY there, never in ${ROOT}.`,
+          `No installs, no dev server, no git. Then review_preview with id ${full.id} and a short PR title: a draft PR, its preview shows on the plan.`,
+        ].join("\n"), meta: { kind: "preview", comment: String(c.n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
+        continue;
+      }
       if (k.kind === "go") {
         let w;
         try {
-          w = { ...prepareWork(full, c.n), plan: k.words, by: full.call.by, sess };
+          w = { ...prepareWork(full, c.n, draftBranch(full)), plan: k.words, by: full.call.by, sess };
         } catch (e) {
           applyChange(full, { reply: `I couldn't start on it: ${String(e.message || e).split("\n")[0]}. Nothing was changed.`, via: "claude" }, full.call.by);
           await st.put(full);
@@ -264,6 +313,7 @@ async function callRound() {
           ``,
           `Comment by ${named.by}: "${full.text}" · Page: ${full.pageTitle || full.route || "?"} · Code: ${full.source?.file ? `${full.source.file}${full.source.line ? `:${full.source.line}` : ""}` : "find it from the page"}`,
           ``,
+          ...(draftBranch(full) ? [`The branch already holds the live preview you built for an earlier plan: bring it to this plan.`] : []),
           `Make exactly that change, nothing more, in the work folder: ${w.app}`,
           `(a fresh copy of ${cfg.github.repo} ${cfg.github.base}, branch ${w.branch}). Edit files ONLY there, never in ${ROOT}.`,
           `Use the design system's tokens and components${cfg.designSystem ? ` (${cfg.designSystem})` : ""}. No installs, no dev server, no git: the review server does the git.`,
@@ -300,6 +350,14 @@ async function callRound() {
         `- "draft": they asked for help writing a reply. The words they would send, in their voice.`,
         `- "plan": they want something changed. What you will change and where, in design words, one short paragraph; it`,
         `  waits for a person's Go (every change does), then comes back to you to make.`,
+        ...(cfg.previews === "never" ? [] : cfg.previews === "always" ? [`  Every plan comes with a live preview (the team's setting): you will be told where to make it.`] : [
+        `  Decide on a live preview (preview: true) and say which in the plan, with why ("Live preview: this changes every`,
+        `  banner's hover" / "No preview: only the label text changes"). PREVIEW when it changes how something looks (colour,`,
+        `  spacing, size, type, borders, shadows), how it behaves (hover, press, focus, motion, open and close, loading),`,
+        `  layout (moves, wraps, other widths), a shared piece (a common component or style: other pages change too), or`,
+        `  when you are not sure it will look right. NO PREVIEW for words only, a value swapped for its exact token with`,
+        `  nothing visible changing, non-visual fixes (a link, a click, a screen reader label), or an obvious one-liner.`]),
+        ...(full.pr?.draft && full.pr.state === "open" ? [`  There is a draft PR #${full.pr.n} from your earlier plan: a new plan with a preview builds on its branch.`] : []),
         `Do not change code or any status from a call. Then carry on with what you were doing.`,
       ].join("\n");
       send({ method: "notifications/claude/channel", params: { content: text, meta: { kind: "call", comment: String(c.n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
@@ -326,17 +384,19 @@ const WORK_DIR = path.join(os.homedir(), ".review-mode", "work");
 const works = new Map(); // comment id -> { branch, dir, app, remote, plan, by, sess }
 const remoteFor = (repo) => run("git", ["-C", GIT_ROOT, "remote", "-v"]).split("\n").find((l) => new RegExp(`github\\.com[/:]${repo.replace(/[.]/g, "\\.")}(\\.git)?\\s`).test(l))?.split(/\s+/)[0];
 const slug = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 28).replace(/-+$/, "");
-function prepareWork(c, n) {
+/* the open draft PR's branch, for a new plan or a Go to build on */
+const draftBranch = (c) => (c.pr?.draft && c.pr.state === "open" && c.pr.branch ? c.pr.branch : null);
+function prepareWork(c, n, from = null) {
   const gh = cfg.github;
   if (!gh) throw new Error("no GitHub repo is set for this project (github in hub.json)");
   if (!GIT_ROOT) throw new Error("the project is not in git");
   const remote = remoteFor(gh.repo);
   if (!remote) throw new Error(`no git remote of this project points at ${gh.repo}`);
-  run("git", ["-C", GIT_ROOT, "fetch", remote, gh.base]);
-  const branch = `claude/review-${n}-${slug(c.text) || "fix"}-${Date.now().toString(36).slice(-4)}`;
+  const branch = from || `claude/review-${n}-${slug(c.text) || "fix"}-${Date.now().toString(36).slice(-4)}`;
+  run("git", ["-C", GIT_ROOT, "fetch", remote, from || gh.base]);
   const dir = path.join(WORK_DIR, branch.replace(/\//g, "__"));
   fs.mkdirSync(WORK_DIR, { recursive: true });
-  run("git", ["-C", GIT_ROOT, "worktree", "add", "--no-track", "-b", branch, dir, `${remote}/${gh.base}`]);
+  run("git", ["-C", GIT_ROOT, "worktree", "add", "--no-track", "-B", branch, dir, `${remote}/${from || gh.base}`]);
   return { branch, dir, app: path.join(dir, APP_REL), remote };
 }
 function dropWork(id) {
@@ -367,18 +427,77 @@ async function ship(c, st, a) {
   }
   run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
   w.pushed = true;
+  if (c.pr?.draft && c.pr.branch === w.branch && c.pr.state === "open") {
+    run("gh", ["pr", "ready", String(c.pr.n), "--repo", gh.repo]);
+    run("gh", ["pr", "edit", String(c.pr.n), "--repo", gh.repo, "--title", title]);
+    dropWork(c.id);
+    return finishGo(c, st, c.pr.n, c.pr.url, summary, w.by);
+  }
   const page = c.pageTitle || c.route || "the page";
   const body = [`From review comment #${n} on ${page}${w.sess ? ` (test session ${w.sess})` : ""}: "${c.text}"`, ``, `**The plan, Go by ${goer}:** ${w.plan}`, ``, `**What changed:** ${summary}`, ``, `Made by Claude from the review thread. Claude never merges: the comment is approved in Review mode, and a person merges this.`, ``, `🤖 Generated with [Claude Code](https://claude.com/claude-code)`].join("\n");
   const url = run("gh", ["pr", "create", "--repo", gh.repo, "--base", gh.base, "--head", w.branch, "--title", title, "--body", body]).split("\n").pop();
   const prN = Number(url.match(/\/pull\/(\d+)/)?.[1]);
   dropWork(c.id);
   const fresh = await st.get(c.id);
-  applyChange(fresh, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open", for: w.by } }, w.by);
-  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}; the live preview link shows here when it is built (a few minutes).`, via: "claude", prN }, w.by);
-  if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, w.by);
+  applyChange(fresh, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open", draft: false, for: w.by } }, w.by);
   await st.put(fresh);
-  return `Opened ${url}; #${n} is For approval. A person merges it.`;
+  return finishGo(fresh, st, prN, url, summary, w.by);
 }
+/* the work is in a ready PR: Claude says so, and the comment waits for approval */
+async function finishGo(c, st, prN, url, summary, by) {
+  const fresh = await st.get(c.id);
+  applyChange(fresh, { pr: { n: prN, draft: false } }, by);
+  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview link shows here when it is built (a few minutes)"}.`, via: "claude", prN }, by);
+  if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, by);
+  await st.put(fresh);
+  return `PR ${url} is ready; #${(await numbered(c.id, st))?.n} is For approval. A person merges it.`;
+}
+/* a live preview before Go (Nirav, 2026-11-05): the planned change on a DRAFT PR, so its preview is the real page */
+async function previewBuild(c, st, a) {
+  const w = works.get(c.id);
+  if (!w) throw new Error("No work folder for this comment: a preview comes from a plan with preview, or Show me live");
+  if (c.call?.kind === "go") return ship(c, st, { title: a.title, summary: w.plan }); // Go came while you built it: it ships
+  const gh = cfg.github;
+  if (!run("git", ["-C", w.dir, "status", "--porcelain"])) throw new Error(`Nothing changed in ${w.app}: make the change there first`);
+  const n = (await numbered(c.id, st))?.n;
+  const title = String(a.title || "").trim().slice(0, 120) || `Review #${n}`;
+  run("git", ["-C", w.dir, "add", "-A"]);
+  run("git", ["-C", w.dir, "commit", "-q", "-m", `${title}\n\nReview comment #${n}: ${c.text}\nThe plan, before Go: ${w.plan}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`]);
+  if (process.env.REVIEW_SHIP_DRY === "1") {
+    dropWork(c.id);
+    return `DRY RUN: committed on ${w.branch} for a preview, not pushed`;
+  }
+  run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
+  w.pushed = true;
+  let prN = c.pr?.draft && c.pr.branch === w.branch && c.pr.state === "open" ? c.pr.n : 0, url = prN ? c.pr.url : "";
+  if (!prN) {
+    const body = [`A live preview of Claude's plan for review comment #${n} (${c.pageTitle || c.route || "the page"}): "${c.text}"`, ``, `**The plan:** ${w.plan}`, ``, `Draft until someone says Go in the review thread. Claude never merges.`, ``, `🤖 Generated with [Claude Code](https://claude.com/claude-code)`].join("\n");
+    url = run("gh", ["pr", "create", "--draft", "--repo", gh.repo, "--base", gh.base, "--head", w.branch, "--title", title, "--body", body]).split("\n").pop();
+    prN = Number(url.match(/\/pull\/(\d+)/)?.[1]);
+  }
+  dropWork(c.id);
+  const fresh = await st.get(c.id);
+  applyChange(fresh, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open", draft: true, for: w.by, ...(fresh.pr?.n === prN ? {} : {}) } }, w.by);
+  if (fresh.pr) Object.assign(fresh.pr, { planAt: fresh.call?.planAt || null, preview: null, previewAt: null }); // a new build: its link comes again
+  if (fresh.call?.kind === "preview") applyChange(fresh, { callState: "planned" }, w.by);
+  await st.put(fresh);
+  return `Draft PR ${url}: its live preview shows on the plan in a few minutes. The plan waits for Go.`;
+}
+/* a session that stopped mid-work leaves its folder: at start, work folders untouched for 2 h with nothing changed go */
+function sweepWork() {
+  if (!GIT_ROOT || !fs.existsSync(WORK_DIR)) return;
+  for (const name of fs.readdirSync(WORK_DIR)) {
+    const dir = path.join(WORK_DIR, name);
+    try {
+      if (Date.now() - fs.statSync(dir).mtimeMs < 2 * 3600_000 || run("git", ["-C", dir, "status", "--porcelain"])) continue;
+      const branch = run("git", ["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"]);
+      const pushed = (() => { try { return !!run("git", ["-C", dir, "ls-remote", "--heads", run("git", ["-C", dir, "config", `branch.${branch}.remote`]) || "origin", branch]); } catch { return false; } })();
+      run("git", ["-C", GIT_ROOT, "worktree", "remove", dir]);
+      if (!pushed && /^claude\//.test(branch)) run("git", ["-C", GIT_ROOT, "branch", "-D", branch]);
+    } catch {}
+  }
+}
+setTimeout(sweepWork, 15_000).unref?.();
 /* what GitHub says about each open PR, every 45 s: the preview link (the Preview workflow's comment), merged, closed */
 const PR_EVERY = 45_000;
 async function prRound() {
@@ -390,17 +509,19 @@ async function prRound() {
         const repo = c.pr.repo || cfg.github.repo;
         let info;
         try {
-          info = JSON.parse(run("gh", ["pr", "view", String(c.pr.n), "--repo", repo, "--json", "state,comments"], { timeout: 30_000 }));
+          info = JSON.parse(run("gh", ["pr", "view", String(c.pr.n), "--repo", repo, "--json", "state,comments,isDraft,headRefOid"], { timeout: 30_000 }));
         } catch {
           continue;
         }
-        const note = (info.comments || []).map((x) => x.body || "").find((b) => b.includes("<!-- preview-link -->") && /Preview is ready/i.test(b));
+        /* ready only when the Preview workflow's comment names the branch's latest commit: a rebuilt draft waits for its own */
+        const head = String(info.headRefOid || "").slice(0, 7);
+        const note = (info.comments || []).map((x) => x.body || "").find((b) => b.includes("<!-- preview-link -->") && /Preview is ready/i.test(b) && (!head || b.includes(head)));
         const base = note?.match(/https:\/\/[^\s|)]+/)?.[0];
         const preview = base ? `${base.replace(/\/+$/, "")}${c.route && c.route.startsWith("/") ? c.route : ""}` : c.pr.preview;
         const state = info.state === "MERGED" ? "merged" : info.state === "CLOSED" ? "closed" : "open";
-        if (preview === c.pr.preview && state === c.pr.state) continue;
+        if (preview === c.pr.preview && state === c.pr.state && !!info.isDraft === !!c.pr.draft) continue;
         const full = await st.get(c.id);
-        applyChange(full, { pr: { n: c.pr.n, ...(preview ? { preview } : {}), state } }, defaultAs);
+        applyChange(full, { pr: { n: c.pr.n, ...(preview ? { preview } : {}), state, draft: !!info.isDraft } }, defaultAs);
         await st.put(full);
       }
     } catch {}

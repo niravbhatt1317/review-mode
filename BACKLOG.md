@@ -233,6 +233,13 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
     workflow's link (to the comment's page) and merged or closed. The card shows Open preview and PR #N. Claude never
     merges. REVIEW_SHIP_DRY=1 stops before the push. Still to come: before and after pictures, follow-ups on the same
     PR, Undo, Stop (steps 3 and 4).
+  - [x] **A live preview before Go** (Nirav, 2026-11-05, done the same day): Claude decides per plan, by written rules
+    (how it looks or behaves, layout, a shared piece, or not sure: preview; words, an exact token swap, non-visual,
+    an obvious one-liner: no preview) and says which and why. A preview plan's change goes on a DRAFT PR; the plan shows
+    Preview is building, then Try it live (the preview of the branch's latest commit). Go on it marks the draft ready
+    and the comment For approval, nothing redone; Go while it builds ships it when built. A text plan has Show me live.
+    Change the plan builds on the draft's branch. "previews" in hub.json: auto (default), always, never. Work folders a
+    stopped session left (2 h old, unchanged) are cleared at start.
 
 ## Ideas from Claude (2026-10-26, to pick from)
 
