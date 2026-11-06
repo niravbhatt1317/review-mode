@@ -219,7 +219,7 @@ async function call(name, a = {}) {
           try { run("git", ["-C", w.dir, "checkout", `${w.remote}/${gh.base}`, "--", rel]); } catch { run("git", ["-C", w.dir, "rm", "-q", "--", rel]); } // new on the branch: it goes
         }
         if (!run("git", ["-C", w.dir, "status", "--porcelain"])) throw new Error("Those files are already as they are on staging");
-        run("git", ["-C", w.dir, "commit", "-q", "-am", `Undo part of review #${n}: ${files.join(", ")} back as on ${gh.base}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`]);
+        run("git", ["-C", w.dir, "commit", "-q", "-am", `Undo part of review #${n}: ${files.join(", ")} back as on ${gh.base}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`], asGitHub());
         if (!dry) run("git", ["-C", w.dir, "push", "-q", w.remote, w.branch]);
       } finally {
         dropWork(c.id);
@@ -258,7 +258,7 @@ async function call(name, a = {}) {
       try {
         run("git", ["-C", GIT_ROOT, "fetch", w.remote, sha]);
         const parents = run("git", ["-C", w.dir, "rev-list", "--parents", "-n", "1", sha]).split(" ").length - 1;
-        run("git", ["-C", w.dir, "revert", "--no-edit", ...(parents > 1 ? ["-m", "1"] : []), sha]);
+        run("git", ["-C", w.dir, "revert", "--no-edit", ...(parents > 1 ? ["-m", "1"] : []), sha], asGitHub());
         if (dry) return `DRY RUN: PR #${old} reverted on ${w.branch}, not pushed`;
         run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
         works.get(c.id).pushed = true;
@@ -598,6 +598,21 @@ function mayFollow(c, who) {
    project (Claude never edits the person's own folder), and when Claude is done (review_ship) it commits, pushes and
    opens the PR. REVIEW_SHIP_DRY=1 stops before the push, for trying it out. */
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 180_000, ...opts }).trim();
+/* GITHUB WORK UNDER THE GITHUB ACCOUNT (Nirav, 2026-11-06: "github is my personal id always"): a folder may also push
+   elsewhere with another email (Azure, the work one), so the commits Claude pushes to GitHub carry the signed-in gh
+   account's own address, whatever the folder says */
+let ghIdent = null;
+const asGitHub = () => {
+  if (!ghIdent)
+    try {
+      const [id, login] = run("gh", ["api", "user", "-q", '"\\(.id) \\(.login)"'], { timeout: 30_000 }).split(" ");
+      const email = `${id}+${login}@users.noreply.github.com`;
+      ghIdent = { GIT_AUTHOR_NAME: login, GIT_AUTHOR_EMAIL: email, GIT_COMMITTER_NAME: login, GIT_COMMITTER_EMAIL: email };
+    } catch {
+      return {}; // gh not signed in: the folder's own name, as before
+    }
+  return { env: { ...process.env, ...ghIdent } };
+};
 const GIT_ROOT = (() => {
   try {
     return run("git", ["-C", ROOT, "rev-parse", "--show-toplevel"]);
@@ -652,7 +667,7 @@ async function ship(c, st, a) {
   const title = String(a.title || "").trim().slice(0, 120) || `Review #${n}`;
   const summary = String(a.summary || "").trim().slice(0, 600);
   run("git", ["-C", w.dir, "add", "-A"]);
-  run("git", ["-C", w.dir, "commit", "-q", "-m", `${title}\n\nReview comment #${n}: ${c.text}\nGo by ${goer} to the plan: ${w.plan}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`]);
+  run("git", ["-C", w.dir, "commit", "-q", "-m", `${title}\n\nReview comment #${n}: ${c.text}\nGo by ${goer} to the plan: ${w.plan}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`], asGitHub());
   if (process.env.REVIEW_SHIP_DRY === "1") {
     const files = run("git", ["-C", w.dir, "show", "--stat", "--format=", "HEAD"]);
     dropWork(c.id);
@@ -705,7 +720,7 @@ async function previewBuild(c, st, a) {
   const n = (await numbered(c.id, st))?.n;
   const title = String(a.title || "").trim().slice(0, 120) || `Review #${n}`;
   run("git", ["-C", w.dir, "add", "-A"]);
-  run("git", ["-C", w.dir, "commit", "-q", "-m", `${title}\n\nReview comment #${n}: ${c.text}\nThe plan, before Go: ${w.plan}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`]);
+  run("git", ["-C", w.dir, "commit", "-q", "-m", `${title}\n\nReview comment #${n}: ${c.text}\nThe plan, before Go: ${w.plan}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`], asGitHub());
   if (process.env.REVIEW_SHIP_DRY === "1") {
     dropWork(c.id);
     return `DRY RUN: committed on ${w.branch} for a preview, not pushed`;
