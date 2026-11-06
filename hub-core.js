@@ -180,6 +180,8 @@ export function applyChange(c, body, who, ctx = {}) {
   if (body.pr && typeof body.pr === "object") {
     const n = Number(body.pr.n);
     const had = c.pr?.n === n ? c.pr : null;
+    /* a new PR beside one still open: the open one is remembered, so an undo can close both */
+    if (Number.isFinite(n) && n > 0 && c.pr?.n && c.pr.n !== n && (c.pr.state || "open") === "open") c.prsOpen = [...new Set([...(c.prsOpen || []), c.pr.n])].slice(-5);
     if (Number.isFinite(n) && n > 0) c.pr = { ...(c.pr?.n === n ? c.pr : {}), n, url: String(body.pr.url || c.pr?.url || "").slice(0, 300), ...(body.pr.branch ? { branch: String(body.pr.branch).slice(0, 120) } : {}), ...(body.pr.repo ? { repo: String(body.pr.repo).slice(0, 120) } : {}), ...(body.pr.preview ? { preview: String(body.pr.preview).slice(0, 300) } : {}), ...(body.pr.state ? { state: String(body.pr.state).slice(0, 20) } : {}), ...(typeof body.pr.draft === "boolean" ? { draft: body.pr.draft } : {}), ...(body.pr.for ? { for: String(body.pr.for).slice(0, 80) } : had?.for ? { for: had.for } : {}), at: c.pr?.n === n ? c.pr.at : Date.now() };
     if (c.pr?.n === n && c.pr.preview && !had?.preview) c.pr.previewAt = Date.now();
     if (c.pr?.n === n && c.pr.state === "merged" && had?.state !== "merged") c.pr.mergedAt = Date.now();

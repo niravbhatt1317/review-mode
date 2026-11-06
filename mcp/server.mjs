@@ -175,7 +175,7 @@ async function call(name, a = {}) {
     if (a.kind === "draft") applyChange(c, { claudeDraft: { text: words } }, who);
     else {
       const stopped = c.call.state === "stopped" || (works.has(c.id) && !["go", "preview"].includes(c.call.kind)); // after a Stop: the folder waits for their answer
-      const live = a.kind === "plan" && cfg.previews !== "never" && (a.preview === true || cfg.previews === "always");
+      const live = a.kind === "plan" && cfg.previews !== "never" && (a.preview === true || cfg.previews === "always") && !readyPr(c); // a ready PR open: Go updates it, and its own preview shows the result
       applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true, ...(live ? { preview: true } : {}) } : {}) }, who);
       if (works.has(c.id) && !stopped) dropWork(c.id); // a go that ends in words: the work folder goes
       if (live) {
@@ -232,8 +232,18 @@ async function call(name, a = {}) {
     if (c.pr.state === "open") {
       if (dry) return `DRY RUN: PR #${c.pr.n} would be closed and #${n} go back to In progress`;
       run("gh", ["pr", "close", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--delete-branch", "--comment", `Undone from review comment #${n}.`]);
+      /* any earlier PR of this comment still open goes too */
+      const also = [];
+      for (const m of c.prsOpen || []) {
+        try {
+          if (JSON.parse(run("gh", ["pr", "view", String(m), "--repo", c.pr.repo || gh.repo, "--json", "state"])).state !== "OPEN") continue;
+          run("gh", ["pr", "close", String(m), "--repo", c.pr.repo || gh.repo, "--delete-branch", "--comment", `Undone from review comment #${n}.`]);
+          also.push(m);
+        } catch {}
+      }
+      c.prsOpen = [];
       applyChange(c, { pr: { n: c.pr.n, state: "closed" } }, asker);
-      say(`Undone: ${text} I closed PR #${c.pr.n}, so nothing reaches staging.`);
+      say(`Undone: ${text} I closed PR #${c.pr.n}${also.length ? ` and #${also.join(", #")}` : ""}, so nothing reaches staging.`);
       if (c.status === "approval") applyChange(c, { status: "progress", via: "claude" }, asker);
       await st.put(c);
       return dry ? "DRY RUN: the PR would be closed" : `PR #${c.pr.n} closed; #${n} is In progress again.`;
@@ -448,7 +458,7 @@ async function callRound() {
       if (k.kind === "go" && full.pr?.draft && full.pr.state === "open" && full.pr.planAt && full.pr.planAt === full.call.planAt && !works.has(full.id)) {
         try {
           run("gh", ["pr", "ready", String(full.pr.n), "--repo", full.pr.repo || cfg.github.repo]);
-          await finishGo(full, st, full.pr.n, full.pr.url, (k.words || "").replace(/^plan:\s*/i, ""), full.call.by);
+          await finishGo(full, st, full.pr.n, full.pr.url, "", full.call.by); // the plan is above: "Done, as planned"
         } catch (e) {
           applyChange(full, { reply: `I couldn't mark PR #${full.pr.n} ready: ${String(e.message || e).split("\n")[0]}.`, via: "claude" }, full.call.by);
           await st.put(full);
@@ -456,6 +466,12 @@ async function callRound() {
         continue;
       }
       if ((k.kind === "go" || k.kind === "preview") && works.has(full.id)) continue; // Claude is building it already: review_preview ships or shows it
+      if (k.kind === "preview" && readyPr(full)) {
+        applyChange(full, { callState: "planned" }, full.call.by);
+        applyChange(full, { reply: `PR #${full.pr.n} is open for this comment, so this plan goes onto it with Go, and its preview shows the result.`, via: "claude" }, full.call.by);
+        await st.put(full);
+        continue;
+      }
       if (k.kind === "preview") {
         const p = (named.history || []).find((h) => h.at === full.call.planAt && h.via === "claude");
         let w;
@@ -480,7 +496,7 @@ async function callRound() {
       if (k.kind === "go") {
         let w;
         try {
-          w = { ...prepareWork(full, c.n, draftBranch(full)), plan: k.words, by: full.call.by, sess };
+          w = readyPr(full) ? { ...prepareWork(full, c.n, full.pr.branch), plan: k.words, by: full.call.asker || full.call.by, sess, mode: "followup" } : { ...prepareWork(full, c.n, draftBranch(full)), plan: k.words, by: full.call.by, sess };
         } catch (e) {
           applyChange(full, { reply: `I couldn't start on it: ${String(e.message || e).split("\n")[0]}. Nothing was changed.`, via: "claude" }, full.call.by);
           await st.put(full);
@@ -507,7 +523,7 @@ async function callRound() {
       const src = full.source?.file ? `${full.source.file}${full.source.line ? `:${full.source.line}` : ""}${full.source.component ? ` (${full.source.component})` : ""}` : "none recorded: find it from the page and the element";
       const talk = (named.history || []).filter((h) => h.kind === "reply").map((h) => `  ${h.via === "claude" ? "Claude" : h.by} (${ago(h.at)}): ${h.note}${h.ask ? "  [your question]" : ""}`);
       const asked = k.answers ? (named.history || []).find((h) => h.at === k.answers && h.via === "claude") : null; // the question this reply answers
-      const what = k.sentBack ? `${k.by} sent your change back: "${k.words}". It's about your PR #${full.pr?.n}: if the reason says how, change it on the same PR (kind "change"); if not, plan or ask.`
+      const what = k.sentBack ? `${k.by} sent your change back: "${k.words}". It's about your open PR #${full.pr?.n}. A reason that names the change ("keep it outline, just bolder text", "make it 12") IS the go: kind "change" on the same PR, no plan. Plan only when it doesn't say what to do ("it feels off"); that plan's Go also updates PR #${full.pr?.n}.`
         : k.kind === "assigned" ? `${k.by} handed this comment to you. Work out what it needs and tell them (an answer, or what you would change and where).`
         : k.kind === "draft" ? `${k.by} asked for help writing a reply: "${k.words}". Draft it (kind "draft"), only they see it.`
         : asked ? `${k.by} answered your question ("${asked.note}"): "${k.words}". Carry on from there.`
@@ -594,6 +610,9 @@ const WORK_DIR = path.join(os.homedir(), ".review-mode", "work");
 const works = new Map(); // comment id -> { branch, dir, app, remote, plan, by, sess }
 const remoteFor = (repo) => run("git", ["-C", GIT_ROOT, "remote", "-v"]).split("\n").find((l) => new RegExp(`github\\.com[/:]${repo.replace(/[.]/g, "\\.")}(\\.git)?\\s`).test(l))?.split(/\s+/)[0];
 const slug = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 28).replace(/-+$/, "");
+/* Claude's open, ready PR on a comment: a new plan's Go updates it, never a second PR (Nirav, 2026-11-06: a send-back
+   plan opened PR #8 beside the open #5) */
+const readyPr = (c) => (c.pr?.n && c.pr.state === "open" && !c.pr.draft && c.pr.branch ? c.pr : null);
 /* the open draft PR's branch, for a new plan or a Go to build on */
 const draftBranch = (c) => (c.pr?.draft && c.pr.state === "open" && c.pr.branch ? c.pr.branch : null);
 function prepareWork(c, n, from = null) {
@@ -670,7 +689,7 @@ async function ship(c, st, a) {
 async function finishGo(c, st, prN, url, summary, by) {
   const fresh = await st.get(c.id);
   applyChange(fresh, { pr: { n: prN, draft: false } }, by);
-  applyChange(fresh, { reply: `Done: ${summary} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview and before and after pictures show here in a minute or two"}.`, via: "claude", prN }, by);
+  applyChange(fresh, { reply: `${summary ? `Done: ${summary}` : "Done, as planned."} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview and before and after pictures show here in a minute or two"}.`, via: "claude", prN }, by);
   if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, by);
   await st.put(fresh);
   return `PR ${url} is ready; #${(await numbered(c.id, st))?.n} is For approval. A person merges it.`;

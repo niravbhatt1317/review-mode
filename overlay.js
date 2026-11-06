@@ -6091,6 +6091,7 @@ function planButtons(c, x) {
   const built = c.pr?.draft && c.pr.state === "open" && c.pr.planAt === x.planAt;
   const live = built && c.pr.preview ? `<a class="th-pick th-try" href="${esc(c.pr.preview)}" target="_blank" rel="noopener">Try it live${ext}</a>`
     : x.previewPlan || built ? `<span class="th-pick th-try building">Preview in about ${built ? "1 min" : "2 min"}</span>`
+    : c.pr?.n && c.pr.state === "open" && !c.pr.draft ? "" // a ready PR is open: Go updates it, its own preview shows the result
     : `<button type="button" class="th-pick th-plan-live">Show me live</button>`;
   const go = canGo(c) ? `<button type="button" class="th-pick pri th-plan-go">Go</button>` : `<button type="button" class="th-pick pri th-plan-go" disabled title="${esc(onlyWho([c.call?.by], "say Go"))}">Go</button>`;
   return `<div class="th-picks">${go}${live}<button type="button" class="th-pick th-plan-change">Change the plan</button></div>${canGo(c) ? "" : `<div class="th-only">${esc(onlyWho([c.call?.by], "say Go"))}. You can still reply.</div>`}`;
