@@ -249,6 +249,11 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
     clients" or a customer in memory only), Claude reads the code and gives the clicks to get there (`review_resnap`),
     remembered for the comment. Not yet: pictures of a state (hover, focus), one pair
     per page when a change touches several, a picked area instead of the whole window for comments with no element.
+  - [x] **Step 4, after the PR** (Nirav, 2026-11-06): on a comment with Claude's open PR, a clear instruction from the
+    person the PR is for or an approver ("make it 16", a send-back reason that says how) is the go: Claude changes the
+    same PR's branch (kind "change", "Claude is updating PR #N", Stop works), new before and after follow. A send-back
+    with a reason goes to Claude. "Undo": the whole PR closed (back to In progress), a part put back as on staging on the
+    same PR, or after a merge a PR that takes it back out (`review_undo`). Anyone else's follow-up gets a plan and a Go.
   - [x] **Go and Stop, who can press them** (Nirav, 2026-11-05): Go is the asker or an approver, Stop the asker,
     whoever said Go or an approver; the hub checks it. Stop before start puts the plan back; mid-change Claude says
     what it had done and asks Throw it away / Carry on / Push what's done (`review_drop`). Notices for both.

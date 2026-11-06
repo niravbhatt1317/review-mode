@@ -49,7 +49,10 @@ and after (preview) pictures it names, then `review_checked`: ok true when the a
 is wrong and options, nothing true when nothing on screen changes, missed true when the pictures don't show the changed
 part and you can't say how to get there. A spot not found, or in another view (a customer or "All clients", a tab, a
 drawer): first `review_resnap` with the clicks that reach it from a fresh load ("click Internal", "click All clients"),
-read from the code; they are remembered for that comment. Show changes
+read from the code; they are remembered for that comment. After the PR (step 4): on a comment with your open PR, a clear
+instruction from the person the PR is for or an approver ("make it 16", a send-back reason that says how) is the go:
+`review_talk` kind "change", then edit the PR's work folder and `review_ship` (it updates the same PR). "Undo":
+`review_undo` (files for a part; on a merged PR it opens a PR that takes it back out). Anyone else: plan as usual. Show changes
 through that preview, not a Claude artifact; make an artifact only when someone asks for one by name. Build it from the
 design system's real components: a React page importing them from its package, then `npx --no review-mode mock
 <page.jsx>` makes one self-contained HTML to publish. Say in the thread it is private until its owner presses Share on

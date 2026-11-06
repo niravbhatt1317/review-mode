@@ -69,12 +69,13 @@ const TOOLS = [
   { name: "review_reply", description: "Answer a question (one or two plain sentences, from the code it points at). If something should change, say so; the asker can make it a fix.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, ...asProp }, required: ["id", "text"] } },
   { name: "review_picture", description: "Save a comment's picture (the element boxed, its number on it) and return the file path to Read.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" } }, required: ["id"] } },
   { name: "review_suggest", description: "Claude drafts first: leave a short suggestion on a new comment, for a person to accept or ignore. For a fix, what you would change and where (file and line), in one or two plain sentences; for a question, the answer. When you cannot tell what is meant, or the code shows no clear change, set unsure and say in one sentence what you would need to know, instead of guessing. Draft only: change no code and no status.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, unsure: { type: "boolean", description: "True when the text is a question back to the person, not a suggestion" }, ...asProp }, required: ["id", "text"] } },
-  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan"] }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, ...asProp }, required: ["id", "kind", "text"] } },
+  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan", "change"], description: "change: only on a comment with an open PR, when they told you exactly what to change (\"make it 16\"): that is the go; the text is one short line of what you'll do, and the reply names the PR's work folder" }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, ...asProp }, required: ["id", "kind", "text"] } },
   { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
   { name: "review_preview", description: "After a plan with preview (or a preview call): you made the planned change in the work folder named. The review server commits it, pushes the branch and opens (or updates) a DRAFT pull request, whose live preview link shows on the plan. The plan still waits for a person's Go.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changes" }, session: { type: "string" } }, required: ["id", "title"] } },
   { name: "review_drop", description: "After a Stop, when they chose to throw your work away: the work folder goes, nothing is pushed, and your plan waits for Go again. Says so in the thread.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string" } }, required: ["id"] } },
   { name: "review_checked", description: "After a CHECK brief: you looked at the before and after pictures against your plan. ok true: they match (the pair is marked checked). ok false: say in text what you see that is wrong, one question with options; it goes in the thread as your question. nothing true: nothing on screen changes with this plan (a link, a screen reader label), so the pictures are hidden. missed true: the pictures don't show the part you changed (another tab, scrolled away, a closed drawer), so they are hidden and the thread says to try it live.", inputSchema: { type: "object", properties: { id: { type: "string" }, ok: { type: "boolean" }, nothing: { type: "boolean" }, missed: { type: "boolean" }, text: { type: "string" }, options: { type: "array", items: { type: "string" } }, session: { type: "string" } }, required: ["id", "ok"] } },
   { name: "review_resnap", description: "After a CHECK brief whose pictures missed the spot: take them again, with the clicks that reach the comment's view from a fresh page load (by their visible words: \"click Internal\", \"click All clients\", \"hover Try again\", \"press Escape\") and, if the spot's own words differ there, target (its visible words). Remembered for this comment's later pictures. Answers with the new pictures' paths: Read them, then review_checked.", inputSchema: { type: "object", properties: { id: { type: "string" }, steps: { type: "array", items: { type: "string" } }, target: { type: "string" }, session: { type: "string" } }, required: ["id", "steps"] } },
+  { name: "review_undo", description: "When the asker or an approver says undo (a clear instruction is the go). On an open PR: no files closes the PR (nothing reaches staging, the comment goes back to In progress); files puts those back as they are on staging, on the same PR (\"undo the Agents part\"). On a merged PR: opens a PR that takes the whole change back out. text: one short line for the thread, in design words.", inputSchema: { type: "object", properties: { id: { type: "string" }, files: { type: "array", items: { type: "string" }, description: "Paths in the app (src/...) to put back as on staging; leave out to undo all of it" }, text: { type: "string" }, session: { type: "string" } }, required: ["id", "text"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
 const line = (c) => `#${c.n} ${c.id} ${c.status} ${kind(c.severity)}${holder(c) ? ` [${holder(c)}${c.withClaude ? " + Claude" : ""}]` : ""}: ${c.text}${c.note?.text ? ` [note: ${c.note.text}]` : ""}`;
@@ -145,6 +146,30 @@ async function call(name, a = {}) {
     const words = String(a.text || "").trim();
     if (!words) throw new Error("Say something: text is empty");
     if (!c.call || c.call.state === "done") return `#${(await numbered(c.id, st))?.n}: nobody is waiting on Claude here, nothing sent`;
+    /* STEP 4, A FOLLOW-UP ON THE SAME PR (Nirav, 2026-11-04: a clear instruction is the go): "make it 16" from the asker
+       or an approver changes the open PR's branch, no new plan, no new PR; anyone else's needs a plan and a Go */
+    if (a.kind === "change") {
+      if (!(c.pr?.n && c.pr.state === "open" && !c.pr.draft && c.pr.branch)) throw new Error('kind "change" is only for a comment with an open, ready PR: use kind "plan"');
+      const asker = c.call.by;
+      if (!mayFollow(c, asker)) throw new Error(`${withNames(c, ppl).call.by} can't give the go on their own: use kind "plan", and the person the PR is for or an approver says Go`);
+      applyChange(c, { reply: words, via: "claude", prN: c.pr.n }, who);
+      const step = c.history.at(-1);
+      c.call = { state: "reading", kind: "go", followup: true, at: step.at, by: asker, asker, claimedAt: Date.now(), words, read: [], step: step.at };
+      const n = (await numbered(c.id, st))?.n;
+      let w;
+      try {
+        w = prepareWork(c, n, c.pr.branch);
+      } catch (e) {
+        c.call.state = "done";
+        await st.put(c);
+        throw new Error(`Could not open PR #${c.pr.n}'s branch: ${String(e.message || e).split("\n")[0]}`);
+      }
+      works.set(c.id, { ...w, plan: words, by: asker, sess: a.session || "", mode: "followup" });
+      await st.put(c);
+      called.delete(callKey(c));
+      heard = true;
+      return `On PR #${c.pr.n}'s branch: make exactly that, nothing more, in ${w.app} (never ${ROOT}; no installs, no git). Then review_ship with id ${c.id}, a short title and a one-sentence summary: it updates the same PR.`;
+    }
     if (a.kind === "draft") applyChange(c, { claudeDraft: { text: words } }, who);
     else {
       const stopped = c.call.state === "stopped" || (works.has(c.id) && !["go", "preview"].includes(c.call.kind)); // after a Stop: the folder waits for their answer
@@ -174,6 +199,71 @@ async function call(name, a = {}) {
     throw new Error(`${withNames(c, await people()).call.stoppedBy || "Someone"} pressed Stop: do not ship. Say what you had done with review_talk (kind "ask", options Throw it away / Carry on / Push what's done) and wait for their answer`);
   if (name === "review_ship") return works.get(c.id)?.mode === "preview" ? previewBuild(c, st, a) : ship(c, st, a);
   if (name === "review_preview") return previewBuild(c, st, a);
+  if (name === "review_undo") {
+    if (!c.pr?.n) throw new Error("This comment has no PR of Claude's to undo");
+    const asker = c.call?.by || who;
+    if (!mayFollow(c, asker)) throw new Error(`${withNames(c, ppl).call?.by || asker} can't undo on their own: ask the person the PR is for, or an approver`);
+    const gh = cfg.github, n = (await numbered(c.id, st))?.n, text = String(a.text || "").trim().slice(0, 300);
+    const dry = process.env.REVIEW_SHIP_DRY === "1";
+    const files = (Array.isArray(a.files) ? a.files : []).map((f) => String(f).trim().replace(/^\/+/, "")).filter(Boolean).slice(0, 20);
+    const say = (words, extra = {}) => applyChange(c, { reply: words, via: "claude", ...extra }, asker);
+    if (c.pr.state === "open" && files.length) {
+      const w = prepareWork(c, n, c.pr.branch);
+      works.set(c.id, { ...w, mode: "undo" }); // so dropWork clears the folder
+      try {
+        run("git", ["-C", GIT_ROOT, "fetch", w.remote, gh.base]);
+        for (const f of files) {
+          const rel = fs.existsSync(path.join(w.dir, f)) || !APP_REL ? f : path.join(APP_REL, f);
+          try { run("git", ["-C", w.dir, "checkout", `${w.remote}/${gh.base}`, "--", rel]); } catch { run("git", ["-C", w.dir, "rm", "-q", "--", rel]); } // new on the branch: it goes
+        }
+        if (!run("git", ["-C", w.dir, "status", "--porcelain"])) throw new Error("Those files are already as they are on staging");
+        run("git", ["-C", w.dir, "commit", "-q", "-am", `Undo part of review #${n}: ${files.join(", ")} back as on ${gh.base}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`]);
+        if (!dry) run("git", ["-C", w.dir, "push", "-q", w.remote, w.branch]);
+      } finally {
+        dropWork(c.id);
+      }
+      prSoon();
+      say(`Undone: ${text} It's on the same PR #${c.pr.n}; new before and after pictures come in a minute or two.`, { prN: c.pr.n });
+      await st.put(c);
+      return dry ? `DRY RUN: undo committed on ${c.pr.branch}, not pushed` : `Part undone on PR #${c.pr.n}.`;
+    }
+    if (c.pr.state === "open") {
+      if (dry) return `DRY RUN: PR #${c.pr.n} would be closed and #${n} go back to In progress`;
+      run("gh", ["pr", "close", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--delete-branch", "--comment", `Undone from review comment #${n}.`]);
+      applyChange(c, { pr: { n: c.pr.n, state: "closed" } }, asker);
+      say(`Undone: ${text} I closed PR #${c.pr.n}, so nothing reaches staging.`);
+      if (c.status === "approval") applyChange(c, { status: "progress", via: "claude" }, asker);
+      await st.put(c);
+      return dry ? "DRY RUN: the PR would be closed" : `PR #${c.pr.n} closed; #${n} is In progress again.`;
+    }
+    if (c.pr.state === "merged") {
+      const sha = JSON.parse(run("gh", ["pr", "view", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--json", "mergeCommit"])).mergeCommit?.oid;
+      if (!sha) throw new Error(`Couldn't find what PR #${c.pr.n} merged`);
+      const old = c.pr.n;
+      const w = prepareWork({ ...c, pr: null, text: `undo ${old}` }, n);
+      works.set(c.id, { ...w, mode: "undo" });
+      let url = "", prN = 0;
+      try {
+        run("git", ["-C", GIT_ROOT, "fetch", w.remote, sha]);
+        const parents = run("git", ["-C", w.dir, "rev-list", "--parents", "-n", "1", sha]).split(" ").length - 1;
+        run("git", ["-C", w.dir, "revert", "--no-edit", ...(parents > 1 ? ["-m", "1"] : []), sha]);
+        if (dry) return `DRY RUN: PR #${old} reverted on ${w.branch}, not pushed`;
+        run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
+        works.get(c.id).pushed = true;
+        url = run("gh", ["pr", "create", "--repo", gh.repo, "--base", gh.base, "--head", w.branch, "--title", `Undo PR #${old} (review #${n})`, "--body", [`Takes PR #${old} back out of ${gh.base}, asked in review comment #${n}: ${text}`, ``, `Claude never merges: a person merges this.`, ``, `🤖 Generated with [Claude Code](https://claude.com/claude-code)`].join("\n")]).split("\n").pop();
+        prN = Number(url.match(/\/pull\/(\d+)/)?.[1]);
+      } finally {
+        dropWork(c.id);
+      }
+      prSoon();
+      applyChange(c, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open", draft: false, for: asker } }, asker);
+      c.pr.undoes = old;
+      say(`Undone: ${text} PR #${prN} takes PR #${old} back out of staging; it needs a merge like any PR.`, { prN });
+      await st.put(c);
+      return `PR #${prN} undoes PR #${old}; a person merges it.`;
+    }
+    throw new Error(`PR #${c.pr.n} is ${c.pr.state}: nothing to undo`);
+  }
   if (name === "review_resnap") {
     const p = c.pics?.at(-1);
     if (!p || !c.pr?.preview) throw new Error("No pictures or preview on this comment to retake");
@@ -406,7 +496,8 @@ async function callRound() {
       const src = full.source?.file ? `${full.source.file}${full.source.line ? `:${full.source.line}` : ""}${full.source.component ? ` (${full.source.component})` : ""}` : "none recorded: find it from the page and the element";
       const talk = (named.history || []).filter((h) => h.kind === "reply").map((h) => `  ${h.via === "claude" ? "Claude" : h.by} (${ago(h.at)}): ${h.note}${h.ask ? "  [your question]" : ""}`);
       const asked = k.answers ? (named.history || []).find((h) => h.at === k.answers && h.via === "claude") : null; // the question this reply answers
-      const what = k.kind === "assigned" ? `${k.by} handed this comment to you. Work out what it needs and tell them (an answer, or what you would change and where).`
+      const what = k.sentBack ? `${k.by} sent your change back: "${k.words}". It's about your PR #${full.pr?.n}: if the reason says how, change it on the same PR (kind "change"); if not, plan or ask.`
+        : k.kind === "assigned" ? `${k.by} handed this comment to you. Work out what it needs and tell them (an answer, or what you would change and where).`
         : k.kind === "draft" ? `${k.by} asked for help writing a reply: "${k.words}". Draft it (kind "draft"), only they see it.`
         : asked ? `${k.by} answered your question ("${asked.note}"): "${k.words}". Carry on from there.`
         : `${k.by} wrote: "${k.words}"`;
@@ -449,6 +540,12 @@ async function callRound() {
         `  Explaining a change you would make is always a plan (so it carries Go and Show me live), never an answer.`,
         `  Asking them anything is always an ask (with quick picks), never an answer.`,
         ...(full.pr?.draft && full.pr.state === "open" ? [`  There is a draft PR #${full.pr.n} from your earlier plan: a new plan with a preview builds on its branch.`] : []),
+        ...(full.pr?.n && full.pr.state === "open" && !full.pr.draft ? [
+        `- "change": this comment has your open PR #${full.pr.n}. When ${k.by} says exactly what to change ("make it 16", "use the token",`,
+        `  a send-back reason that says how), that is the go: kind "change", one short line of what you'll do; it updates the same PR.`,
+        `  When the how is open ("it should feel lighter"), plan instead. "Undo" (all of it, or a part: "undo the Agents part"):`,
+        `  review_undo, with the files to put back for a part.`] : []),
+        ...(full.pr?.n && full.pr.state === "merged" ? [`  Your PR #${full.pr.n} was merged. "Undo" from ${k.by}: review_undo opens a PR that takes it back out.`] : []),
         ...(works.has(full.id) ? [
         `AFTER A STOP: your work folder for this change is still there (${works.get(full.id).app}). Their reply says what next:`,
         `  carry on: finish exactly the plan there, then review_ship (or review_preview for a preview); push what's done: review_ship`,
@@ -463,6 +560,12 @@ async function callRound() {
 }
 setInterval(callRound, CALL_EVERY).unref?.();
 
+/* a follow-up or an undo on Claude's PR is a go: from the person the PR is for (who asked, or said Go), or an approver */
+const sameWho = (a, b) => !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
+function mayFollow(c, who) {
+  const plan = [...(c.history || [])].reverse().find((h) => h.plan && h.via === "claude");
+  return (cfg.approvers || []).some((x) => sameWho(x, who)) || sameWho(c.pr?.for, who) || sameWho(plan?.for, who);
+}
 /* ---------- Step 2: Go, the work folder, the PR ---------- */
 /* On Go the review server, not Claude, does the git: a fresh worktree of the GitHub repo's base branch outside the
    project (Claude never edits the person's own folder), and when Claude is done (review_ship) it commits, pushes and
@@ -524,6 +627,14 @@ async function ship(c, st, a) {
   run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
   w.pushed = true;
   prSoon();
+  if (w.mode === "followup") {
+    dropWork(c.id);
+    const fresh = await st.get(c.id);
+    applyChange(fresh, { reply: `Updated PR #${fresh.pr.n}: ${summary} New before and after pictures come here in a minute or two.`, via: "claude", prN: fresh.pr.n }, w.by);
+    if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, w.by);
+    await st.put(fresh);
+    return `PR #${fresh.pr.n} updated; #${n} is For approval.`;
+  }
   if (c.pr?.draft && c.pr.branch === w.branch && c.pr.state === "open") {
     run("gh", ["pr", "ready", String(c.pr.n), "--repo", gh.repo]);
     run("gh", ["pr", "edit", String(c.pr.n), "--repo", gh.repo, "--title", title]);

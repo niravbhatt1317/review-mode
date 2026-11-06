@@ -310,6 +310,10 @@ export function applyChange(c, body, who, ctx = {}) {
     const words = typeof note === "string" ? note.trim().slice(0, 600) : "";
     if (back && words) Object.assign(step, { note: words }, ment);
     if (back && !take) c.note = words ? { text: words, by: who, at, from, to } : null;
+    /* SENT BACK TO CLAUDE (step 4, Nirav 2026-11-04): a reason sent back on Claude's open PR goes to Claude like a
+       follow-up; a reason that says how ("should be a link style") is the go for the same PR */
+    if (back && !take && words && from === "approval" && to === "progress" && c.pr?.n && c.pr.state === "open" && !c.pr.draft && body.via !== "claude")
+      c.call = newCall(who, words, at, { step: at, sentBack: true });
     if (to === "approved") c.note = null;
     (c.history ||= []).push(step);
     normalise(c);
