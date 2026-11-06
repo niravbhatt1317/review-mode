@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# review-server: the always-on Claude's one command (server/setup.sh installs it). server/README.md explains each part.
+#   status | attach | restart | stop | start | logs | secrets [claude|github] | update
+# Claude runs as the `review` user inside tmux (session "claude"), under the review-claude service.
+set -euo pipefail
+REPO="${REVIEW_REPO:-niravbhatt1317/next-gen}"
+BASE="${REVIEW_BASE:-staging}"
+U=review
+H=/home/review
+DIR="$H/next-gen"
+APP="$DIR/Functional/next-gen-ui"
+ENVF="$H/.config/review/env"
+WORK="$H/.review-mode/work"
+cmd="${1:-status}"
+shift || true
+
+root() { [ "$(id -u)" = 0 ] || { echo "Use sudo: sudo review-server $cmd"; exit 1; }; }
+as_review() { runuser -l "$U" -c "$*"; }
+has_secrets() { [ -s "$ENVF" ] && grep -q '^CLAUDE_CODE_OAUTH_TOKEN=.' "$ENVF" && grep -q '^GH_TOKEN=.' "$ENVF"; }
+setkey() { # setkey NAME value: replace one line of the env file, keep the rest
+  local tmp; tmp="$(mktemp)"
+  { [ -f "$ENVF" ] && grep -v "^$1=" "$ENVF" || true; printf '%s=%s\n' "$1" "$2"; } >"$tmp"
+  install -m 600 -o "$U" -g "$U" "$tmp" "$ENVF"
+  rm -f "$tmp"
+}
+busy() { # a work folder touched in the last 20 minutes: Claude is in the middle of a change
+  [ -d "$WORK" ] && [ -n "$(find "$WORK" -mindepth 1 -maxdepth 2 -mmin -20 -print -quit 2>/dev/null)" ]
+}
+
+case "$cmd" in
+  secrets)
+    root
+    which="${1:-both}"
+    if [ "$which" = both ] || [ "$which" = claude ]; then
+      echo "Claude token: on your Mac run  claude setup-token  and paste the token it prints (it starts with sk-ant-oat)."
+      read -rsp "Claude token: " t; echo
+      case "$t" in sk-ant-*) setkey CLAUDE_CODE_OAUTH_TOKEN "$t" ;; *) echo "That does not look like a Claude token (sk-ant-...). Nothing saved."; exit 1 ;; esac
+    fi
+    if [ "$which" = both ] || [ "$which" = github ]; then
+      echo "GitHub token: a fine-grained token for $REPO only (Contents and Pull requests: read and write)."
+      read -rsp "GitHub token: " t; echo
+      login="$(GH_TOKEN="$t" gh api user -q .login 2>/dev/null)" && [ -n "$login" ] || { echo "GitHub did not accept that token. Nothing saved."; exit 1; } # a refused token still prints its error
+      push="$(GH_TOKEN="$t" gh api "repos/$REPO" -q .permissions.push 2>/dev/null)" || push=""
+      [ "$push" = true ] || { echo "The token works for $login but cannot write to $REPO. Nothing saved."; exit 1; }
+      setkey GH_TOKEN "$t"
+      echo "GitHub: $login, can write to $REPO."
+    fi
+    unset t
+    echo "Saved in $ENVF (only the review user can read it). Run  sudo review-server restart  to use them."
+    ;;
+
+  prepare) # as the review user: the console at staging, its packages, review mode, Claude's first-run answers
+    [ "$(id -un)" = "$U" ] || { root; as_review "review-server prepare"; exit; }
+    set -a; . "$ENVF"; set +a
+    export PATH="$HOME/.local/bin:$PATH"
+    gh auth setup-git >/dev/null
+    git config --global user.name niravbhatt1317
+    git config --global user.email niravbhatt1317@users.noreply.github.com
+    git config --global github.user niravbhatt1317
+    if [ ! -d "$DIR/.git" ]; then
+      echo "Cloning $REPO ($BASE)..."
+      git clone -q --branch "$BASE" "https://github.com/$REPO.git" "$DIR"
+    else
+      git -C "$DIR" fetch -q origin "$BASE"
+      git -C "$DIR" checkout -q -f -B "$BASE" "origin/$BASE" # the main copy only follows staging; Claude works in its own folders
+    fi
+    cd "$APP"
+    lock="$(sha256sum package-lock.json | cut -c1-16)"
+    if [ ! -d node_modules ] || [ "$(cat .review-lock 2>/dev/null)" != "$lock" ]; then
+      echo "Installing the console's packages..."
+      npm ci --no-audit --no-fund --loglevel=error
+      echo "$lock" >.review-lock
+    fi
+    npm install --no-save --no-audit --no-fund --loglevel=error github:niravbhatt1317/review-mode
+    npx --no review-mode init next-gen-console >/dev/null
+    npx --no review-mode claude --setup --no-shell >/dev/null
+    # Claude's own first-run questions, answered once: onboarding done, this folder trusted
+    cj="$HOME/.claude.json"
+    [ -s "$cj" ] || echo '{}' >"$cj"
+    jq --arg p "$APP" '.hasCompletedOnboarding = true | .projects[$p].hasTrustDialogAccepted = true' "$cj" >"$cj.tmp" && mv "$cj.tmp" "$cj"
+    echo "Ready: $(git -C "$DIR" log -1 --format='%h %s' | cut -c1-70)"
+    echo "review-mode $(git ls-remote https://github.com/niravbhatt1317/review-mode.git HEAD | cut -c1-7), $(claude --version 2>/dev/null)"
+    ;;
+
+  run) # inside tmux, as the review user: Claude, started again whenever it stops
+    export PATH="$HOME/.local/bin:$PATH"
+    while true; do
+      if has_secrets; then
+        set -a; . "$ENVF"; set +a
+        cd "$APP"
+        echo "[$(date -u '+%F %T') UTC] Starting Claude"
+        npx --no review-mode claude --no-shell --permission-mode auto || true
+        echo "[$(date -u '+%F %T') UTC] Claude stopped; starting again in 30 s"
+      else
+        echo "No tokens yet: sudo review-server secrets"
+      fi
+      sleep 30
+    done
+    ;;
+
+  start)
+    root
+    has_secrets || { echo "Tokens first: sudo review-server secrets"; exit 1; }
+    "$0" prepare
+    systemctl enable --now review-claude >/dev/null 2>&1
+    echo "Claude is starting. The first time: sudo review-server attach, answer its questions, then Ctrl-b d."
+    ;;
+
+  restart) root; systemctl restart review-claude; echo "Restarted." ;;
+  stop) root; systemctl disable --now review-claude >/dev/null 2>&1; echo "Stopped (it stays off after a reboot too; start it with  sudo review-server start)." ;;
+
+  attach)
+    root
+    echo "You are looking at Claude. Leave it running with Ctrl-b then d. Never Ctrl-c or /exit (it would only restart)."
+    sleep 2
+    exec runuser -u "$U" -- tmux attach -t claude
+    ;;
+
+  update)
+    root
+    if [ "${1:-}" = --nightly ] && busy; then echo "Claude is in the middle of a change: the update waits for tomorrow."; exit 0; fi
+    "$0" prepare
+    systemctl restart review-claude
+    echo "Updated and restarted."
+    ;;
+
+  logs)
+    root
+    journalctl -u review-claude -u review-update -n "${1:-40}" --no-pager
+    echo; echo "== Claude's screen (last lines)"
+    runuser -u "$U" -- tmux capture-pane -p -t claude 2>/dev/null | grep -v '^\s*$' | tail -n 25 || echo "(no Claude screen: is it running?)"
+    ;;
+
+  status)
+    root
+    up="$(systemctl is-active review-claude 2>/dev/null || true)"
+    if [ "$up" = active ] && runuser -u "$U" -- tmux has-session -t claude 2>/dev/null; then
+      if pgrep -u "$U" -f 'claude.*--dangerously-load-development-channels' >/dev/null; then echo "Claude: running"; else echo "Claude: starting again (or waiting for a question: sudo review-server attach)"; fi
+    else
+      echo "Claude: OFF ($up). Start it: sudo review-server start"
+    fi
+    has_secrets && echo "Tokens: saved" || echo "Tokens: missing (sudo review-server secrets)"
+    [ -d "$DIR/.git" ] && echo "Console: $(git -C "$DIR" log -1 --format='%h, %cr' 2>/dev/null)"
+    echo "Last update: $(systemctl show review-update -p ExecMainExitTimestamp --value 2>/dev/null | sed 's/^$/never/')"
+    echo "Work folders: $(find "$WORK" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)$(busy && echo ', one busy now' || true)"
+    df -h / | awk 'NR==2 {print "Disk: " $3 " used of " $2 " (" $5 ")"}'
+    free -h | awk '/^Mem/ {print "Memory: " $3 " used of " $2}'
+    ;;
+
+  *)
+    echo "review-server status | attach | restart | stop | start | logs [lines] | secrets [claude|github] | update"
+    exit 1
+    ;;
+esac
