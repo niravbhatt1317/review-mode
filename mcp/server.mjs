@@ -663,6 +663,7 @@ async function ship(c, st, a) {
   prSoon();
   if (w.mode === "followup") {
     dropWork(c.id);
+    try { run("gh", ["pr", "edit", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--title", title]); } catch {} // the title follows the latest change
     const fresh = await st.get(c.id);
     applyChange(fresh, { reply: `Updated PR #${fresh.pr.n}: ${summary} New before and after pictures come here in a minute or two.`, via: "claude", prN: fresh.pr.n }, w.by);
     if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, w.by);
