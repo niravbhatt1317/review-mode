@@ -168,7 +168,12 @@ export function applyChange(c, body, who, ctx = {}) {
      plan: "picsChecked" marks a pair as matching and ends the check call */
   if (body.pics && typeof body.pics === "object" && body.pics.before && body.pics.after) {
     const p = body.pics;
-    c.pics = [...(c.pics || []).filter((x) => !(x.at === p.at && x.sha === p.sha)), { at: Number(p.at) || 0, sha: String(p.sha || "").slice(0, 12), before: String(p.before).slice(0, 120), after: String(p.after).slice(0, 120), w: Number(p.w) || 0, h: Number(p.h) || 0, found: { before: !!p.found?.before, after: !!p.found?.after }, pr: Number(p.pr) || null, takenAt: Date.now() }].slice(-6);
+    /* better pictures (2026-11-06): the changed part (fractions of the after), no difference at all, and more pairs
+       (other pages, other widths) as views, the first being the pair itself */
+    const box = (b) => (b && typeof b === "object" ? Object.fromEntries(["x", "y", "w", "h"].map((k) => [k, Math.min(1, Math.max(0, Number(b[k]) || 0))])) : null);
+    const pair = (v) => ({ before: String(v.before).slice(0, 120), after: String(v.after).slice(0, 120), w: Number(v.w) || 0, h: Number(v.h) || 0, found: { before: !!v.found?.before, after: !!v.found?.after }, chg: box(v.chg), same: v.same === true });
+    const views = Array.isArray(p.views) ? p.views.filter((v) => v?.before && v?.after).slice(0, 4).map((v) => ({ ...pair(v), label: String(v.label || "").slice(0, 40), route: String(v.route || "").slice(0, 300), width: Number(v.width) || null, state: ["hover", "focus", "open"].includes(v.state) ? v.state : null })) : null;
+    c.pics = [...(c.pics || []).filter((x) => !(x.at === p.at && x.sha === p.sha)), { at: Number(p.at) || 0, sha: String(p.sha || "").slice(0, 12), ...pair(p), ...(views?.length > 1 ? { views } : {}), pr: Number(p.pr) || null, takenAt: Date.now() }].slice(-6);
   }
   if (body.picsChecked === true) {
     const p = c.pics?.at(-1);
@@ -612,7 +617,7 @@ export function makeHub({ url, key, project, cache = null, fetchFn = globalThis.
         e.status = 403;
         throw e;
       }
-      await removeFiles([c.shot, c.thumb, ...(c.pics || []).flatMap((p) => [p.before, p.after])].filter(Boolean)).catch(() => {});
+      await removeFiles([c.shot, c.thumb, ...(c.pics || []).flatMap((p) => [p.before, p.after, ...(p.views || []).flatMap((v) => [v.before, v.after])])].filter(Boolean)).catch(() => {});
       drop(c.id);
     },
     /* a picture's bytes: from the cache, else downloaded once and kept */

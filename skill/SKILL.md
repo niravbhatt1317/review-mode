@@ -49,7 +49,11 @@ and after (preview) pictures it names, then `review_checked`: ok true when the a
 is wrong and options, nothing true when nothing on screen changes, missed true when the pictures don't show the changed
 part and you can't say how to get there. A spot not found, or in another view (a customer or "All clients", a tab, a
 drawer): first `review_resnap` with the clicks that reach it from a fresh load ("click Internal", "click All clients"),
-read from the code; they are remembered for that comment. After the PR (step 4): on a comment with your open PR, a clear
+read from the code; they are remembered for that comment. Pictures that show the change (a plan's or a change's
+`pictures`, or `review_resnap` later): `state` when the change is a hover, focus or open look; `pages` (route, and the
+spot's words there) when the piece is shared and shows elsewhere; `widths` (768, 390) when it may wrap, or when someone
+asks to see it small. A pair marked NO DIFFERENCE means the change did not show there: never ok true on it; find out why
+(resnap, or the code), or say so with ok false. After the PR (step 4): on a comment with your open PR, a clear
 instruction from the person the PR is for or an approver ("make it 16", a send-back reason that says how) is the go:
 `review_talk` kind "change", then edit the PR's work folder and `review_ship` (it updates the same PR). "Undo":
 `review_undo` (files for a part; on a merged PR it opens a PR that takes it back out). Anyone else: plan as usual. Show changes

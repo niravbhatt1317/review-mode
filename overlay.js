@@ -284,6 +284,8 @@ root.innerHTML = `
   .ui { font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #1d2b3e; }
   .hover { position: fixed; pointer-events: none; border: 2px solid #e11d48; border-radius: 4px; box-shadow: 0 0 0 1px #fff, inset 0 0 0 1px #fff; display: none; transition: top .04s, left .04s, width .04s, height .04s; }
   .hover.on { display: block; }
+  .area-pick { position: fixed; pointer-events: none; border: 2px dashed #e11d48; border-radius: 4px; background: rgba(225,29,72,.06); box-shadow: 0 0 0 1px #fff; display: none; }
+  .area-pick.on { display: block; }
   .hover .tag { position: absolute; left: -2px; top: -24px; background: #1d2b3e; color: #fff; font: 500 11px/20px -apple-system, system-ui, sans-serif; padding: 0 7px; border-radius: 4px 4px 0 0; white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
   .hover.flip .tag { top: auto; bottom: -24px; border-radius: 0 0 4px 4px; }
   :host([data-composing]) .hover .tag { display: none; } /* the pin's label says it; the outline stays */
@@ -1523,6 +1525,7 @@ root.innerHTML = `
   .card-rm.sure { border-color: hsl(353 84% 47%); color: #fff; background: hsl(353 84% 47%); }
   /* BEFORE AND AFTER (step 3): the pair under Claude's message, and the big compare view */
   .th-ba { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; margin-top: 7px; }
+  .th-ba.stack { grid-template-columns: minmax(0, 1fr); } /* a wide pair: one above the other, big enough to read */
   .ba-pic { position: relative; display: block; padding: 0; border: 0; border-radius: 8px; overflow: hidden; background: hsl(var(--rv-n10)); box-shadow: inset 0 0 0 1px var(--rv-line); cursor: zoom-in; aspect-ratio: var(--ar, 16 / 9); }
   .ba-pic img { display: block; width: 100%; height: 100%; object-fit: contain; }
   .ba-pic:hover, .ba-pic:focus-visible { box-shadow: inset 0 0 0 1px var(--rv-line), 0 0 0 2px hsl(214 98% 44% / .35); outline: none; }
@@ -1530,6 +1533,21 @@ root.innerHTML = `
   .ba-pic.af .ba-lb { background: #1E8C81; }
   .ba-note { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
   .ba-note.ok { color: #1E8C81; }
+  .ba-note.warn { color: #9A5B00; }
+  .ba-chg { position: absolute; box-sizing: border-box; border: 1.5px dashed #E8590C; border-radius: 4px; pointer-events: none; }
+  .ba-chg i { position: absolute; right: -1px; top: -15px; height: 13px; padding: 0 4px; border-radius: 3px; font-style: normal; font-size: 8.5px; font-weight: 600; line-height: 13px; color: #fff; background: #E8590C; white-space: nowrap; }
+  .ba-chg.low i { top: 2px; right: 2px; } /* no room above it: inside, at its corner */
+  .ba-tabs { display: flex; gap: 4px; margin: 6px 0 4px; flex-wrap: wrap; }
+  .ba-tab { height: 22px; padding: 0 9px; border: 0; border-radius: 999px; background: hsl(var(--rv-n10)); color: var(--rv-ink-2); font: inherit; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+  .ba-tab.on { background: var(--rv-ink); color: var(--rv-surface); }
+  .ba-dot { width: 6px; height: 6px; border-radius: 50%; background: #E8A100; }
+  .ba-fold { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 3px 8px 3px 3px; border: 0; border-radius: 6px; background: hsl(var(--rv-n10)); color: var(--rv-ink-3); font: inherit; font-size: 11px; cursor: pointer; }
+  .ba-fold:hover { color: var(--rv-ink); }
+  .ba-fold .ba-mini { display: inline-flex; gap: 2px; }
+  .ba-fold .ba-mini img { width: 30px; height: 20px; border-radius: 3px; object-fit: cover; box-shadow: inset 0 0 0 1px var(--rv-line); }
+  .bav-im { position: relative; display: block; }
+  .bav-side .ba-chg i, .bav-slide .ba-chg i { font-size: 11px; height: 17px; line-height: 17px; top: -19px; }
+  .bav-side .ba-chg.low i, .bav-slide .ba-chg.low i { top: 3px; right: 3px; }
   .th-last .ba-mini { display: inline-flex; gap: 2px; margin-left: 6px; flex: 0 0 auto; }
   .th-last .ba-mini img { width: 30px; height: 20px; border-radius: 3px; object-fit: cover; box-shadow: inset 0 0 0 1px var(--rv-line); }
   .ba-view { position: fixed; inset: 0; pointer-events: auto; background: rgba(12,20,32,.82); display: none; align-items: center; justify-content: center; z-index: 5; }
@@ -1962,7 +1980,7 @@ root.innerHTML = `
   .pin-tip .th-go { background: rgba(255,255,255,.1); color: #fff; }
   .pin-tip .th-msg.glow { background: hsl(45 60% 30% / .6); box-shadow: 0 0 0 2px hsl(45 95% 60% / .5); }
 </style>
-<div class="hover ui"><span class="tag"></span></div>
+<div class="hover ui"><span class="tag"></span></div><div class="area-pick ui"></div>
 <div class="pins"></div>
 <div class="pin-tip ui"></div>
 <div class="composer ui">
@@ -2421,11 +2439,36 @@ window.addEventListener(
     state.mouse = { x: e.clientX, y: e.clientY };
     state.alt = e.altKey;
     if (!e.composedPath().includes(host) && e.target instanceof Element && !e.target.closest("[data-radix-popper-content-wrapper],[role=tooltip]")) state.lastHover = e.target;
+    if (areaDrag) return; // a drag: followed by pointermove (no mousemove comes while the press is held back)
     if (armed()) showHover(targetAt(e.clientX, e.clientY));
     else if (state.hover && !state.pending) showHover(null);
   },
   true
 );
+/* A PICKED AREA (Nirav, 2026-11-06: "this section feels crowded"): armed, a drag draws a box; the comment is on the
+   smallest element that holds it, with the box kept as fractions of that element (never screen positions), so the
+   pin follows the element and the before and after picture that part of it */
+let areaDrag = null;
+const areaBox = $(".area-pick");
+window.addEventListener("pointermove", (e) => { if (areaDrag && !areaDrag.done && armed()) dragArea(e.clientX, e.clientY); }, true);
+const areaRect = (d, x, y) => ({ x: Math.min(d.x, x), y: Math.min(d.y, y), w: Math.abs(x - d.x), h: Math.abs(y - d.y) });
+function dragArea(x, y) {
+  if (!areaDrag.on && Math.hypot(x - areaDrag.x, y - areaDrag.y) < 10) return;
+  areaDrag.on = true;
+  showHover(null);
+  const r = areaRect(areaDrag, x, y);
+  Object.assign(areaBox.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+  areaBox.classList.add("on");
+}
+function holderOf(r) {
+  let el = targetAt(r.x + r.w / 2, r.y + r.h / 2);
+  while (el && el !== document.body && el !== document.documentElement) {
+    const q = el.getBoundingClientRect();
+    if (q.left <= r.x + 2 && q.top <= r.y + 2 && q.right >= r.x + r.w - 2 && q.bottom >= r.y + r.h - 2) return el;
+    el = el.parentElement || (el.getRootNode() instanceof ShadowRoot ? el.getRootNode().host : null);
+  }
+  return el && el !== document.documentElement ? el : document.body;
+}
 window.addEventListener(
   "keydown",
   (e) => {
@@ -2541,7 +2584,19 @@ for (const t of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "a
       if (!(state.alt || e.altKey || state.sticky) || state.pending || state.capturing || state.off) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (t === "click") beginComment(targetAt(e.clientX, e.clientY));
+      if (t === "pointerdown" && e.button === 0) areaDrag = { x: e.clientX, y: e.clientY, on: false };
+      else if (t === "pointerup" && areaDrag) {
+        const d = areaDrag;
+        areaBox.classList.remove("on");
+        if (d.on) {
+          const r = areaRect(d, e.clientX, e.clientY);
+          areaDrag = { done: true };
+          if (r.w >= 16 && r.h >= 16) beginComment(holderOf(r), r);
+        } else areaDrag = null;
+      } else if (t === "click") {
+        if (areaDrag?.done) areaDrag = null; // the drag made its comment already
+        else beginComment(targetAt(e.clientX, e.clientY));
+      }
     },
     true
   );
@@ -2574,7 +2629,7 @@ window.addEventListener(
 );
 
 /* ---------- composer ---------- */
-async function beginComment(el) {
+async function beginComment(el, area = null) {
   if (!el || state.pending || busy) return;
   if (EXT && state.hub && state.hub.signedIn === false) {
     toast("Sign in first: the Review icon in the toolbar, then Sign in with GitHub", true);
@@ -2592,8 +2647,10 @@ async function beginComment(el) {
     return;
   }
   const r0 = el.getBoundingClientRect();
-  const rect = { x: r0.left, y: r0.top, w: r0.width, h: r0.height };
-  state.pending = { el, rect, shot: null, how: "none" };
+  const rect = area ? { ...area } : { x: r0.left, y: r0.top, w: r0.width, h: r0.height };
+  /* a picked area: the part of the element it covers, as fractions of the element */
+  const part = area && r0.width && r0.height ? { x: (area.x - r0.left) / r0.width, y: (area.y - r0.top) / r0.height, w: area.w / r0.width, h: area.h / r0.height } : null;
+  state.pending = { el, rect, shot: null, how: "none", area: part && Object.fromEntries(Object.entries(part).map(([k, v]) => [k, Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000])) };
   /* the number first (from the server, so it matches whatever was removed meanwhile), then the picture:
      taken NOW, before the box appears, so it is exactly what was pointed at (a hover card, an open menu) */
   await loadComments();
@@ -2616,10 +2673,11 @@ barHint();
   }
   if (!state.pending) return; // cancelled meanwhile
   showHover(el);
+  if (area) Object.assign(hoverBox.style, { left: `${area.x - 2}px`, top: `${area.y - 2}px`, width: `${area.w + 4}px`, height: `${area.h + 4}px` }); // the area, not the whole element
   $(".composer .num").textContent = n;
   const what = $(".composer .what");
   what.innerHTML = "<b></b><span></span>";
-  what.querySelector("b").textContent = describe(el);
+  what.querySelector("b").textContent = area ? `An area of ${describe(el).replace(/^\w/, (m) => m.toLowerCase())}` : describe(el);
   what.querySelector("span").textContent = ` · ${pageTitle()} · ${contextOf(el)}${state.pending.shot ? "" : " · no picture"}`;
   ta.value = "";
   twinCheck();
@@ -2983,6 +3041,7 @@ async function save() {
     lead: (state.lead || []).slice(-20), // the clicks on the pages before (the way here)
     overlay: host.parentNode !== document.body || !!closestDeep(el, "dialog[open],:popover-open,[popover],[role=dialog],[role=alertdialog],[role=menu],[role=listbox],[role=tooltip],[data-radix-popper-content-wrapper]"),
     mark: state.pending.mark || null,
+    ...(state.pending.area ? { area: state.pending.area } : {}),
     scrolls: scrollsOf(el),
     app: appSnapshot(),
   };
@@ -5903,6 +5962,8 @@ function histHtml(c) {
    a reply is a message; a move is a quiet line, and the words that rode with it (why it came back, a note for the
    person it was handed to) are a message under it. Mentions-only steps are left out: the mention is in the words. */
 state.thOpen = new Set(); // comments whose thread is open
+state.baTab = new Map(); // "<id>:<sha>" -> the pair shown (a page or a width)
+state.baOpen = new Set(); // "<id>:<at>": an earlier pair opened again
 state.thDraft = null; // { id, text, quote }: the reply being written, kept through a redraw
 state.thAll = new Set(); // long threads unfolded
 /* LONG MESSAGES FOLD (Nirav, 2026-11-05): an older long message shows its first 4 lines, an activity line its first 2,
@@ -6049,26 +6110,48 @@ function callBusyHtml(c) {
    preview, under the Claude message it belongs to; a click opens them big, side by side or one over the other */
 const picUrl = (file) => `/__review/shot/${file}${window.__reviewSession ? `?session=${window.__reviewSession}` : ""}`;
 const picsOf = (c, at) => (c.pics || []).filter((p) => p.at === at && !p.hidden).at(-1) || null;
+/* BETTER PICTURES (Nirav, 2026-11-06): more pairs (other pages, other widths) as tabs; the changed part boxed on the
+   after; a pair with no difference at all says so, never a quiet "Done" */
+const baViews = (p) => (p.views?.length ? p.views : [p]);
+const baPick = (c, p) => Math.min(state.baTab.get(`${c.id}:${p.sha}`) || 0, baViews(p).length - 1);
+const chgHtml = (v) => (v.chg && !v.same ? `<span class="ba-chg${v.chg.y < 0.12 ? " low" : ""}" style="left:${(v.chg.x * 100).toFixed(2)}%;top:${(v.chg.y * 100).toFixed(2)}%;width:${(v.chg.w * 100).toFixed(2)}%;height:${(v.chg.h * 100).toFixed(2)}%"><i>Changed</i></span>` : "");
 function picsHtml(c, p) {
   if (p.missed) return `<div class="ba-note">Claude couldn't get the change into a picture, so try it live.</div>`;
   const draft = c.pr?.draft && c.pr.planAt === p.at;
-  const ar = p.w && p.h ? ` style="--ar:${p.w} / ${p.h}"` : "";
-  const note = p.wrong ? "" : p.checked ? `<div class="ba-note ok">✓ Claude checked the after against the plan</div>`
+  const all = baViews(p), i = baPick(c, p), v = all[i];
+  const ar = v.w && v.h ? ` style="--ar:${v.w} / ${v.h}"` : "";
+  const tabs = all.length > 1 ? `<div class="ba-tabs" role="tablist">${all.map((x, k) => `<button type="button" role="tab" class="ba-tab${k === i ? " on" : ""}" data-v="${k}" aria-selected="${k === i}">${esc(x.label || `Pair ${k + 1}`)}${x.same ? '<i class="ba-dot" title="No difference"></i>' : ""}</button>`).join("")}</div>` : "";
+  const same = v.same && !p.checked ? `<div class="ba-note warn">The before and after look the same here, so the change may not have landed. Claude is looking into it.</div>` : "";
+  const note = p.wrong || same ? "" : p.checked ? `<div class="ba-note ok">✓ Claude checked the after against the plan</div>`
     : Date.now() - (p.takenAt || 0) < 5 * 60_000 ? `<div class="ba-note">Claude is checking the after against the plan…</div>` : "";
-  const lost = !p.found?.before || !p.found?.after ? `<div class="ba-note">The spot wasn't found on ${!p.found?.before && !p.found?.after ? "either page" : !p.found?.before ? "staging" : "the preview"}, so this is the whole window.</div>` : "";
-  return `<div class="th-ba" data-sha="${esc(p.sha)}"><button type="button" class="ba-pic" data-which="before"${ar}><img src="${esc(picUrl(p.before))}" alt="Before, on staging" loading="lazy"><span class="ba-lb">Before · staging</span></button><button type="button" class="ba-pic af" data-which="after"${ar}><img src="${esc(picUrl(p.after))}" alt="After, on the preview" loading="lazy"><span class="ba-lb">${draft ? "Planned · preview" : "After · preview"}</span></button></div>${lost}${note}`;
+  const lost = !v.found?.before || !v.found?.after ? `<div class="ba-note">The spot wasn't found on ${!v.found?.before && !v.found?.after ? "either page" : !v.found?.before ? "staging" : "the preview"}, so this is the whole window.</div>` : "";
+  const st = v.state || (p.views ? null : c.snapState);
+  const how = st ? `<div class="ba-note">${st === "hover" ? "With the pointer over it" : st === "focus" ? "With the focus on it" : "With it open"}</div>` : "";
+  return `<div class="th-ba-w" data-sha="${esc(p.sha)}">${tabs}<div class="th-ba${v.w && v.h && v.w / v.h > 1.4 ? " stack" : ""}" data-sha="${esc(p.sha)}" data-v="${i}"><button type="button" class="ba-pic" data-which="before"${ar}><img src="${esc(picUrl(v.before))}" alt="Before, on staging" loading="lazy"><span class="ba-lb">Before · staging</span></button><button type="button" class="ba-pic af" data-which="after"${ar}><img src="${esc(picUrl(v.after))}" alt="After, on the preview" loading="lazy">${chgHtml(v)}<span class="ba-lb">${draft ? "Planned · preview" : "After · preview"}</span></button></div>${how}${lost}${same}${note}</div>`;
+}
+/* A TIDY THREAD: only the newest pair shows; an earlier one folds to one line, opened again on a click */
+function picsFold(c, x, latestAt) {
+  const p = picsOf(c, x.at);
+  if (!p) return "";
+  if (x.at === latestAt || state.baOpen.has(`${c.id}:${x.at}`)) return picsHtml(c, p);
+  const n = baViews(p).length;
+  return `<button type="button" class="ba-fold" data-at="${x.at}"><span class="ba-mini"><img src="${esc(picUrl(p.before))}" alt=""><img src="${esc(picUrl(p.after))}" alt=""></span>Earlier before and after${n > 1 ? ` · ${n} pairs` : ""} · Show</button>`;
 }
 const baView = $(".ba-view");
-function openBa(c, p, mode = "side") {
+function openBa(c, p, mode = "side", vi = baPick(c, p)) {
+  const v = baViews(p)[vi] || p;
   baView.dataset.id = c.id;
   baView.dataset.sha = p.sha;
+  baView.dataset.v = vi;
   baView.querySelectorAll(".bav-seg button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
-  const b = esc(picUrl(p.before)), a = esc(picUrl(p.after));
-  baView.querySelector(".bav-t").textContent = `Before and after · #${c.n}`;
+  const b = esc(picUrl(v.before)), a = esc(picUrl(v.after));
+  baView.querySelector(".bav-t").textContent = `Before and after · #${c.n}${baViews(p).length > 1 && v.label ? ` · ${v.label}` : ""}`;
+  /* the slide starts at the change: the line on its left edge, so one drag across shows it */
+  const at = v.chg && !v.same ? Math.max(2, Math.min(98, Math.round(v.chg.x * 100))) : 50;
   baView.querySelector(".bav-body").innerHTML = mode === "side"
-    ? `<div class="bav-side"><figure><img src="${b}" alt="Before"><figcaption>Before · staging</figcaption></figure><figure><img src="${a}" alt="After"><figcaption>After · preview</figcaption></figure></div>`
-    : `<div class="bav-slide"><img src="${a}" alt="After"><div class="bav-top-img"><img src="${b}" alt="Before"></div><span class="bav-line"></span><span class="bav-l">Before</span><span class="bav-l af">After</span><input type="range" min="0" max="100" value="50" aria-label="Before to after"></div>`;
-  baView.querySelector(".bav-cap").textContent = mode === "side" ? "Esc closes." : "Drag across to wipe from before to after. Esc closes.";
+    ? `<div class="bav-side"><figure><img src="${b}" alt="Before"><figcaption>Before · staging</figcaption></figure><figure><span class="bav-im"><img src="${a}" alt="After">${chgHtml(v)}</span><figcaption>After · preview</figcaption></figure></div>`
+    : `<div class="bav-slide" style="--x:${at}%"><img src="${a}" alt="After"><div class="bav-top-img"><img src="${b}" alt="Before"></div>${chgHtml(v)}<span class="bav-line"></span><span class="bav-l">Before</span><span class="bav-l af">After</span><input type="range" min="0" max="100" value="${at}" aria-label="Before to after"></div>`;
+  baView.querySelector(".bav-cap").textContent = v.same ? "No difference between the two. Esc closes." : mode === "side" ? "Esc closes." : "Drag across to wipe from before to after. Esc closes.";
   const range = baView.querySelector(".bav-slide input");
   range?.addEventListener("input", () => baView.querySelector(".bav-slide").style.setProperty("--x", `${range.value}%`));
   baView.classList.add("on");
@@ -6079,7 +6162,7 @@ baView.addEventListener("click", (e) => {
   if (m) {
     const c = [...state.comments, ...(state.done || [])].find((x) => x.id === baView.dataset.id);
     const p = c?.pics?.find((x) => x.sha === baView.dataset.sha);
-    if (c && p) openBa(c, p, m.dataset.mode);
+    if (c && p) openBa(c, p, m.dataset.mode, Number(baView.dataset.v) || 0);
     return;
   }
   if (e.target.closest(".bav-x") || e.target === baView) closeBa();
@@ -6142,6 +6225,7 @@ function threadHtml(c, moves = true) {
     return `<button type="button" class="th-last${last.ask ? " ask" : ""}" aria-label="Open the thread, ${msgs.length} ${msgs.length === 1 ? "reply" : "replies"}">${thLastFace(c, last)}<span class="th-w"><b>${thName(last.by)}</b> ${last.sug ? "suggested: " : ""}${mentionHtml(last.words)}</span>${last.claude && picsOf(c, last.at) && !picsOf(c, last.at).missed ? `<span class="ba-mini"><img src="${esc(picUrl(picsOf(c, last.at).before))}" alt=""><img src="${esc(picUrl(picsOf(c, last.at).after))}" alt=""></span>` : ""}${tag}${pill}</button>` + prRow;
   }
   const newest = [...items].reverse().find((x) => !x.sys)?.at;
+  const picsAt = [...items].reverse().find((x) => x.claude && picsOf(c, x.at))?.at; // the newest pair: the only one shown open
   const rows = items.map((x) => {
     if (x.sys) {
       const who = x.by ? `<b>${thName(x.by)}</b> ` : "";
@@ -6152,7 +6236,7 @@ function threadHtml(c, moves = true) {
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
     const long = !x.sug && x.at !== newest && !x.ask && !x.planLive && isLong(x.words, 280), open = state.longOpen.has(`${c.id}:${x.at}`);
     const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
-    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.claude && picsOf(c, x.at) ? picsHtml(c, picsOf(c, x.at)) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
+    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.claude && picsOf(c, x.at) ? picsFold(c, x, picsAt) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
   if (callBusy(c)) rows.push(callBusyHtml(c));
@@ -6343,7 +6427,19 @@ function threadClick(e, c, box, onChange) {
   const bp = t.closest(".ba-pic");
   if (bp) {
     const p = (c.pics || []).find((x) => x.sha === bp.closest(".th-ba")?.dataset.sha);
-    if (p) openBa(c, p);
+    if (p) openBa(c, p, "side", Number(bp.closest(".th-ba").dataset.v) || 0);
+    return true;
+  }
+  const bt = t.closest(".ba-tab");
+  if (bt) {
+    state.baTab.set(`${c.id}:${bt.closest(".th-ba-w").dataset.sha}`, Number(bt.dataset.v) || 0);
+    onChange();
+    return true;
+  }
+  const bf = t.closest(".ba-fold");
+  if (bf) {
+    state.baOpen.add(`${c.id}:${bf.dataset.at}`);
+    onChange();
     return true;
   }
   if (t.closest(".th-stop")) {

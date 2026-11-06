@@ -61,6 +61,11 @@ const holder = (c) => (c.status === "progress" ? c.assignee : c.status === "appr
 
 /* ---------- the tools ---------- */
 const asProp = { as: { type: "string", description: "The GitHub handle of the person you work for (the brief gives it). Leave out to use the default." } };
+const picsProps = {
+  state: { type: "string", enum: ["hover", "focus", "open"], description: "Take the pictures with the element in this state, when the change is about it: hover (a hover style, a tooltip), focus (the focus ring), open (clicked: a menu, a dropdown, a popover)" },
+  pages: { type: "array", items: { type: "object", properties: { route: { type: "string" }, target: { type: "string", description: "The spot's visible words on that page" } }, required: ["route"] }, description: "Other pages the changed piece shows on (a shared component): a pair for each, up to 3, as tabs" },
+  widths: { type: "array", items: { type: "number" }, description: "Other window widths, up to 2 (768 a tablet, 390 a phone): when the change may wrap or squeeze, or they asked to see it on a small screen" },
+};
 const TOOLS = [
   { name: "review_list", description: "List the review comments: number, id, status, kind (fix or question), who has it, text and any sent-back note. Open ones by default.", inputSchema: { type: "object", properties: { open: { type: "boolean", description: "Only open ones (default true)" }, mine: { type: "boolean", description: "Only the ones this person has now" }, ...asProp } } },
   { name: "review_show", description: "One comment in full: page, element, how to get there, the history and, for a question, the conversation.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" } }, required: ["id"] } },
@@ -69,12 +74,12 @@ const TOOLS = [
   { name: "review_reply", description: "Answer a question (one or two plain sentences, from the code it points at). If something should change, say so; the asker can make it a fix.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, ...asProp }, required: ["id", "text"] } },
   { name: "review_picture", description: "Save a comment's picture (the element boxed, its number on it) and return the file path to Read.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" } }, required: ["id"] } },
   { name: "review_suggest", description: "Claude drafts first: leave a short suggestion on a new comment, for a person to accept or ignore. For a fix, what you would change and where (file and line), in one or two plain sentences; for a question, the answer. When you cannot tell what is meant, or the code shows no clear change, set unsure and say in one sentence what you would need to know, instead of guessing. Draft only: change no code and no status.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, unsure: { type: "boolean", description: "True when the text is a question back to the person, not a suggestion" }, ...asProp }, required: ["id", "text"] } },
-  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan", "change"], description: "change: only on a comment with an open PR, when they told you exactly what to change (\"make it 16\"): that is the go; the text is one short line of what you'll do, and the reply names the PR's work folder" }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, ...asProp }, required: ["id", "kind", "text"] } },
+  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan", "change"], description: "change: only on a comment with an open PR, when they told you exactly what to change (\"make it 16\"): that is the go; the text is one short line of what you'll do, and the reply names the PR's work folder" }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, pictures: { type: "object", properties: picsProps, description: "For plan or change: how the before and after should be taken, when one plain pair of the spot would not show your change (a hover style, other pages that use the piece, a narrow screen)" }, ...asProp }, required: ["id", "kind", "text"] } },
   { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
   { name: "review_preview", description: "After a plan with preview (or a preview call): you made the planned change in the work folder named. The review server commits it, pushes the branch and opens (or updates) a DRAFT pull request, whose live preview link shows on the plan. The plan still waits for a person's Go.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changes" }, session: { type: "string" } }, required: ["id", "title"] } },
   { name: "review_drop", description: "After a Stop, when they chose to throw your work away: the work folder goes, nothing is pushed, and your plan waits for Go again. Says so in the thread.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string" } }, required: ["id"] } },
   { name: "review_checked", description: "After a CHECK brief: you looked at the before and after pictures against your plan. ok true: they match (the pair is marked checked). ok false: say in text what you see that is wrong, one question with options; it goes in the thread as your question. nothing true: nothing on screen changes with this plan (a link, a screen reader label), so the pictures are hidden. missed true: the pictures don't show the part you changed (another tab, scrolled away, a closed drawer), so they are hidden and the thread says to try it live.", inputSchema: { type: "object", properties: { id: { type: "string" }, ok: { type: "boolean" }, nothing: { type: "boolean" }, missed: { type: "boolean" }, text: { type: "string" }, options: { type: "array", items: { type: "string" } }, session: { type: "string" } }, required: ["id", "ok"] } },
-  { name: "review_resnap", description: "After a CHECK brief whose pictures missed the spot: take them again, with the clicks that reach the comment's view from a fresh page load (by their visible words: \"click Internal\", \"click All clients\", \"hover Try again\", \"press Escape\") and, if the spot's own words differ there, target (its visible words). Remembered for this comment's later pictures. Answers with the new pictures' paths: Read them, then review_checked.", inputSchema: { type: "object", properties: { id: { type: "string" }, steps: { type: "array", items: { type: "string" } }, target: { type: "string" }, session: { type: "string" } }, required: ["id", "steps"] } },
+  { name: "review_resnap", description: "Take the before and after again: after a CHECK brief whose pictures missed the spot or the state, or when someone asks to see it another way (\"show me on a small screen\", \"what about the settings page\", \"with the menu open\"). steps: the clicks that reach the comment's view from a fresh page load (by their visible words: \"click Internal\", \"click All clients\", \"hover Try again\", \"press Escape\"); target: the spot's own words there, if they differ; state, pages, widths: as in review_talk's pictures. All remembered for this comment's later pictures. Answers with the new pictures' paths: Read them, then review_checked.", inputSchema: { type: "object", properties: { id: { type: "string" }, steps: { type: "array", items: { type: "string" } }, target: { type: "string" }, ...picsProps, session: { type: "string" } }, required: ["id"] } },
   { name: "review_undo", description: "When the person the PR is for or an approver says undo (a clear instruction is the go). On an open PR: no files closes the PR (nothing reaches staging, the comment goes back to In progress); files puts those back as they are on staging, on the same PR (\"undo the Agents part\"). On a merged PR: opens a PR that takes the whole change back out. text: one short line for the thread on what goes back, in design words; the thread adds which PRs closed.", inputSchema: { type: "object", properties: { id: { type: "string" }, files: { type: "array", items: { type: "string" }, description: "Paths in the app (src/...) to put back as on staging; leave out to undo all of it" }, text: { type: "string" }, session: { type: "string" } }, required: ["id", "text"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
@@ -146,6 +151,7 @@ async function call(name, a = {}) {
     const words = String(a.text || "").trim();
     if (!words) throw new Error("Say something: text is empty");
     if (!c.call || c.call.state === "done") return `#${(await numbered(c.id, st))?.n}: nobody is waiting on Claude here, nothing sent`;
+    setSnapPlan(c, a.pictures);
     /* STEP 4, A FOLLOW-UP ON THE SAME PR (Nirav, 2026-11-04: a clear instruction is the go): "make it 16" from the asker
        or an approver changes the open PR's branch, no new plan, no new PR; anyone else's needs a plan and a Go */
     if (a.kind === "change") {
@@ -282,22 +288,24 @@ async function call(name, a = {}) {
     const key = `${c.id}:${p.sha}:resnap`;
     if ((snapFails.get(key) || 0) >= 3) throw new Error("Already retaken 3 times: answer review_checked with missed true");
     snapFails.set(key, (snapFails.get(key) || 0) + 1);
-    const steps = (Array.isArray(a.steps) ? a.steps : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 8).map((x) => {
+    if (Array.isArray(a.steps)) c.snapSteps = a.steps.map((x) => String(x).trim()).filter(Boolean).slice(0, 8).map((x) => {
       const m = x.match(/^(click|hover|press)\s+(.+)$/i);
       if (!m) return { kind: "click", textKey: x.slice(0, 80) };
       const kind = m[1].toLowerCase();
       return kind === "press" ? { kind: "key", key: m[2].trim(), code: m[2].trim() } : { kind, textKey: m[2].trim().replace(/^["']|["']$/g, "").slice(0, 80) };
     });
-    c.snapSteps = steps;
     if (a.target) c.snapTarget = String(a.target).trim().slice(0, 80);
+    setSnapPlan(c, a);
     await st.put(c);
     const r = await picsFor(c.id, a.session || "", new URL(c.pr.preview).origin, p.sha, true);
     if (!r) throw new Error("The pictures could not be taken again");
-    return `Retaken with ${steps.length} step${steps.length === 1 ? "" : "s"}: the spot was ${r.found.before && r.found.after ? "found on both pages" : `not found on ${!r.found.before && !r.found.after ? "either page" : !r.found.before ? "staging" : "the preview"} (the whole window)`}. Read before ${r.local.before} and after ${r.local.after}, then review_checked.`;
+    return [`Retaken, ${r.views.length === 1 ? "one pair" : `${r.views.length} pairs`}. Read them, then review_checked:`, ...picsLines(r.views)].join("\n");
   }
   if (name === "review_checked") {
     const p = c.pics?.at(-1);
     if (!p) throw new Error("No pictures on this comment to check");
+    /* NO DIFFERENCE, NOT DONE: the same pictures never pass as matching the plan */
+    if (a.ok === true && !a.nothing && (p.views || [p]).some((v) => v.same)) throw new Error("A pair has no difference at all, so it can't match a plan that changes something. Find out why (review_resnap, or the code), answer ok false saying the change did not show, or nothing true if nothing on screen changes");
     if (a.ok === true || a.nothing === true || a.missed === true) {
       applyChange(c, { picsChecked: true }, who);
       if (a.nothing === true) c.pics.at(-1).hidden = true;
@@ -535,6 +543,7 @@ async function callRound() {
         ``,
         `Comment by ${named.by}: "${full.text}"`,
         `Page: ${full.pageTitle || full.route || "?"}${full.route ? ` (${full.route})` : ""} · Code: ${src}${full.shot ? " · has a picture" : ""}`,
+        ...(full.area ? [`It is about an area the person picked inside that element (the box on the picture), not the whole element.`] : []),
         ...(talk.length ? [`The thread so far:`, ...talk] : [`No replies before this.`]),
         ``,
         `Read first: review_show ${full.id}${sess ? ` (session ${sess})` : ""} (the whole record), review_picture then Read the file (what it looks like),`,
@@ -808,41 +817,39 @@ async function picsFor(id, sess, base, sha, quiet = false) {
     if (staging === base) return; // not a pr-N preview: nothing to compare with
     const msg = c.pr.draft ? (c.history || []).find((h) => h.at === c.pr.planAt && h.via === "claude") : [...(c.history || [])].reverse().find((h) => h.via === "claude" && h.note && (h.pr === c.pr.n || (/^Done\b/.test(h.note) && h.at >= (c.pr.at || 0) - 5000))); // older "Done" messages carry no PR number
     if (!msg) return; // the "Done" message comes with the PR: the next round
-    const r = await snap({ before: staging + c.route, after: base + c.route, comment: c, login: cfg.previewLogin });
-    if (quiet) { // a retake Claude asked for: it gets the pictures back in the tool's answer
-      const stem0 = `${c.id}.ba-${sha}`;
-      await st.putFile(`${stem0}-before.jpg`, r.before);
-      await st.putFile(`${stem0}-after.jpg`, r.after);
-      fs.mkdirSync(PICS_DIR, { recursive: true });
-      const loc = { before: path.join(PICS_DIR, `${stem0}-before.jpg`), after: path.join(PICS_DIR, `${stem0}-after.jpg`) };
-      fs.writeFileSync(loc.before, r.before);
-      fs.writeFileSync(loc.after, r.after);
-      const full = await st.get(id);
-      applyChange(full, { pics: { at: msg.at, sha, before: `${stem0}-before.jpg`, after: `${stem0}-after.jpg`, w: r.w, h: r.h, found: r.found, pr: c.pr.n } }, defaultAs);
-      await st.put(full);
-      return { found: r.found, local: loc };
-    }
-    const stem = `${c.id}.ba-${sha}`;
-    await st.putFile(`${stem}-before.jpg`, r.before);
-    await st.putFile(`${stem}-after.jpg`, r.after);
+    const r = await snap({ staging, preview: base, comment: c, login: cfg.previewLogin, views: snapViews(c) });
+    /* each pair's files, kept on the hub and here (for Claude to Read); the first pair is also the record's own */
     fs.mkdirSync(PICS_DIR, { recursive: true });
-    const local = { before: path.join(PICS_DIR, `${stem}-before.jpg`), after: path.join(PICS_DIR, `${stem}-after.jpg`) };
-    fs.writeFileSync(local.before, r.before);
-    fs.writeFileSync(local.after, r.after);
+    const local = [];
+    const views = [];
+    for (const [i, v] of r.views.entries()) {
+      const stem = `${c.id}.ba-${sha}${i ? `-v${i}` : ""}`;
+      const files = { before: `${stem}-before.jpg`, after: `${stem}-after.jpg` };
+      await st.putFile(files.before, v.before);
+      await st.putFile(files.after, v.after);
+      const loc = { before: path.join(PICS_DIR, files.before), after: path.join(PICS_DIR, files.after) };
+      fs.writeFileSync(loc.before, v.before);
+      fs.writeFileSync(loc.after, v.after);
+      local.push({ ...loc, label: v.label, found: v.found, same: v.same, chg: v.chg });
+      views.push({ label: v.label, route: v.route, width: v.width, state: v.state, ...files, w: v.w, h: v.h, found: v.found, chg: v.chg, same: v.same });
+    }
+    const v0 = views[0];
     const full = await st.get(id);
-    applyChange(full, { pics: { at: msg.at, sha, before: `${stem}-before.jpg`, after: `${stem}-after.jpg`, w: r.w, h: r.h, found: r.found, pr: c.pr.n } }, defaultAs);
+    applyChange(full, { pics: { at: msg.at, sha, before: v0.before, after: v0.after, w: v0.w, h: v0.h, found: v0.found, chg: v0.chg, same: v0.same, pr: c.pr.n, ...(views.length > 1 ? { views } : {}) } }, defaultAs);
     await st.put(full);
+    if (quiet) return { views: local }; // a retake Claude asked for: it gets the pictures back in the tool's answer
     if (!canHear()) return;
     const n = (await numbered(id, st))?.n;
     send({ method: "notifications/claude/channel", params: { content: [
       `CHECK on review comment #${n} (${id})${sess ? `, TEST SESSION ${sess} (pass session "${sess}" to the review tools)` : ""}: the before and after pictures of the spot are in the thread.`,
       `Your plan: "${msg.note}"`,
-      `Read both: before (staging) ${local.before} · after (the preview) ${local.after}${!r.found.before || !r.found.after ? ` (the spot was not found on the ${!r.found.before && !r.found.after ? "two pages" : !r.found.before ? "staging page" : "preview"}: the whole window was taken)` : ""}.`,
+      ...picsLines(local),
       `Then review_checked with id ${id}: ok true when the after shows your plan; nothing true when nothing on screen changes with this plan;`,
       `missed true when the pictures don't show the part you changed at all, and you can't say how to get there. If the spot wasn't found`,
-      `or it's in another view (another tab, a customer or "All clients", a drawer), FIRST try review_resnap: the clicks that get there from a`,
-      `fresh page load as a signed-in test user (read the code to know them), by their visible words, and the words of the spot; then check those.`,
-      `ok false with text (what you see that is wrong, in design words, one or two sentences) and 2 or 3 options when it doesn't. Then carry on.`,
+      `or it's in another view (another tab, a customer or "All clients", a drawer, a hover or an open menu), FIRST try review_resnap: the clicks`,
+      `that get there from a fresh page load as a signed-in test user (read the code to know them), by their visible words, the words of the`,
+      `spot, and its state; then check those. ok false with text (what you see that is wrong, in design words, one or two sentences) and 2 or 3`,
+      `options when it doesn't. Then carry on.`,
     ].join("\n"), meta: { kind: "check", comment: String(n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
   } catch (e) {
     snapFails.set(`${id}:${sha}`, (snapFails.get(`${id}:${sha}`) || 0) + 1);
@@ -850,6 +857,31 @@ async function picsFor(id, sess, base, sha, quiet = false) {
   } finally {
     snapping.delete(id);
   }
+}
+/* the pairs for Claude to Read, one line each: where the change shows, or that it does not */
+const picsLines = (local) => local.map((v, i) => {
+  const lost = !v.found.before || !v.found.after ? ` (the spot was not found on the ${!v.found.before && !v.found.after ? "two pages" : !v.found.before ? "staging page" : "preview"}: the whole window was taken)` : "";
+  const what = v.same ? " NO DIFFERENCE: the two are the same, pixel for pixel. Your change did not land here (or it is somewhere these don't show): never ok true on this; find out why (review_resnap, or the code), or ok false and say so."
+    : v.chg ? ` The part that differs is boxed on the after (${Math.round(v.chg.x * 100)}% from the left, ${Math.round(v.chg.y * 100)}% from the top).` : "";
+  return `${local.length > 1 ? `${i + 1}. ${v.label}: ` : "Read both: "}before (staging) ${v.before} · after (the preview) ${v.after}${lost}.${what}`;
+});
+/* BETTER PICTURES (Nirav, 2026-11-06): how Claude wants the pictures taken, kept on the comment for every later pair:
+   a state on the element (hover, focus, open), the other pages the changed piece shows on, other widths */
+const SNAP_STATES = ["hover", "focus", "open"];
+function setSnapPlan(c, p) {
+  if (!p || typeof p !== "object") return;
+  if ("state" in p) c.snapState = SNAP_STATES.includes(p.state) ? p.state : null;
+  if (Array.isArray(p.pages)) c.snapPages = p.pages.map((x) => (typeof x === "string" ? { route: x } : x)).filter((x) => x && /^\//.test(String(x.route || "")) && x.route !== c.route).slice(0, 3).map((x) => ({ route: String(x.route).slice(0, 300), ...(x.target ? { target: String(x.target).slice(0, 80) } : {}), ...(x.label ? { label: String(x.label).slice(0, 40) } : {}) }));
+  if (Array.isArray(p.widths)) c.snapWidths = [...new Set(p.widths.map(Number).filter((n) => n >= 320 && n <= 1920 && n !== (c.viewport?.w || 1440)))].slice(0, 2);
+}
+/* the pairs to take: the comment's own page first, then its other pages, then its other widths; four at most */
+function snapViews(c) {
+  const pages = c.snapPages || [], widths = c.snapWidths || [];
+  const name = (r) => String(r || "").split("?")[0].split("/").filter(Boolean).pop()?.replace(/[-_]+/g, " ").replace(/^\w/, (m) => m.toUpperCase()) || "Home";
+  const views = [{ label: pages.length ? c.pageTitle || name(c.route) : `${c.viewport?.w || 1440} px` }];
+  for (const p of pages) views.push({ route: p.route, target: p.target, label: p.label || name(p.route) });
+  for (const w of widths) views.push({ width: w, label: `${w} px` });
+  return views.slice(0, 4);
 }
 /* a building preview right after a push: the next round soon, not in 45 s */
 const prSoon = () => { prBuilding = true; };

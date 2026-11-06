@@ -79,7 +79,7 @@ export function fileStore(dir) {
     async remove(c) {
       if (c.shot) fs.rmSync(path.join(dir, c.shot), { force: true });
       fs.rmSync(path.join(dir, `${c.id}.t.jpg`), { force: true });
-      for (const p of c.pics || []) for (const f of [p.before, p.after]) if (f) fs.rmSync(path.join(dir, path.basename(f)), { force: true });
+      for (const p of c.pics || []) for (const f of [p.before, p.after, ...(p.views || []).flatMap((v) => [v.before, v.after])]) if (f) fs.rmSync(path.join(dir, path.basename(f)), { force: true });
       writeComments(dir, numbered(readComments(dir).filter((x) => x.id !== c.id)));
     },
     async shot(file) {
