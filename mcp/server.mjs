@@ -165,6 +165,8 @@ async function call(name, a = {}) {
         throw new Error(`Could not open PR #${c.pr.n}'s branch: ${String(e.message || e).split("\n")[0]}`);
       }
       works.set(c.id, { ...w, plan: words, by: asker, sess: a.session || "", mode: "followup" });
+      c.call.alive = Date.now();
+      held.add(callKey(c));
       await st.put(c);
       called.delete(callKey(c));
       heard = true;
@@ -392,6 +394,7 @@ setInterval(draftRound, DRAFT_EVERY).unref?.();
    claimed and sent to this session with everything Claude needs to read first. A claim lapses after ten minutes. */
 const CALL_EVERY = 6_000;
 const called = new Set();
+const held = new Set(); // calls this session claimed: kept alive while it runs
 const callKey = (c) => `${c.id}:${c.call?.at || 0}`; // ids are unique across sessions (time-based)
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 async function callRound() {
@@ -401,6 +404,13 @@ async function callRound() {
     for (const sess of ["", ...localTests()]) {
     const st = storeOf(sess);
     const all = prepare(await st.list());
+    /* the calls this session holds: touched once a minute, so the page and other sessions know it is still here */
+    for (const c of all.filter((x) => x.call?.state === "reading" && held.has(callKey(x)) && Date.now() - (x.call.alive || 0) > 60_000)) {
+      const full = await st.get(c.id);
+      if (!full || full.call?.state !== "reading" || !held.has(callKey(full))) continue;
+      applyChange(full, { callAlive: true }, defaultAs);
+      await st.put(full);
+    }
     /* STOP (Nirav, 2026-11-05): someone pressed Stop while Claude worked. Claude is told at once; with no work folder
        here (another session, or a restart) the review server answers for it and the plan waits for Go again */
     for (const c of all.filter((x) => x.call?.state === "stopped" && !x.call.stopSent)) {
@@ -431,6 +441,7 @@ async function callRound() {
       applyChange(full, { callState: "reading" }, defaultAs);
       await st.put(full);
       called.add(callKey(full));
+      held.add(callKey(full));
       const named = withNames(full, ppl);
       const k = named.call;
       /* Go on the plan whose preview is built: the draft becomes the PR, nothing to redo */
@@ -595,6 +606,10 @@ function prepareWork(c, n, from = null) {
   run("git", ["-C", GIT_ROOT, "fetch", remote, from || gh.base]);
   const dir = path.join(WORK_DIR, branch.replace(/\//g, "__"));
   fs.mkdirSync(WORK_DIR, { recursive: true });
+  /* a folder for this branch a closed session left behind: cleared, the work starts again from the branch */
+  if (fs.existsSync(dir)) {
+    try { run("git", ["-C", GIT_ROOT, "worktree", "remove", "--force", dir]); } catch { fs.rmSync(dir, { recursive: true, force: true }); run("git", ["-C", GIT_ROOT, "worktree", "prune"]); }
+  }
   run("git", ["-C", GIT_ROOT, "worktree", "add", "--no-track", "-B", branch, dir, `${remote}/${from || gh.base}`]);
   return { branch, dir, app: path.join(dir, APP_REL), remote };
 }

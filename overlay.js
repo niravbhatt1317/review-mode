@@ -1835,6 +1835,9 @@ root.innerHTML = `
   .pin-tip .th-pr .th-prn, .pin-tip .th-pr .th-pv.building { background: rgba(255,255,255,.08); color: #fff; }
   .th-reading.idle { align-items: center; color: var(--rv-ink-3); background: hsl(var(--rv-n10)); }
   .th-rd-t { font-weight: 500; }
+  .th-idle-t { flex: 1; min-width: 0; }
+  .th-reading.idle .th-pick { flex: 0 0 auto; white-space: nowrap; padding: 0 12px; }
+  .th-reading.idle .th-again { color: var(--rv-ink); }
   .th-rd-b { flex: 1; min-width: 0; }
   .th-rd-h { display: flex; align-items: center; gap: 8px; }
   .th-stop { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--rv-surface); box-shadow: inset 0 0 0 1px #e8c9bb; color: #b4532f; font-family: inherit; font-size: 11px; font-weight: 500; line-height: 22px; cursor: pointer; flex: 0 0 auto; }
@@ -6000,7 +6003,19 @@ const claudeAsk = (c) => (claudeWaits(c) ? { at: c.draft.at, by: "Claude", text:
 /* CLAUDE AS A TEAMMATE (Nirav, 2026-11-04, step 1): someone wrote @Claude; a connected Claude session claims the call
    and reads first. The thread says so, with what Claude has read; a call nobody claims for a while says it waits */
 const CALL_WAIT_MS = 45_000;
-const callBusy = (c) => (c.call?.state === "waiting" || c.call?.state === "reading" || c.call?.state === "stopped") && c.status !== "approved" && Date.now() - (c.call.at || 0) < 30 * 60_000;
+/* nothing changes in the data when a session closes: every 20 s, a card whose call just went quiet is drawn again */
+const goneSeen = new Set();
+setInterval(() => {
+  for (const c of state.comments || []) {
+    const k = `${c.id}:${c.call?.at}`;
+    if (!callGone(c.call) || goneSeen.has(k)) continue;
+    goneSeen.add(k);
+    if (panel.classList.contains("on") && !panelBusy()) refreshCard(c);
+  }
+}, 20_000);
+/* the session holding a call went quiet (closed): the same rule as the hub's (alive every minute; 2.5 min silent) */
+const callGone = (k) => !!k && k.state === "reading" && (k.alive ? Date.now() - k.alive > 150_000 : Date.now() - (k.claimedAt || 0) > 10 * 60_000);
+const callBusy = (c) => c.status !== "approved" && (callGone(c.call) || ((c.call?.state === "waiting" || c.call?.state === "reading" || c.call?.state === "stopped") && Date.now() - (c.call.at || 0) < 30 * 60_000));
 /* WHO SAYS GO AND STOP (Nirav, 2026-11-05): Go is the person who asked Claude or an approver; Stop is them or whoever
    said Go. Everyone else sees Go greyed with who can, and can still say anything in the thread (the hub checks too) */
 const canGo = (c) => isApprover() || isMe(c.call?.by);
@@ -6012,6 +6027,8 @@ function onlyWho(names, verb) {
 const STOP_BTN = '<button type="button" class="th-stop" aria-label="Stop Claude"><i></i>Stop</button>';
 function callBusyHtml(c) {
   const k = c.call;
+  /* its session closed before it answered (Nirav, 2026-11-06): say so, and let anyone send it to Claude again */
+  if (callGone(k)) return `<div class="th-reading idle">${CLAUDE_AV()}<span class="th-idle-t">Claude's session closed before it ${k.kind === "go" ? "finished the change" : k.kind === "preview" ? "built the preview" : "answered"}</span><button type="button" class="th-pick th-again">Ask again</button><button type="button" class="th-pick th-connect">Connect Claude</button></div>`;
   /* stopped mid-change: Claude says what it had done and asks what next */
   if (k.state === "stopped") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">Stopped by ${esc(isMe(k.stoppedBy) ? "you" : k.stoppedBy || "someone")}. Claude is saying what it had done…</span></div></div>`;
   const stop = k.state === "reading" || k.state === "waiting" ? (canStop(c) ? STOP_BTN : "") : "";
@@ -6112,7 +6129,7 @@ function threadHtml(c, moves = true) {
   if (!state.thOpen.has(c.id)) {
     /* Claude at work, or a draft waiting for you: said on the closed line first */
     const prRow = prRowHtml(c);
-    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${c.call.state === "stopped" ? "Stopped. Claude is saying what it had done…" : c.call.kind === "go" && c.call.followup ? `Claude is updating PR #${c.pr?.n || ""}…` : c.call.kind === "go" ? "Claude is making the change…" : c.call.kind === "preview" ? "Claude is building a live preview…" : c.call.kind === "draft" ? "Claude is writing a new draft…" : c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Sent to Claude…"}</span></button>` + prRow;
+    if (callBusy(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w th-rd-t">${callGone(c.call) ? "Claude's session closed before it answered" : c.call.state === "stopped" ? "Stopped. Claude is saying what it had done…" : c.call.kind === "go" && c.call.followup ? `Claude is updating PR #${c.pr?.n || ""}…` : c.call.kind === "go" ? "Claude is making the change…" : c.call.kind === "preview" ? "Claude is building a live preview…" : c.call.kind === "draft" ? "Claude is writing a new draft…" : c.call.state === "reading" ? "Claude is reading the thread and the code…" : "Sent to Claude…"}</span></button>` + prRow;
     if (myDraft(c)) return `<button type="button" class="th-last ask" aria-label="Open the thread">${CLAUDE_AV()}<span class="th-w"><b>Claude</b> drafted a reply for you: ${esc(myDraft(c).text)}</span><span class="th-tag">Only you</span></button>` + prRow;
     /* no replies yet: the drawer card shows its reply box on hover, no trip through ⋯ (Nirav, 2026-11-04) */
     if (!msgs.length) return moves && !isQ(c) && can("answer", c) ? `<div class="th-ghost"><div class="th-ghost-in"><div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="Reply, @ to mention…" aria-label="Reply"><button type="button" class="th-go">Reply</button></div></div></div>` : "";
@@ -6308,6 +6325,17 @@ function threadClick(e, c, box, onChange) {
     return true;
   }
   if (t.closest(".th-connect")) return showSheet("callnone"), true;
+  if (t.closest(".th-again")) {
+    const was = c.call;
+    c.call = { ...was, state: "waiting", at: Date.now(), claimedAt: null, alive: null };
+    onChange();
+    applyUpdate({ id: c.id, callAgain: true }).then((r) => {
+      if (!r) c.call = was;
+      else watchCall(c.id);
+      onChange();
+    });
+    return true;
+  }
   if (t.closest(".th-pr a, .th-link")) return true; // the link opens itself, in a new tab
   /* Go: the plan is agreed; Claude makes it (every change waits for a person's go, Nirav 2026-11-04) */
   const planStep = (c.history || []).find((h) => h.at === c.call?.planAt && h.via === "claude");

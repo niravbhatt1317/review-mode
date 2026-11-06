@@ -249,6 +249,9 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
     clients" or a customer in memory only), Claude reads the code and gives the clicks to get there (`review_resnap`),
     remembered for the comment. Not yet: pictures of a state (hover, focus), one pair
     per page when a change touches several, a picked area instead of the whole window for comments with no element.
+  - [x] **A Claude session that closes mid-call** (Nirav, 2026-11-06): the session holding a call touches it every
+    minute; silent for 2.5 min, the thread says "Claude's session closed before it answered" with Ask again and
+    Connect Claude, and the next session takes it by itself (a work folder the closed one left is cleared first).
   - [x] **Step 4, after the PR** (Nirav, 2026-11-06): on a comment with Claude's open PR, a clear instruction from the
     person the PR is for or an approver ("make it 16", a send-back reason that says how) is the go: Claude changes the
     same PR's branch (kind "change", "Claude is updating PR #N", Stop works), new before and after follow. A send-back

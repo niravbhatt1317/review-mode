@@ -15,7 +15,11 @@ export const draftOpen = (d) => !d || d.state === "reply" || (d.state === "draft
    ("reading"), reads the thread, the page and the code, then answers in the thread, asks one question back ("asked",
    the next reply goes to Claude without an @), or drafts a reply only the caller sees. Data only: no status moves. */
 export const CALL_CLAIM_MS = 10 * 60 * 1000; // a session's claim on a call, before another may take it
-export const callOpen = (k) => !!k && (k.state === "waiting" || (k.state === "reading" && Date.now() - (k.claimedAt || 0) > CALL_CLAIM_MS));
+/* A SESSION THAT CLOSED (Nirav, 2026-11-06: "Claude is reading…" stayed after he closed it): the session holding a call
+   touches it every minute ("alive"); silent for 2.5 min, it is gone, the page says so and any session may take it */
+export const CALL_ALIVE_MS = 150 * 1000;
+export const callGone = (k) => !!k && k.state === "reading" && (k.alive ? Date.now() - k.alive > CALL_ALIVE_MS : Date.now() - (k.claimedAt || 0) > CALL_CLAIM_MS);
+export const callOpen = (k) => !!k && (k.state === "waiting" || callGone(k));
 const newCall = (who, words, at, extra = {}) => ({ state: "waiting", at, by: who, words: String(words || "").trim().slice(0, 1200), read: [], ...extra });
 
 /* sentence case: the first letter capital, the rest as typed (Nirav, 2026-10-19) */
@@ -136,7 +140,10 @@ export function applyChange(c, body, who, ctx = {}) {
     c.call = newCall(who, body.callClaude, Date.now(), { ...(body.callKind ? { kind: String(body.callKind).slice(0, 20) } : {}), ...keep });
   }
   if (body.callState === "planned" && c.call?.planAt) Object.assign(c.call, { state: "planned", builtAt: Date.now() });
-  if (body.callState === "reading" && callOpen(c.call)) Object.assign(c.call, { state: "reading", claimedAt: Date.now() });
+  if (body.callState === "reading" && callOpen(c.call)) Object.assign(c.call, { state: "reading", claimedAt: Date.now(), alive: Date.now() });
+  if (body.callAlive === true && c.call?.state === "reading") c.call.alive = Date.now();
+  /* Ask again: a call whose session closed waits for any session again (a new time, so no session thinks it has it) */
+  if (body.callAgain === true && callGone(c.call)) Object.assign(c.call, { state: "waiting", at: Date.now(), claimedAt: null, alive: null });
   if (typeof body.claudeRead === "string" && c.call && !c.call.read?.includes(body.claudeRead)) c.call.read = [...(c.call.read || []), body.claudeRead.slice(0, 20)];
   if (body.claudeDraft && typeof body.claudeDraft.text === "string" && body.claudeDraft.text.trim() && c.call)
     Object.assign(c.call, { state: "done", doneAt: Date.now(), draft: { for: c.call.by, text: body.claudeDraft.text.trim().slice(0, 1200), at: Date.now() } });
