@@ -23,6 +23,22 @@ setkey() { # setkey NAME value: replace one line of the env file, keep the rest
   install -m 600 -o "$U" -g "$U" "$tmp" "$ENVF"
   rm -f "$tmp"
 }
+# Claude's two questions at every start, answered while nobody is looking (Nirav, 2026-11-11: after the update it sat on
+# the first one, deaf to the hub): the development-channels warning (option 1: the channel is review mode's own) and, on
+# a fresh folder, "New MCP server found: review" (Use this MCP server). Watches the screen for a minute, then stops
+answer_startup() {
+  local i screen
+  for i in $(seq 1 40); do
+    sleep 2
+    screen="$(tmux capture-pane -p -t claude 2>/dev/null)" || continue
+    case "$screen" in
+      *"Loading development channels"*"I am using this for local development"*) tmux send-keys -t claude Enter; sleep 3 ;;
+      *"New MCP server found"*"Use this MCP server"*"Continue without using this MCP server"*)
+        if printf '%s\n' "$screen" | grep -q '❯ *Use this MCP server'; then tmux send-keys -t claude Enter; else tmux send-keys -t claude Up; fi
+        sleep 1 ;;
+    esac
+  done
+}
 busy() { # a work folder touched in the last 20 minutes: Claude is in the middle of a change
   [ -d "$WORK" ] && [ -n "$(find "$WORK" -mindepth 1 -maxdepth 2 -mmin -20 -print -quit 2>/dev/null)" ]
 }
@@ -89,6 +105,7 @@ case "$cmd" in
         set -a; . "$ENVF"; set +a
         cd "$APP"
         echo "[$(date -u '+%F %T') UTC] Starting Claude"
+        answer_startup &
         npx --no review-mode claude --no-shell --permission-mode auto || true
         echo "[$(date -u '+%F %T') UTC] Claude stopped; starting again in 30 s"
       else
