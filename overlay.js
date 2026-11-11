@@ -1615,6 +1615,8 @@ root.innerHTML = `
   .ba-pic.af .ba-lb { background: #1E8C81; }
   .ba-note { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
   .ba-note.ok { color: #1E8C81; }
+  .ba-note.busy > span { background: linear-gradient(90deg, #b07a63 0%, #b07a63 40%, #6e3a26 50%, #b07a63 60%, #b07a63 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; } /* Claude at work: the thread's shine (Nirav, 2026-11-11) */
+  @media (prefers-reduced-motion: reduce) { .ba-note.busy > span { animation: none; color: #b07a63; background: none; } }
   .ba-note.warn { color: #9A5B00; }
   .ba-chg { position: absolute; box-sizing: border-box; border: 1.5px dashed #E8590C; border-radius: 4px; pointer-events: none; }
   .ba-chg i { position: absolute; right: -1px; top: -15px; height: 13px; padding: 0 4px; border-radius: 3px; font-style: normal; font-size: 8.5px; font-weight: 600; line-height: 13px; color: #fff; background: #E8590C; white-space: nowrap; }
@@ -6234,7 +6236,7 @@ function picsHtml(c, p) {
   const tabs = all.length > 1 ? `<div class="ba-tabs" role="tablist">${all.map((x, k) => `<button type="button" role="tab" class="ba-tab${k === i ? " on" : ""}" data-v="${k}" aria-selected="${k === i}">${esc(x.label || `Pair ${k + 1}`)}${x.same ? '<i class="ba-dot" title="No difference"></i>' : ""}</button>`).join("")}</div>` : "";
   const same = v.same && !p.checked ? `<div class="ba-note warn">The before and after look the same here, so the change may not have landed. Claude is looking into it.</div>` : "";
   const note = p.wrong || same ? "" : p.checked ? `<div class="ba-note ok">✓ Claude checked the after against the plan</div>`
-    : Date.now() - (p.takenAt || 0) < 5 * 60_000 ? `<div class="ba-note">Claude is checking the after against the plan…</div>` : "";
+    : Date.now() - (p.takenAt || 0) < 5 * 60_000 ? `<div class="ba-note busy"><span>Claude is checking the after against the plan…</span></div>` : "";
   const lost = !v.found?.before || !v.found?.after ? `<div class="ba-note">The spot wasn't found on ${!v.found?.before && !v.found?.after ? "either page" : !v.found?.before ? "staging" : "the preview"}, so this is the whole window.</div>` : "";
   const st = v.state || (p.views ? null : c.snapState);
   const how = st ? `<div class="ba-note">${st === "hover" ? "With the pointer over it" : st === "focus" ? "With the focus on it" : "With it open"}</div>` : "";
