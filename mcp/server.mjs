@@ -984,7 +984,7 @@ async function checkAgainRound() {
       for (const c of await st.list()) {
         const p = c.pics?.at(-1);
         if (!p?.sha || p.checked || p.wrong || p.hidden || p.missed || !c.pr?.n || c.pr.state !== "open") continue;
-        if (Date.now() - (p.takenAt || 0) > 3 * 3600_000 || Date.now() - (p.takenAt || 0) < 5 * 60_000) continue; // fresh ones are still being checked
+        if (Date.now() - (p.takenAt || 0) > 3 * 3600_000) continue; // older: left as it is
         const key = `${c.id}:${p.sha}`;
         if (checkSent.has(key) || snapping.has(c.id)) continue;
         checkSent.add(key);
@@ -1003,6 +1003,7 @@ async function checkAgainRound() {
   }
 }
 setInterval(checkAgainRound, 60_000).unref?.();
+setTimeout(checkAgainRound, 20_000).unref?.(); // just after a start: what the last run left unchecked
 /* CLEARER COMMENTS (step 5): a comment that tracks its asks as a list, shown to Claude with what is ticked */
 const asksLines = (c, how) => (c.asks?.state === "list" ? [`It tracks its asks as a list (tick boxes in the same comment): ${c.asks.items.map((x, i) => `${i + 1}. [${x.done ? "x" : " "}] ${x.t}${x.route ? ` (on ${x.page || x.route}, ${x.route})` : ""}`).join("  ")}`, how] : []);
 /* the pairs for Claude to Read, one line each: where the change shows, or that it does not */

@@ -6283,7 +6283,7 @@ const STOP_BTN = '<button type="button" class="th-stop" aria-label="Stop Claude"
 function callBusyHtml(c) {
   const k = c.call;
   /* its session closed before it answered (Nirav, 2026-11-06): say so, and let anyone send it to Claude again */
-  if (callGone(k)) return `<div class="th-reading idle">${CLAUDE_AV()}<span class="th-idle-t">Claude's session closed before it ${k.kind === "go" ? "finished the change" : k.kind === "preview" ? "built the preview" : "answered"}</span><button type="button" class="th-pick th-again">Ask again</button><button type="button" class="th-pick th-connect">Connect Claude</button></div>`;
+  if (callGone(k)) return `<div class="th-reading idle">${CLAUDE_AV()}<span class="th-idle-t">Claude stopped before it ${k.kind === "go" ? "finished the change" : k.kind === "preview" ? "built the preview" : "answered"}. A running Claude picks it up again by itself</span><button type="button" class="th-pick th-again">Ask again</button><button type="button" class="th-pick th-connect">Connect Claude</button></div>`;
   /* stopped mid-change: Claude says what it had done and asks what next */
   if (k.state === "stopped") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">Stopped by ${esc(isMe(k.stoppedBy) ? "you" : k.stoppedBy || "someone")}. Claude is saying what it had done…</span></div></div>`;
   const stop = k.state === "reading" || k.state === "waiting" ? (canStop(c) ? STOP_BTN : "") : "";
