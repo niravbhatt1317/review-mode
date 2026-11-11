@@ -1986,12 +1986,10 @@ root.innerHTML = `
   .th-link.chip:hover { background: hsl(214 98% 44% / .16); }
   .th-link.chip svg { width: 10px; height: 10px; }
   .pin-tip .th-link { color: #8fbcff; }
-  /* a decided suggestion folds too, once it is long (Nirav, 2026-11-11) */
-  .th-sugg.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .th-words.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
   .hs-words.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .th-long { display: block; margin-top: 2px; border: 0; padding: 0; background: none; font: inherit; font-size: 12px; font-weight: 500; color: var(--rv-ink-2); cursor: pointer; }
-  .th-long:hover, .th-long:focus-visible { color: var(--rv-ink); text-decoration: underline; outline: none; }
+  .th-long:hover, .th-long:focus-visible { color: var(--rv-ink); text-decoration: underline dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; outline: none; }
   .pin-tip .th-long { color: hsl(216 20% 70%); }
   .hs-body .th-long { align-self: flex-start; justify-self: start; width: max-content; text-align: left; }
   .th-words { margin-top: 1px; font-size: 12.5px; line-height: 1.45; color: var(--rv-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -6370,8 +6368,8 @@ function threadHtml(c, moves = true) {
     }
     const q = x.quote ? `<button type="button" class="th-quote" data-at="${x.quote.at}">${TH_ARROW}<b>${thName(x.quote.by)}</b><span>${esc(x.quote.text)}</span></button>` : "";
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
-    const long = x.sug ? isLong(x.words, 200) : x.at !== newest && !x.ask && !x.planLive && isLong(x.words, 280), open = state.longOpen.has(`${c.id}:${x.at}`);
-    const words = x.summary ? (c.pinned === x.at ? `<div class="th-words">${linkHtml(mentionHtml(x.words))} <span class="th-at">Pinned to the top</span></div>` : `<div class="th-words">${linkHtml(mentionHtml(x.words))}</div>${sumHtml(x.summary)}<div class="th-picks"><button type="button" class="th-pick th-pin" data-at="${x.at}">Pin to the top</button></div>`) : x.sug ? `<div class="th-sugg${long && !open ? " clamp" : ""}">${mentionHtml(x.words)}</div>${long ? longBtn(open) : ""}<div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
+    const long = !x.sug && x.at !== newest && !x.ask && !x.planLive && isLong(x.words, 280), open = state.longOpen.has(`${c.id}:${x.at}`);
+    const words = x.summary ? (c.pinned === x.at ? `<div class="th-words">${linkHtml(mentionHtml(x.words))} <span class="th-at">Pinned to the top</span></div>` : `<div class="th-words">${linkHtml(mentionHtml(x.words))}</div>${sumHtml(x.summary)}<div class="th-picks"><button type="button" class="th-pick th-pin" data-at="${x.at}">Pin to the top</button></div>`) : x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
     return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.claude && picsOf(c, x.at) ? picsFold(c, x, picsAt) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
@@ -7374,8 +7372,9 @@ function unclamp(target) {
 }
 function clampCard(card) {
   const id = card.dataset.id;
-  for (const [sel, inner, part] of CLAMPS) {
-    const el = card.querySelector(sel);
+  /* a decided suggestion in the thread folds the same way, inside its grey box (Nirav, 2026-11-11) */
+  const parts = [...CLAMPS.map(([sel, inner, part]) => [card.querySelector(sel), inner, part]), ...[...card.querySelectorAll(".th-msg.sug .th-sugg")].map((el) => [el, null, `sug:${el.closest(".th-msg").dataset.at}`])];
+  for (const [el, inner, part] of parts) {
     if (!el || el.isContentEditable) continue;
     const target = inner ? el.querySelector(inner) : el;
     if (!target) continue;
