@@ -73,9 +73,9 @@ const TOOLS = [
   { name: "review_done", description: "Set a comment for approval. ONLY after the person said yes in the chat to marking it done. Never approves.", inputSchema: { type: "object", properties: { id: { type: "string" }, ...asProp }, required: ["id"] } },
   { name: "review_reply", description: "Answer a question (one or two plain sentences, from the code it points at). If something should change, say so; the asker can make it a fix.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, ...asProp }, required: ["id", "text"] } },
   { name: "review_picture", description: "Save a comment's picture (the element boxed, its number on it) and return the file path to Read.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" } }, required: ["id"] } },
-  { name: "review_suggest", description: "Claude drafts first: leave a short suggestion on a new comment, for a person to accept or ignore. For a fix, what you would change and where (file and line), in one or two plain sentences; for a question, the answer. When you cannot tell what is meant, or the code shows no clear change, set unsure and say in one sentence what you would need to know, instead of guessing. Draft only: change no code and no status.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, unsure: { type: "boolean", description: "True when the text is a question back to the person, not a suggestion" }, ...asProp }, required: ["id", "text"] } },
-  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan", "change"], description: "change: only on a comment with an open PR, when they told you exactly what to change (\"make it 16\"): that is the go; the text is one short line of what you'll do, and the reply names the PR's work folder" }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, pictures: { type: "object", properties: picsProps, description: "For plan or change: how the before and after should be taken, when one plain pair of the spot would not show your change (a hover style, other pages that use the piece, a narrow screen)" }, ...asProp }, required: ["id", "kind", "text"] } },
-  { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
+  { name: "review_suggest", description: "Claude drafts first: leave a short suggestion on a new comment, for a person to accept or ignore. For a fix, what you would change and where (file and line), in one or two plain sentences; for a question, the answer. When you cannot tell what is meant, or the code shows no clear change, set unsure and say in one sentence what you would need to know, instead of guessing. Draft only: change no code and no status.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, unsure: { type: "boolean", description: "True when the text is a question back to the person, not a suggestion" }, sharper: { type: "string", description: "Only for a vague comment (\"this looks off\", \"feels wrong\"): the same comment said clearly, in the writer's voice and design words, from what the picture and the code show (\"The card title sits 2px lower than the icon. Align them to the centre?\"). Offered to the writer only; leave out when the comment is already clear" }, asks: { type: "array", items: { type: "string" }, description: "Only when the comment holds 2 or more separate asks, each its own change (different elements or different things): each ask in a few words (\"The title in bold\"). Never the steps of one change (\"make Retry the primary button\" is one ask). Offered to the writer as a tick list inside the same comment; never a split" }, clash: { type: "object", properties: { with: { type: "number", description: "The other open comment's number" }, text: { type: "string", description: "One or two sentences, naming who asked what: \"This clashes with #14: Pranjal asked for 8px on the same gap. Which one?\"" }, options: { type: "array", items: { type: "object", properties: { label: { type: "string" }, n: { type: "number" } }, required: ["label"] }, description: "The two choices, each with the comment that asked for it: [{label: \"12px\", n: 12}, {label: \"8px\", n: 14}]" } }, required: ["with", "text", "options"], description: "Only when another OPEN comment asks for the opposite on the same element, or a different value of the same token. Said on both comments" }, session: { type: "string", description: "The test session (the brief names it); leave out for the team comments" }, ...asProp }, required: ["id", "text"] } },
+  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan", "change", "summary"], description: "change: only on a comment with an open PR, when they told you exactly what to change (\"make it 16\"): that is the go; the text is one short line of what you'll do, and the reply names the PR's work folder" }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, summary: { type: "object", properties: { decided: { type: "array", items: { type: "string" } }, left: { type: "array", items: { type: "string" } }, who: { type: "string" } }, description: "For kind summary (someone asked you to sum up the thread): what was decided, what is left, and who has it, each a few words; text is one short line before it" }, asks_add: { type: "string", description: "When a reply asks for one more thing on a comment that tracks its asks as a list: that ask in a few words, added to the list" }, pictures: { type: "object", properties: picsProps, description: "For plan or change: how the before and after should be taken, when one plain pair of the spot would not show your change (a hover style, other pages that use the piece, a narrow screen)" }, ...asProp }, required: ["id", "kind", "text"] } },
+  { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, asks_done: { type: "array", items: { type: "number" }, description: "When the comment tracks its asks as a list (the brief shows it): the numbers of the items this change did, ticked for you" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
   { name: "review_preview", description: "After a plan with preview (or a preview call): you made the planned change in the work folder named. The review server commits it, pushes the branch and opens (or updates) a DRAFT pull request, whose live preview link shows on the plan. The plan still waits for a person's Go.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changes" }, session: { type: "string" } }, required: ["id", "title"] } },
   { name: "review_drop", description: "After a Stop, when they chose to throw your work away: the work folder goes, nothing is pushed, and your plan waits for Go again. Says so in the thread.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string" } }, required: ["id"] } },
   { name: "review_checked", description: "After a CHECK brief: you looked at the before and after pictures against your plan. ok true: they match (the pair is marked checked). ok false: say in text what you see that is wrong, one question with options; it goes in the thread as your question. nothing true: nothing on screen changes with this plan (a link, a screen reader label), so the pictures are hidden. missed true: the pictures don't show the part you changed (another tab, scrolled away, a closed drawer), so they are hidden and the thread says to try it live.", inputSchema: { type: "object", properties: { id: { type: "string" }, ok: { type: "boolean" }, nothing: { type: "boolean" }, missed: { type: "boolean" }, text: { type: "string" }, options: { type: "array", items: { type: "string" } }, session: { type: "string" } }, required: ["id", "ok"] } },
@@ -141,7 +141,20 @@ async function call(name, a = {}) {
   if (name === "review_suggest") {
     if (c.draft && c.draft.state !== "drafting" && c.draft.state !== "reply") return `#${(await numbered(c.id, st))?.n} already has a suggestion: nothing to do`;
     if (c.status !== "open" && !(c.status === "progress" && c.draft?.thread?.length)) return `#${(await numbered(c.id, st))?.n} is already being worked: no suggestion needed`;
-    applyChange(c, { draft: { text: String(a.text || ""), unsure: a.unsure === true } }, who);
+    applyChange(c, { draft: { text: String(a.text || ""), unsure: a.unsure === true, ...(a.sharper ? { sharper: String(a.sharper) } : {}), ...(Array.isArray(a.asks) ? { asks: a.asks } : {}) } }, who);
+    /* A CLASH (step 5): said on both comments, each in its own words */
+    if (a.clash && Number(a.clash.with)) {
+      const all = prepare(await st.list());
+      const me = all.find((x) => x.id === c.id), o = all.find((x) => x.n === Number(a.clash.with));
+      if (o && o.id !== c.id && o.status !== "approved") {
+        const opts = (Array.isArray(a.clash.options) ? a.clash.options : []).slice(0, 2);
+        applyChange(c, { clash: { with: o.id, n: o.n, text: String(a.clash.text || ""), options: opts } }, who);
+        const other = await st.get(o.id);
+        const mine = opts.find((x) => Number(x.n) === me?.n)?.label;
+        applyChange(other, { clash: { with: c.id, n: me?.n, text: `This clashes with #${me?.n}: ${withNames(c, ppl).by || "someone"} asked${mine ? ` for ${mine}` : " for something else"} on the same spot. Which one?`, options: opts } }, who);
+        await st.put(other);
+      }
+    }
     await st.put(c);
     drafted.add(`${c.id}:${c.draft?.thread?.length || 0}`);
     heard = true;
@@ -178,11 +191,12 @@ async function call(name, a = {}) {
       heard = true;
       return `On PR #${c.pr.n}'s branch: make exactly that, nothing more, in ${w.app} (never ${ROOT}; no installs, no git). Then review_ship with id ${c.id}, a short title and a one-sentence summary: it updates the same PR.`;
     }
+    if (a.asks_add && c.asks?.state === "list") applyChange(c, { asksAdd: String(a.asks_add) }, who);
     if (a.kind === "draft") applyChange(c, { claudeDraft: { text: words } }, who);
     else {
       const stopped = c.call.state === "stopped" || (works.has(c.id) && !["go", "preview"].includes(c.call.kind)); // after a Stop: the folder waits for their answer
       const live = a.kind === "plan" && cfg.previews !== "never" && (a.preview === true || cfg.previews === "always") && !readyPr(c); // a ready PR open: Go updates it, and its own preview shows the result
-      applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true, ...(live ? { preview: true } : {}) } : {}) }, who);
+      applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true, ...(live ? { preview: true } : {}) } : a.kind === "summary" && a.summary ? { summary: a.summary } : {}) }, who);
       if (works.has(c.id) && !stopped) dropWork(c.id); // a go that ends in words: the work folder goes
       if (live) {
         await st.put(c);
@@ -205,6 +219,10 @@ async function call(name, a = {}) {
   }
   if (c.call?.state === "stopped" && (name === "review_ship" || name === "review_preview"))
     throw new Error(`${withNames(c, await people()).call.stoppedBy || "Someone"} pressed Stop: do not ship. Say what you had done with review_talk (kind "ask", options Throw it away / Carry on / Push what's done) and wait for their answer`);
+  if (name === "review_ship" && Array.isArray(a.asks_done) && c.asks?.state === "list") {
+    applyChange(c, { asksDone: a.asks_done }, who);
+    await st.put(c);
+  }
   if (name === "review_ship") return works.get(c.id)?.mode === "preview" ? previewBuild(c, st, a) : ship(c, st, a);
   if (name === "review_preview") return previewBuild(c, st, a);
   if (name === "review_undo") {
@@ -374,7 +392,9 @@ async function draftRound() {
   try {
     const all = prepare(await store.list());
     const turn = (c) => `${c.id}:${c.draft?.thread?.length || 0}`; // a new answer from the person is a new turn
-    const fresh = all.filter((c) => (c.status === "open" || (c.status === "progress" && c.draft?.state === "reply")) && Date.now() - (c.ts || 0) < DRAFT_WINDOW && !drafted.has(turn(c)) && draftOpen(c.draft));
+    /* a comment that calls @Claude is answered by the call, not drafted too (Nirav, 2026-11-11: "@Claude which button
+       style…" got the answer twice, a suggestion and a reply) */
+    const fresh = all.filter((c) => (c.status === "open" || (c.status === "progress" && c.draft?.state === "reply")) && Date.now() - (c.ts || 0) < DRAFT_WINDOW && !drafted.has(turn(c)) && draftOpen(c.draft) && !c.call && !(c.mentions || []).includes("Claude"));
     /* answers to Claude's questions first (someone is waiting on the card), then the newest */
     const pick = [...fresh.filter((c) => c.draft?.state === "reply"), ...fresh.filter((c) => c.draft?.state !== "reply").reverse()].slice(0, DRAFT_BATCH);
     if (!pick.length) return;
@@ -398,6 +418,10 @@ async function draftRound() {
       `Not sure what is meant, or no clear change in the code? Set unsure and ask, in one sentence, what you would need`,
       `to know. A wrong suggestion said with confidence is worse than none.`,
       `Where you asked before and the person answered, draft again with their answer.`,
+      `In the same call, only when it applies (CLEARER COMMENTS): sharper, when the comment is vague, the same comment said`,
+      `clearly; asks, when it holds 2 or more separate asks (each its own change; never the steps of one change); clash,`,
+      `when another open comment (review_list) asks for the opposite on the same element or token. All are offers a person`,
+      `decides on. Most comments need none of them.`,
       `Draft only: change no code and no status. Then carry on with whatever you were doing.`,
       ``,
       ...lines,
@@ -521,6 +545,7 @@ async function callRound() {
           `Make exactly that change, nothing more, in the work folder: ${w.app}`,
           `(a fresh copy of ${cfg.github.repo} ${cfg.github.base}, branch ${w.branch}). Edit files ONLY there, never in ${ROOT}.`,
           `Use the design system's tokens and components${cfg.designSystem ? ` (${cfg.designSystem})` : ""}. No installs, no dev server, no git: the review server does the git.`,
+          ...asksLines(full, "With review_ship, pass asks_done: the numbers of the items your change did."),
           `When it is done: review_ship with id ${full.id}, a short PR title and a one or two sentence summary in design words.`,
           `It commits, pushes, opens the PR on the comment and moves it to For approval. If you find you cannot do it as planned,`,
           `review_talk instead (ask, or answer to say why); the work folder is thrown away. Then carry on with what you were doing.`,
@@ -533,6 +558,8 @@ async function callRound() {
       const asked = k.answers ? (named.history || []).find((h) => h.at === k.answers && h.via === "claude") : null; // the question this reply answers
       const what = k.sentBack ? `${k.by} sent your change back: "${k.words}". It's about your open PR #${full.pr?.n}. A reason that names the change ("keep it outline, just bolder text", "make it 12") IS the go: kind "change" on the same PR, no plan. Plan only when it doesn't say what to do ("it feels off"); that plan's Go also updates PR #${full.pr?.n}.`
         : k.kind === "assigned" ? `${k.by} handed this comment to you. Work out what it needs and tell them (an answer, or what you would change and where).`
+        : k.kind === "sent" ? `${k.by} sent this comment to you from the drawer. A question: answer it (kind "answer"). A fix: plan the change (kind "plan"), it waits for their Go.`
+        : k.kind === "accepted" ? `${k.by} accepted your suggestion ("${full.draft?.text || k.words}"). Plan exactly that (kind "plan"), in design words: it waits for their Go.`
         : k.kind === "draft" ? `${k.by} asked for help writing a reply: "${k.words}". Draft it (kind "draft"), only they see it.`
         : asked ? `${k.by} answered your question ("${asked.note}"): "${k.words}". Carry on from there.`
         : `${k.by} wrote: "${k.words}"`;
@@ -544,6 +571,8 @@ async function callRound() {
         `Comment by ${named.by}: "${full.text}"`,
         `Page: ${full.pageTitle || full.route || "?"}${full.route ? ` (${full.route})` : ""} · Code: ${src}${full.shot ? " · has a picture" : ""}`,
         ...(full.area ? [`It is about an area the person picked inside that element (the box on the picture), not the whole element.`] : []),
+        ...asksLines(full, "A reply asking for one more thing: pass asks_add with it, in a few words."),
+        ...(/\bsum (it )?up\b|\bsummar/i.test(k.words || "") ? [`They want the thread summed up: review_talk kind "summary", text one short line, and summary {decided, left, who}, each a few words, from the whole thread.`] : []),
         ...(talk.length ? [`The thread so far:`, ...talk] : [`No replies before this.`]),
         ``,
         `Read first: review_show ${full.id}${sess ? ` (session ${sess})` : ""} (the whole record), review_picture then Read the file (what it looks like),`,
@@ -858,6 +887,8 @@ async function picsFor(id, sess, base, sha, quiet = false) {
     snapping.delete(id);
   }
 }
+/* CLEARER COMMENTS (step 5): a comment that tracks its asks as a list, shown to Claude with what is ticked */
+const asksLines = (c, how) => (c.asks?.state === "list" ? [`It tracks its asks as a list (tick boxes in the same comment): ${c.asks.items.map((x, i) => `${i + 1}. [${x.done ? "x" : " "}] ${x.t}`).join("  ")}`, how] : []);
 /* the pairs for Claude to Read, one line each: where the change shows, or that it does not */
 const picsLines = (local) => local.map((v, i) => {
   const lost = !v.found.before || !v.found.after ? ` (the spot was not found on the ${!v.found.before && !v.found.after ? "two pages" : !v.found.before ? "staging page" : "preview"}: the whole window was taken)` : "";

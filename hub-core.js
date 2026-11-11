@@ -227,6 +227,47 @@ export function applyChange(c, body, who, ctx = {}) {
     const isQ = c.severity === "question" || c.severity === "idea";
     c.draft = { state: "new", text: body.draft.text.trim().slice(0, 600), kind: isQ ? "answer" : "fix", at: Date.now(), by: who, via: "claude", ...(body.draft.unsure === true ? { unsure: true } : {}), ...thread };
   }
+  /* CLEARER COMMENTS (step 5, Nirav 2026-11-06), found in the same drafting pass and only ever offered:
+     - sharpen: a clearer wording of a vague comment, for its writer to use, edit or keep theirs (the original is kept);
+     - asks: 2 or more separate asks, for its writer to track as a list inside the same comment. An item is a tick box
+       and nothing else (no faces, notes, owners or replies on it); the comment moves as one. Never a split;
+     - clash: two open comments asking opposite things, said on both, settled by a pick (the server writes both sides) */
+  if (body.draft && typeof body.draft === "object") {
+    const d = body.draft;
+    if (typeof d.sharper === "string" && d.sharper.trim() && !c.sharpen && d.sharper.trim() !== String(c.text || "").trim()) c.sharpen = { text: d.sharper.trim().slice(0, 600), state: "new", at: Date.now() };
+    const items = Array.isArray(d.asks) ? d.asks.map((x) => String(x || "").trim().slice(0, 140)).filter(Boolean).slice(0, 8) : [];
+    if (items.length >= 2 && !c.asks) c.asks = { state: "offered", items: items.map((t) => ({ t, done: false })), at: Date.now() };
+  }
+  if (body.sharpen === "use" && c.sharpen?.state === "new") {
+    c.textOriginal = c.text;
+    c.text = c.sharpen.text;
+    Object.assign(c.sharpen, { state: "used", by: who, decidedAt: Date.now() });
+  } else if ((body.sharpen === "keep" || body.sharpen === "edited") && c.sharpen?.state === "new") {
+    if (body.sharpen === "edited") c.textOriginal ??= c.text; // Edit opened with the sharper words: whatever they save
+    Object.assign(c.sharpen, { state: body.sharpen === "keep" ? "kept" : "used", by: who, decidedAt: Date.now() });
+  }
+  if ((body.asks === "list" || body.asks === "no") && c.asks?.state === "offered") Object.assign(c.asks, { state: body.asks === "list" ? "list" : "declined", by: who, decidedAt: Date.now() });
+  if (body.asksTick && typeof body.asksTick === "object" && c.asks?.state === "list") {
+    const it = c.asks.items[Number(body.asksTick.i)];
+    if (it) Object.assign(it, { done: body.asksTick.done === true, by: who, at: Date.now() }); // kept for the record, never shown on the item
+  }
+  if (Array.isArray(body.asksDone) && c.asks?.state === "list") for (const i of body.asksDone) { const it = c.asks.items[Number(i) - 1]; if (it && !it.done) Object.assign(it, { done: true, by: who, at: Date.now() }); } // Claude: the items (from 1) its change did
+  /* an item added by mistake: removed, matched by its words too, so a list that changed meanwhile loses the right one */
+  if (body.asksRemove && typeof body.asksRemove === "object" && c.asks?.state === "list") {
+    const t = String(body.asksRemove.t || ""), k = Number(body.asksRemove.i);
+    const i = c.asks.items[k]?.t === t ? k : c.asks.items.findIndex((x) => x.t === t);
+    if (i >= 0) c.asks.items.splice(i, 1);
+  }
+  const added = typeof body.asksAdd === "string" ? body.asksAdd.trim().slice(0, 140) : "";
+  if (added && c.asks?.state === "list" && c.asks.items.length < 12) c.asks.items.push({ t: added, done: false, by: who, at: Date.now(), added: true });
+  if (body.clash && typeof body.clash === "object" && body.clash.with && !(c.clash && c.clash.state === "open")) {
+    const k = body.clash;
+    c.clash = { with: String(k.with).slice(0, 40), n: Number(k.n) || null, text: String(k.text || "").trim().slice(0, 400), options: (Array.isArray(k.options) ? k.options : []).filter((o) => o && typeof o.label === "string").slice(0, 3).map((o) => ({ label: o.label.trim().slice(0, 40), n: Number(o.n) || null })), state: "open", at: Date.now() };
+  }
+  if (body.clashPick && typeof body.clashPick === "object" && c.clash?.state === "open") Object.assign(c.clash, { state: "settled", pick: { label: String(body.clashPick.label || "").slice(0, 40), n: Number(body.clashPick.n) || null }, by: who, settledAt: Date.now() });
+  if (body.clashTalk === true && c.clash?.state === "open") Object.assign(c.clash, { state: "talk", by: who, settledAt: Date.now() });
+  /* a pinned summary sits at the top of the thread; a newer summary from Claude takes its place */
+  if ("pinSummary" in body) c.pinned = Number(body.pinSummary) || null;
   const answer = typeof body.draftReply === "string" ? body.draftReply.trim().slice(0, 600) : "";
   if (answer && c.draft?.state === "new" && c.draft.unsure) c.draft = { state: "reply", at: Date.now(), by: who, thread: [...(c.draft.thread || []), { q: c.draft.text, qAt: c.draft.at, a: answer, by: who, at: Date.now() }] };
   if ((body.draftState === "accepted" || body.draftState === "ignored") && c.draft?.state === "new") Object.assign(c.draft, { state: body.draftState, decidedBy: who, decidedAt: Date.now() });
@@ -257,6 +298,10 @@ export function applyChange(c, body, who, ctx = {}) {
     if (go && !mayGo(c, who, ctx.approvers)) refuse("Only the person who asked Claude or an approver can say Go");
     const planAsker = go ? c.call.by : null;
     const forWho = claude && c.call?.by ? { for: c.call.by } : {}; // who called Claude: Claude's message is news for them
+    /* SUM UP (step 5): Claude's summary of a long thread, what was decided, what is left and who has it */
+    const list = (x) => (Array.isArray(x) ? x.map((v) => String(v || "").trim().slice(0, 200)).filter(Boolean).slice(0, 8) : []);
+    const sum = claude && body.summary && typeof body.summary === "object" ? { summary: { decided: list(body.summary.decided), left: list(body.summary.left), who: String(body.summary.who || "").trim().slice(0, 120) } } : {};
+    if (sum.summary && c.pinned) c.pinned = at;
     const cask = claude && body.ask === true ? { ask: true, ...(Array.isArray(body.options) ? { options: body.options.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 60)).slice(0, 4) } : {}) } : {};
     if (claude && c.call && c.call.state !== "done") Object.assign(c.call, cask.ask ? { state: "asked", askAt: at } : plan ? { state: "planned", planAt: at } : { state: "done", doneAt: at });
     else if (go) {
@@ -267,7 +312,7 @@ export function applyChange(c, body, who, ctx = {}) {
     else if (!claude && !go && (mentions.includes("Claude") || c.call?.state === "asked" || qt.quote?.by === "Claude")) c.call = newCall(who, reply, at, { step: at, ...(c.call?.state === "asked" ? { answers: c.call.askAt } : {}) });
     /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
     if (!isQ) {
-      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true, ...(body.preview === true ? { preview: true } : {}) } : {}), ...(go ? { go: true, ...(planAsker && !sameWho(planAsker, who) ? { tell: [planAsker] } : {}) } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...ment, ...qt });
+      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true, ...(body.preview === true ? { preview: true } : {}) } : {}), ...(go ? { go: true, ...(planAsker && !sameWho(planAsker, who) ? { tell: [planAsker] } : {}) } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...sum, ...ment, ...qt });
       /* Go on a New comment picks it up: the person who said go is on it, with Claude */
       if (go && from === "open") {
         Object.assign(c, { status: "progress", assignee: who, pickedAt: at, withClaude: true });
@@ -282,7 +327,7 @@ export function applyChange(c, body, who, ctx = {}) {
       if (to === "open") Object.assign(c, { assignee: null, pickedAt: null, doneAt: null, approvedAt: null, resolvedAt: null });
     } else if (to === "approval") Object.assign(c, { doneBy: who, doneAt: at }); // the latest answer's face on the card
     c.note = { text: reply, by: who, at, from, to, kind: "reply", ...(claude ? { via: "claude" } : {}) };
-    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...ment, ...qt });
+    (c.history ||= []).push({ at, by: who, status: to, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...sum, ...ment, ...qt });
     normalise(c);
     c.edited = Date.now();
     return c;
@@ -344,6 +389,7 @@ export function withNames(c, people = {}) {
   if (Array.isArray(c.history)) out.history = c.history.map((h) => ({ ...h, by: name(h.by), ...(h.toWho ? { toWho: name(h.toWho) } : {}), ...(h.for ? { for: name(h.for) } : {}), ...(h.tell ? { tell: h.tell.map(name) } : {}) }));
   /* Claude's part of the thread names its people too: who answered, who accepted or set it aside (2026-11-04) */
   if (c.pr?.for) out.pr = { ...c.pr, for: name(c.pr.for) };
+  if (c.clash?.by) out.clash = { ...c.clash, by: name(c.clash.by) }; // who settled a clash (step 5)
   if (c.call) out.call = { ...c.call, by: name(c.call.by), ...(c.call.asker ? { asker: name(c.call.asker) } : {}), ...(c.call.stoppedBy ? { stoppedBy: name(c.call.stoppedBy) } : {}), ...(c.call.draft ? { draft: { ...c.call.draft, for: name(c.call.draft.for) } } : {}) };
   if (c.draft) out.draft = { ...c.draft, ...(c.draft.decidedBy ? { decidedBy: name(c.draft.decidedBy) } : {}), ...(Array.isArray(c.draft.thread) ? { thread: c.draft.thread.map((t) => ({ ...t, by: name(t.by) })) } : {}) };
   return out;

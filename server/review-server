@@ -77,7 +77,7 @@ case "$cmd" in
     # Claude's own first-run questions, answered once: onboarding done, this folder trusted
     cj="$HOME/.claude.json"
     [ -s "$cj" ] || echo '{}' >"$cj"
-    jq --arg p "$APP" '.hasCompletedOnboarding = true | .projects[$p].hasTrustDialogAccepted = true' "$cj" >"$cj.tmp" && mv "$cj.tmp" "$cj"
+    jq --arg p "$APP" '.hasCompletedOnboarding = true | .projects[$p].hasTrustDialogAccepted = true | .projects[$p].enabledMcpjsonServers = ((.projects[$p].enabledMcpjsonServers // []) + ["review"] | unique)' "$cj" >"$cj.tmp" && mv "$cj.tmp" "$cj" # review mode's own MCP server: on, no question
     echo "Ready: $(git -C "$DIR" log -1 --format='%h %s' | cut -c1-70)"
     echo "review-mode $(git ls-remote https://github.com/niravbhatt1317/review-mode.git HEAD | cut -c1-7), $(claude --version 2>/dev/null)"
     ;;
@@ -140,7 +140,7 @@ case "$cmd" in
       echo "Claude: OFF ($up). Start it: sudo review-server start"
     fi
     has_secrets && echo "Tokens: saved" || echo "Tokens: missing (sudo review-server secrets)"
-    [ -d "$DIR/.git" ] && echo "Console: $(git -C "$DIR" log -1 --format='%h, %cr' 2>/dev/null)"
+    [ -d "$DIR/.git" ] && echo "Console: $(runuser -u "$U" -- git -C "$DIR" log -1 --format='%h %s, %cr' 2>/dev/null | cut -c1-80)" # as its owner: git refuses another user's folder
     echo "Last update: $(systemctl show review-update -p ExecMainExitTimestamp --value 2>/dev/null | sed 's/^$/never/')"
     echo "Work folders: $(find "$WORK" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)$(busy && echo ', one busy now' || true)"
     df -h / | awk 'NR==2 {print "Disk: " $3 " used of " $2 " (" $5 ")"}'

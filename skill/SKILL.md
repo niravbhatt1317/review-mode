@@ -53,7 +53,12 @@ read from the code; they are remembered for that comment. Pictures that show the
 `pictures`, or `review_resnap` later): `state` when the change is a hover, focus or open look; `pages` (route, and the
 spot's words there) when the piece is shared and shows elsewhere; `widths` (768, 390) when it may wrap, or when someone
 asks to see it small. A pair marked NO DIFFERENCE means the change did not show there: never ok true on it; find out why
-(resnap, or the code), or say so with ok false. After the PR (step 4): on a comment with your open PR, a clear
+(resnap, or the code), or say so with ok false. Clearer comments (step 5), in the same `review_suggest`, only
+when they apply: `sharper` for a vague comment (the same comment said clearly), `asks` for 2 or more separate asks
+(never the steps of one change; the writer may track them as tick boxes in the same comment, never a split), `clash`
+when another open comment asks for the opposite on the same element or token. A go brief that shows a list: pass
+`asks_done` to `review_ship`; a reply asking one more thing on a list: `asks_add`. "Sum up": `review_talk` kind
+"summary" with `summary` {decided, left, who}. After the PR (step 4): on a comment with your open PR, a clear
 instruction from the person the PR is for or an approver ("make it 16", a send-back reason that says how) is the go:
 `review_talk` kind "change", then edit the PR's work folder and `review_ship` (it updates the same PR). "Undo":
 `review_undo` (files for a part; on a merged PR it opens a PR that takes it back out). Anyone else: plan as usual. Show changes

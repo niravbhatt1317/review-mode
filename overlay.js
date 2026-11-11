@@ -1492,10 +1492,90 @@ root.innerHTML = `
   .card-draft .dr-busy { background: linear-gradient(90deg, var(--rv-ink-3) 0%, var(--rv-ink-3) 40%, var(--rv-ink) 50%, var(--rv-ink-3) 60%, var(--rv-ink-3) 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; }
   @keyframes rv-dr-shine { from { background-position: 100% 0; } to { background-position: 0 0; } }
   @media (prefers-reduced-motion: reduce) { .card-draft .dr-busy { animation: none; color: var(--rv-ink-3); } }
-  .card-draft .dr-text { margin: 5px 0 0 22px; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .card-draft .dr-acts { display: flex; gap: 6px; margin: 8px 0 0 22px; }
+  .card-draft .dr-text { margin: 5px 0 0 27px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .card-draft .dr-acts { display: flex; gap: 6px; margin: 8px 0 0 27px; } /* under "Claude suggests", not the mark (Nirav, 2026-11-06) */
   .card-draft .dr-acts button { height: 26px; padding: 0 11px; border-radius: 6px; font: 500 11.5px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
   .card-draft .dr-accept { border: 0; background: #D97757; color: #fff; }
+  /* CLEARER COMMENTS (step 5): Claude's offers in its warm tint; the list and the clash in the card's own tones */
+  .card-clear:empty { display: none; }
+  .cl-offer { margin-top: 10px; padding: 8px 10px 9px; border-radius: 8px; background: color-mix(in srgb, #D97757 7%, var(--rv-surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #D97757 18%, transparent); font-size: 12px; line-height: 1.45; color: var(--rv-ink); }
+  .cl-h { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #B4532F; margin-bottom: 4px; }
+  .cl-h .cl-only { margin-left: auto; font-weight: 400; color: var(--rv-ink-3); }
+  .cl-q { padding: 6px 8px; border-radius: 6px; background: var(--rv-surface); }
+  .cl-offer ol { margin: 0; padding: 0 0 0 18px; } .cl-offer ol li { padding: 1px 0; }
+  .cl-acts { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+  .cl-acts button { height: 24px; padding: 0 10px; border: 0; border-radius: 999px; background: hsl(var(--rv-n10)); color: var(--rv-ink); font: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer; }
+  .cl-acts button.pri { background: #D97757; color: #fff; }
+  .cl-acts button.pri:hover { background: #C6613F; }
+  .cl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 2px; }
+  .cl-chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px 0 3px; border: 0; border-radius: 999px; background: color-mix(in srgb, #D97757 9%, transparent); color: #B4532F; font: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer; }
+  .cl-chip { padding-left: 7px; animation: clIn .32s cubic-bezier(.2,.8,.3,1) both; }
+  .cl-ic { width: 14px; height: 14px; flex: 0 0 auto; color: #D97757; overflow: visible; }
+  .cl-ic .cl-line, .cl-ic .cl-tick { stroke-dasharray: 1; stroke-dashoffset: 1; animation: clDraw .45s .2s ease-out forwards; }
+  .cl-ic .cl-t2 { animation-delay: .42s; }
+  .cl-chip:hover .cl-line, .cl-chip:hover .cl-tick { animation: clRedraw .45s ease-out forwards; }
+  .cl-chip:hover .cl-t2 { animation-delay: .16s; }
+  .cl-chip:hover .cl-pen { animation: clPen .6s ease-in-out; transform-origin: 4px 20px; transform-box: view-box; }
+  @keyframes clIn { from { opacity: 0; transform: translateY(3px) scale(.96); } }
+  @keyframes clDraw { to { stroke-dashoffset: 0; } }
+  @keyframes clRedraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  @keyframes clPen { 30% { transform: translateX(2px) rotate(-6deg); } 65% { transform: translateX(-1px) rotate(3deg); } }
+  @media (prefers-reduced-motion: reduce) { .cl-chip, .cl-ic * { animation: none !important; stroke-dashoffset: 0 !important; } }
+  .cl-chip:hover, .cl-chip.on { background: color-mix(in srgb, #D97757 16%, transparent); }
+  .cl-pop { margin-top: 6px; padding: 8px 10px 9px; border-radius: 8px; background: var(--rv-surface); box-shadow: 0 6px 20px rgba(12,20,32,.12), 0 0 0 1px var(--rv-line); font-size: 12px; line-height: 1.45; }
+  .cl-ph { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: #B4532F; margin-bottom: 5px; }
+  .cl-ph .cl-only { margin-left: auto; font-weight: 400; color: var(--rv-ink-3); }
+  .cl-x { width: 18px; height: 18px; border: 0; border-radius: 50%; background: none; color: var(--rv-ink-3); font-size: 15px; line-height: 18px; cursor: pointer; padding: 0; }
+  .cl-x:hover { background: hsl(var(--rv-n10)); color: var(--rv-ink); }
+  .cl-pop .cl-q { background: hsl(var(--rv-n10)); }
+  .cl-pop ol { margin: 0; padding: 0 0 0 18px; } .cl-pop ol li { padding: 1px 0; }
+  .cl-orig { margin: -4px 0 8px; font-size: 11px; color: var(--rv-ink-3); }
+  .cl-orig button { border: 0; background: none; padding: 0; font: inherit; color: hsl(214 98% 44%); cursor: pointer; }
+  .cl-orig q { display: block; margin-top: 3px; padding: 5px 8px; border-radius: 6px; background: hsl(var(--rv-n10)); color: var(--rv-ink-2); quotes: none; white-space: pre-wrap; }
+  .cl-list { margin-top: 10px; padding: 6px 9px 5px; border-radius: 8px; background: hsl(var(--rv-n10)); }
+  .cl-lh { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--rv-ink-2); margin-bottom: 2px; }
+  .cl-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--rv-line); overflow: hidden; } .cl-bar i { display: block; height: 100%; border-radius: 2px; background: #1E8C81; }
+  .cl-row { position: relative; display: flex; align-items: flex-start; }
+  .cl-row::before { content: ""; position: absolute; top: 0; left: 22px; right: 0; border-top: 1px solid color-mix(in srgb, var(--rv-line) 55%, transparent); } /* from the words, not the box, and light (Nirav, 2026-11-06) */
+  .cl-lh + .cl-row::before { display: none; }
+  .cl-rm { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 3px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--rv-ink-3); font-size: 15px; line-height: 20px; cursor: pointer; opacity: 0; transition: opacity .12s; }
+  .cl-row:hover .cl-rm, .cl-rm:focus-visible { opacity: 1; }
+  .cl-rm:hover { background: hsl(var(--rv-n10) / 1); color: var(--rv-ink); box-shadow: inset 0 0 0 1px var(--rv-line); }
+  .cl-it { display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0; width: 100%; padding: 4px 0; border: 0; background: none; font: inherit; font-size: 12.5px; line-height: 1.4; color: var(--rv-ink); text-align: left; }
+  button.cl-it { cursor: pointer; } button.cl-it:hover .cl-ck { box-shadow: inset 0 0 0 1.5px hsl(214 98% 44%); }
+  .cl-ck { width: 14px; height: 14px; margin-top: 2px; border-radius: 4px; flex: 0 0 auto; box-shadow: inset 0 0 0 1.5px var(--rv-ink-3); background: var(--rv-surface); display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; line-height: 1; }
+  .cl-it.done .cl-ck { background: #1E8C81; box-shadow: none; } .cl-it.done .cl-ck::after { content: "✓"; }
+  .cl-it.done .cl-t { color: var(--rv-ink-2); }
+  .cl-add { display: flex; gap: 6px; padding: 4px 0 2px; }
+  .cl-add-t { display: block; padding: 5px 0 3px; border: 0; background: none; color: var(--rv-ink-3); font: inherit; font-size: 12px; cursor: pointer; }
+  .cl-add-t:hover { color: hsl(214 98% 44%); }
+  .cl-add input { flex: 1; min-width: 0; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--rv-surface); box-shadow: inset 0 0 0 1px var(--rv-line); color: var(--rv-ink); font: inherit; font-size: 12px; }
+  .cl-add input:focus { outline: none; box-shadow: inset 0 0 0 1.5px hsl(214 98% 44%); }
+  .cl-dlg { margin-top: 8px; padding: 9px 10px; border-radius: 8px; background: var(--rv-surface); box-shadow: 0 6px 20px rgba(12,20,32,.14), 0 0 0 1px var(--rv-line); font-size: 12px; }
+  .cl-dlg b { display: block; font-size: 12.5px; margin-bottom: 2px; }
+  .cl-dlg input { width: 100%; box-sizing: border-box; margin-top: 6px; height: 28px; padding: 0 9px; border: 0; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--rv-line); background: var(--rv-surface); color: var(--rv-ink); font: inherit; font-size: 12px; }
+  .cl-dlg .cl-acts button.pri { background: hsl(214 98% 44%); }
+  .cl-clash { margin-top: 10px; padding: 8px 10px 9px; border-radius: 8px; background: color-mix(in srgb, #D97757 7%, var(--rv-surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #D97757 18%, transparent); font-size: 12px; line-height: 1.45; }
+  .cl-clash.settled { background: hsl(var(--rv-n10)); box-shadow: none; color: var(--rv-ink-2); }
+  .cl-clash .cl-h .av { width: 20px; height: 20px; flex: 0 0 auto; }
+  .cl-clash .cl-b { padding-left: 31px; } /* under the heading's words, not Claude's mark */
+  .cl-acts button:disabled { opacity: .5; cursor: not-allowed; }
+  .cl-clash .cl-acts button:not(.pri) { background: var(--rv-surface); box-shadow: inset 0 0 0 1px var(--rv-line); }
+  .asks-pill { display: inline-flex; align-items: center; flex: 0 0 auto; white-space: nowrap; height: 17px; padding: 0 7px; margin-left: 6px; border-radius: 999px; background: color-mix(in srgb, #1E8C81 14%, transparent); color: #1E8C81; font-size: 10.5px; font-weight: 600; }
+  .th-sum { margin-top: 5px; padding: 3px 10px; border-radius: 9px; background: hsl(var(--rv-n10)); font-size: 12.5px; line-height: 1.45; }
+  .th-pinned .th-sum { margin: 0; padding: 0 0 0 27px; background: none; } /* under the word Summary, not Claude's mark */
+  .sm-g { padding: 5px 0; } .sm-g + .sm-g { border-top: 1px solid var(--rv-line); }
+  .sm-r { display: flex; align-items: flex-start; gap: 8px; padding: 1.5px 0; color: var(--rv-ink); }
+  .sm-ic { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 2.5px; } .sm-ic svg { display: block; width: 14px; height: 14px; }
+  .sm-left { color: var(--rv-ink); } .sm-who { color: var(--rv-ink-2); } .sm-who .sm-ic { color: var(--rv-ink-3); }
+  .th-pinned { margin: 2px 0 8px; padding: 7px 9px; border-radius: 8px; background: hsl(var(--rv-n10)); font-size: 12px; line-height: 1.45; }
+  .th-pinned .h { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--rv-ink-3); margin-bottom: 3px; }
+  .th-pinned .h b { color: var(--rv-ink); font-weight: 600; }
+  .th-pinned .h button, .th-sumup button { margin-left: auto; border: 0; background: none; padding: 0; font: inherit; font-size: 11px; color: hsl(214 98% 44%); cursor: pointer; }
+  .th-pinned .h button + button { margin-left: 8px; }
+  .th-pinned .h button { opacity: 0; transition: opacity .12s; } /* Update and Unpin on hover only (Nirav, 2026-11-06) */
+  .th-pinned:hover .h button, .th-pinned:focus-within .h button { opacity: 1; }
+  .th-sumup { display: flex; align-items: center; gap: 6px; margin: 2px 0 8px; font-size: 11.5px; color: var(--rv-ink-3); }
   .card-draft .dr-accept:hover { background: #C6613F; }
   .card-draft .dr-ignore { border: 1px solid var(--rv-line-2); background: var(--rv-surface); color: var(--rv-ink-2); }
   .card-draft .dr-ignore:hover { color: var(--rv-ink); border-color: hsl(var(--rv-n70)); }
@@ -4544,6 +4624,11 @@ tip.addEventListener("click", async (e) => {
   }
   if (t.classList.contains("tip-ok")) {
     const to = t.dataset.to;
+    if (to === "approval" && asksOpen(c)) { // boxes not ticked: asked on the drawer's card
+      state.asksAsk = c.id;
+      showInList(c);
+      return;
+    }
     const was = c.status;
     const ok = await applyUpdate({ id: c.id, status: to }, t);
     if (ok && to === "approved") await tipGoodbye("ok").catch(() => {}); // its lock, as in the list
@@ -6026,7 +6111,7 @@ function threadOf(c) {
     /* a question Claude asked on a call: warm, with its quick picks, while the call still waits on it */
     const live = claudeSays && s.ask && c.call?.state === "asked" && c.call.askAt === s.at && c.status !== "approved";
     const planLive = claudeSays && s.plan && c.call?.state === "planned" && c.call.planAt === s.at && c.status !== "approved";
-    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}), ...(s.plan && claudeSays ? { plan: true, planLive, planAt: s.at, previewPlan: !!s.preview } : {}) });
+    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}), ...(s.plan && claudeSays ? { plan: true, planLive, planAt: s.at, previewPlan: !!s.preview } : {}), ...(claudeSays && s.summary ? { summary: s.summary } : {}) });
     /* a move's reason is a reply, labelled with the move ("You put it back"); a bare move is the history's
        (Nirav, 2026-10-30: the words were written for someone to read) */
     else if (s.note && s.kind !== "mention") out.push({ msg: true, at: s.at, by: s.by, words: s.note, move: stepVerb(c, s, from), st: s.status, mk: moveKey(s, from), pill: movePill(c, s, from, doer) });
@@ -6129,6 +6214,23 @@ function picsHtml(c, p) {
   const how = st ? `<div class="ba-note">${st === "hover" ? "With the pointer over it" : st === "focus" ? "With the focus on it" : "With it open"}</div>` : "";
   return `<div class="th-ba-w" data-sha="${esc(p.sha)}">${tabs}<div class="th-ba${v.w && v.h && v.w / v.h > 1.4 ? " stack" : ""}" data-sha="${esc(p.sha)}" data-v="${i}"><button type="button" class="ba-pic" data-which="before"${ar}><img src="${esc(picUrl(v.before))}" alt="Before, on staging" loading="lazy"><span class="ba-lb">Before · staging</span></button><button type="button" class="ba-pic af" data-which="after"${ar}><img src="${esc(picUrl(v.after))}" alt="After, on the preview" loading="lazy">${chgHtml(v)}<span class="ba-lb">${draft ? "Planned · preview" : "After · preview"}</span></button></div>${how}${lost}${same}${note}</div>`;
 }
+/* SUM UP (step 5): Claude's summary, in three parts, the same in the thread and pinned */
+/* the icons say which is which (Nirav, 2026-11-06: labels in capitals and a border looked like a form): a tick for what
+   was decided, an open ring for what is left, a person for who has it */
+const SUM_IC = {
+  decided: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#1E8C81"/><path d="m5 8.2 2 2 4-4.2" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  left: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="#D28A00" stroke-width="1.8" stroke-dasharray="3 2.2"/></svg>',
+  who: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.7" fill="currentColor"/><path d="M2.8 14c.6-2.9 2.7-4.4 5.2-4.4s4.6 1.5 5.2 4.4" fill="currentColor"/></svg>',
+};
+const sumHtml = (m) => {
+  const row = (k, x, tip) => `<div class="sm-r sm-${k}" title="${tip}"><span class="sm-ic">${SUM_IC[k]}</span><span>${esc(x)}</span></div>`;
+  const parts = [
+    (m.decided || []).map((x) => row("decided", x, "Decided")).join(""),
+    (m.left || []).map((x) => row("left", x, "Still open")).join(""),
+    m.who ? row("who", m.who, "Who has it") : "",
+  ].filter(Boolean);
+  return `<div class="th-sum">${parts.map((p) => `<div class="sm-g">${p}</div>`).join("")}</div>`;
+};
 /* A TIDY THREAD: only the newest pair shows; an earlier one folds to one line, opened again on a click */
 function picsFold(c, x, latestAt) {
   const p = picsOf(c, x.at);
@@ -6226,6 +6328,12 @@ function threadHtml(c, moves = true) {
   }
   const newest = [...items].reverse().find((x) => !x.sys)?.at;
   const picsAt = [...items].reverse().find((x) => x.claude && picsOf(c, x.at))?.at; // the newest pair: the only one shown open
+  /* SUM UP (step 5): a pinned summary first; a long thread (8 replies or more, none summed up since) offers one */
+  const pinnedSum = c.pinned ? items.find((x) => x.at === c.pinned && x.summary) : null;
+  const lastSum = [...items].reverse().find((x) => x.summary);
+  const since = msgs.filter((x) => !lastSum || x.at > lastSum.at).length;
+  const sumTop = pinnedSum ? `<div class="th-pinned"><div class="h">${CLAUDE_AV()}<b>Summary</b>· ${esc(agoText(pinnedSum.at))} · ${msgs.filter((x) => x.at < pinnedSum.at).length} replies${since > 1 ? ` · ${since - 1} since` : ""}<button type="button" class="th-sum-again">Update</button><button type="button" class="th-pin" data-at="${pinnedSum.at}">Unpin</button></div>${sumHtml(pinnedSum.summary)}</div>`
+    : msgs.length >= 8 && since >= 8 && !callBusy(c) && can("answer", c) ? `<div class="th-sumup">${msgs.length} replies<button type="button" class="th-sum-again">Sum up with Claude</button></div>` : "";
   const rows = items.map((x) => {
     if (x.sys) {
       const who = x.by ? `<b>${thName(x.by)}</b> ` : "";
@@ -6235,7 +6343,7 @@ function threadHtml(c, moves = true) {
     const q = x.quote ? `<button type="button" class="th-quote" data-at="${x.quote.at}">${TH_ARROW}<b>${thName(x.quote.by)}</b><span>${esc(x.quote.text)}</span></button>` : "";
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
     const long = !x.sug && x.at !== newest && !x.ask && !x.planLive && isLong(x.words, 280), open = state.longOpen.has(`${c.id}:${x.at}`);
-    const words = x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
+    const words = x.summary ? (c.pinned === x.at ? `<div class="th-words">${linkHtml(mentionHtml(x.words))} <span class="th-at">Pinned to the top</span></div>` : `<div class="th-words">${linkHtml(mentionHtml(x.words))}</div>${sumHtml(x.summary)}<div class="th-picks"><button type="button" class="th-pick th-pin" data-at="${x.at}">Pin to the top</button></div>`) : x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
     return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.claude && picsOf(c, x.at) ? picsFold(c, x, picsAt) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
@@ -6258,9 +6366,9 @@ function threadHtml(c, moves = true) {
     const who = a.assignTo ? (isMe(a.toName) ? "yourself" : esc(a.toName)) : "";
     const ph = a.assignTo ? `A note for ${who} (optional)` : "Why? @ to mention";
     const hint = a.assignTo ? `<div class="th-hint">Enter ${a.label === "Assign" ? "assigns it" : "hands it over"}, with or without a note</div>` : "";
-    return `<div class="th-open"><div class="th-list">${shown.join("")}</div>${askBar(a, c)}<div class="th-box th-move-box" data-c="${MOVE_IC[askKey(a, c)][0]}"><input class="th-in" type="text" maxlength="600" placeholder="${ph}" aria-label="${esc(a.label)}: ${ph}"><button type="button" class="th-go">${esc(a.label)}</button></div>${hint}</div>`;
+    return `<div class="th-open">${sumTop}<div class="th-list">${shown.join("")}</div>${askBar(a, c)}<div class="th-box th-move-box" data-c="${MOVE_IC[askKey(a, c)][0]}"><input class="th-in" type="text" maxlength="600" placeholder="${ph}" aria-label="${esc(a.label)}: ${ph}"><button type="button" class="th-go">${esc(a.label)}</button></div>${hint}</div>`;
   }
-  return `<div class="th-open"><div class="th-list">${shown.join("")}</div>${prRowHtml(c)}${quoting}<div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="${answering ? "Answer Claude…" : "Reply, @ to mention…"}" aria-label="${answering ? "Answer Claude" : "Reply"}"><button type="button" class="th-go">Reply</button></div></div>`;
+  return `<div class="th-open">${sumTop}<div class="th-list">${shown.join("")}</div>${prRowHtml(c)}${quoting}<div class="th-box"><input class="th-in" type="text" maxlength="1200" placeholder="${answering ? "Answer Claude…" : "Reply, @ to mention…"}" aria-label="${answering ? "Answer Claude" : "Reply"}"><button type="button" class="th-go">Reply</button></div></div>`;
 }
 /* the thread block on a card (the drawer's or the pin card's), and its reply box wired */
 function threadSync(box, c, onSent) {
@@ -6434,6 +6542,16 @@ function threadClick(e, c, box, onChange) {
   if (bt) {
     state.baTab.set(`${c.id}:${bt.closest(".th-ba-w").dataset.sha}`, Number(bt.dataset.v) || 0);
     onChange();
+    return true;
+  }
+  const pin = t.closest(".th-pin");
+  if (pin) {
+    const at = Number(pin.dataset.at);
+    applyUpdate({ id: c.id, pinSummary: c.pinned === at ? null : at });
+    return true;
+  }
+  if (t.closest(".th-sum-again")) {
+    applyUpdate({ id: c.id, reply: "@Claude sum up", mentions: ["Claude"] }).then((r) => r && watchCall(c.id));
     return true;
   }
   const bf = t.closest(".ba-fold");
@@ -6838,7 +6956,7 @@ const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "
 function footHtml(c) {
   const pick = `<i class="tb-rule" aria-hidden="true"></i><button class="card-pick" aria-label="Select for copying" aria-pressed="${state.selected.has(c.id)}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></button>`;
   const acts = c.pending ? (c.failed ? `<span class="acts on"><button class="card-ok card-retry">Retry</button><button class="card-rm card-drop">Drop</button></span>` : `<span class="card-sending">Saving…</span>`) : `<span class="acts">${tbMain(actsHtml(c))}</span>`;
-  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${shownStatus(c)}">${statusHtml(c)}</span>${maybe.has(c.id) ? `<span class="card-maybe" data-tip="${esc(maybeTip(c))}">Maybe fixed?</span>` : ""}<span class="card-tb">${acts}${pick}</span>`;
+  return `<span class="where">${esc(`${c.pageTitle || c.route} · ${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}</span><span class="card-status" data-s="${shownStatus(c)}">${statusHtml(c)}</span>${asksPill(c)}${maybe.has(c.id) ? `<span class="card-maybe" data-tip="${esc(maybeTip(c))}">Maybe fixed?</span>` : ""}<span class="card-tb">${acts}${pick}</span>`;
 }
 /* the main move in the toolbar: an icon, its name in the tooltip (Pick up, Done, Approve, Got it; Answer as a reply) */
 const TB_CHECK = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>`;
@@ -6853,6 +6971,7 @@ function tbMain(h) {
 function settle(card, c) {
   threadSync(card, c); // the note is a message in the thread now (Nirav, 2026-10-29)
   draftSync(card, c);
+  clearSync(card, c);
   histSync(card, c);
   clampCard(card);
 }
@@ -6867,6 +6986,8 @@ const myName = (x) => !!x && (isMe(x) || (!!state.hub?.handle && String(x).toLow
 const draftShown = (c) => {
   const d = c.draft;
   if (!d || (d.state === "new" && d.unsure)) return false; // Claude's question is a thread message (Nirav, 2026-11-04)
+  if (c.clash?.state === "settled" && c.clash.pick?.n && c.clash.pick.n !== c.n) return false; // settled the other way: its suggestion is moot
+  if (c.clash?.state === "open" && c.status !== "approved") return false; // a clash first: the suggestion waits for which way it goes (one Claude box)
   if (claudeAgain(c) && state.thOpen.has(c.id)) return false; // drafting again: said at the end of the open thread
   const fresh = d.state === "drafting" && Date.now() - (d.at || 0) < DRAFT_LIVE_MS;
   if (c.status === "open") return d.state === "new" || d.state === "reply" || fresh;
@@ -6899,6 +7020,191 @@ function draftSync(card, c) {
   const t = box.querySelector(".dr-text");
   if (t) t.textContent = c.draft.text;
 }
+/* CLEARER COMMENTS (step 5, Nirav 2026-11-06): what Claude found in its drafting pass, on the card above the thread.
+   - Sharpen: a clearer wording of a vague comment, only to its writer: Use this, Edit, Keep mine. Used, the card says
+     so and keeps the original one click away.
+   - Asks: 2 or more separate asks, only to its writer: Track as a list, No thanks. A list is tick boxes and nothing
+     else (no faces, notes, owners or replies on an item: Nirav, 2026-11-06); the comment moves as one, and Done with a
+     box not ticked asks first, its why a reply. Never a split.
+   - Clash: two open comments asking opposite things; a pick from either writer or an approver settles both. */
+function asksOpen(c) { return c.asks?.state === "list" ? c.asks.items.filter((x) => !x.done).length : 0; }
+function asksPill(c) { return c.asks?.state === "list" && c.asks.items.length ? `<span class="asks-pill" title="Asks ticked">${c.asks.items.length - asksOpen(c)} / ${c.asks.items.length}</span>` : ""; }
+state.origOpen = new Set();
+/* the pills' icons (Nirav, 2026-11-06: one for the wording, one for the asks, in Claude's colour, a little motion): a pen
+   whose line writes itself; two ticks that draw one after the other. Again on hover */
+const CL_ICON = {
+  sharpen: '<svg class="cl-ic cl-ic-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cl-line" pathLength="1" d="M12 20h9"/><path class="cl-pen" d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7.4 18.6a2 2 0 0 1-.9.5l-2.9.9.9-2.9a2 2 0 0 1 .5-.9z"/></svg>',
+  asks: '<svg class="cl-ic cl-ic-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cl-tick" pathLength="1" d="m3 7 2 2 4-4"/><path class="cl-tick cl-t2" pathLength="1" d="m3 17 2 2 4-4"/><path d="M13 6h8M13 12h8M13 18h8"/></svg>',
+};
+state.clOpen = new Map(); // id -> the writer's offer opened ("sharpen" or "asks")
+state.addOpen = new Set(); // lists whose "+ Add an item" is a field now
+state.asksAsk = null; // the comment whose Done is asking about boxes not ticked
+function clearHtml(c) {
+  const out = [], top = [];
+  const writer = isMe(c.by) || myName(c.by);
+  const live = c.status !== "approved";
+  /* the writer's offers: a quiet chip each under the comment, opened on a click (Nirav, 2026-11-06: two boxes looked
+     odd next to "Claude suggests") */
+  const sh = c.sharpen?.state === "new" && writer && live, ak = c.asks?.state === "offered" && writer && live;
+  const open = state.clOpen.get(c.id);
+  if (sh || ak) {
+    const chip = (k, label) => `<button type="button" class="cl-chip${open === k ? " on" : ""}" data-open="${k}" aria-expanded="${open === k}" title="Only you see this">${CL_ICON[k]}<span>${label}</span></button>`;
+    top.push(`<div class="cl-chips">${sh ? chip("sharpen", "Clearer wording") : ""}${ak ? chip("asks", `${c.asks.items.length} asks · track as a list?`) : ""}</div>`);
+    if (open === "sharpen" && sh)
+      top.push(`<div class="cl-pop"><div class="cl-ph">Claude's clearer wording<span class="cl-only">Only you see this</span><button type="button" class="cl-x" aria-label="Close">×</button></div><div class="cl-q">${esc(c.sharpen.text)}</div><div class="cl-acts"><button type="button" class="pri cl-sh-use">Use this</button><button type="button" class="cl-sh-edit">Edit</button><button type="button" class="cl-sh-keep">Keep mine</button></div></div>`);
+    if (open === "asks" && ak)
+      top.push(`<div class="cl-pop"><div class="cl-ph">${c.asks.items.length} separate asks<span class="cl-only">Only you see this</span><button type="button" class="cl-x" aria-label="Close">×</button></div><ol>${c.asks.items.map((x) => `<li>${esc(x.t)}</li>`).join("")}</ol><div class="cl-acts"><button type="button" class="pri cl-asks-list">Track as a list</button><button type="button" class="cl-asks-no">No thanks</button></div></div>`);
+  }
+  if (c.textOriginal && c.textOriginal !== c.text)
+    top.push(`<div class="cl-orig">Sharpened with Claude · <button type="button" class="cl-orig-t">${state.origOpen.has(c.id) ? "Hide the original" : "Show the original"}</button>${state.origOpen.has(c.id) ? `<q>${esc(c.textOriginal)}</q>` : ""}</div>`);
+  if (c.asks?.state === "list" && c.asks.items.length) {
+    const n = c.asks.items.length, done = n - asksOpen(c);
+    const tick = live && (can("answer", c) || canEdit(c) || isApprover());
+    const add = live && (canEdit(c) || myName(c.assignee) || isApprover());
+    out.push(`<div class="cl-list"><div class="cl-lh">${done} of ${n} done<span class="cl-bar"><i style="width:${(done / n) * 100}%"></i></span></div>${c.asks.items.map((x, i) => `<div class="cl-row"><${tick ? 'button type="button"' : "div"} class="cl-it${x.done ? " done" : ""}" data-i="${i}"${tick ? ` aria-pressed="${x.done}"` : ""}><span class="cl-ck"></span><span class="cl-t">${esc(x.t)}</span></${tick ? "button" : "div"}>${add ? `<button type="button" class="cl-rm" data-i="${i}" aria-label="Remove this item" title="Remove">×</button>` : ""}</div>`).join("")}${add ? (state.addOpen.has(c.id) ? `<div class="cl-add"><input class="cl-add-in" type="text" maxlength="140" placeholder="A new item, then Enter" aria-label="Add an item"></div>` : `<button type="button" class="cl-add-t">+ Add an item</button>`) : ""}</div>`);
+    if (state.asksAsk === c.id) {
+      const k = asksOpen(c);
+      out.push(`<div class="cl-dlg"><b>${k} ask${k === 1 ? " isn't" : "s aren't"} ticked</b>Send for approval anyway?<input class="cl-why" type="text" maxlength="400" placeholder="Why, in a line (optional)"><div class="cl-acts"><button type="button" class="cl-dlg-no">Keep working</button><button type="button" class="pri cl-dlg-go">Send anyway</button></div></div>`);
+    }
+  }
+  const k = c.clash;
+  if (k && (k.state === "open" || k.state === "settled")) {
+    const other = [...state.comments, ...(state.done || [])].find((x) => x.id === k.with);
+    if (k.state === "open" && live) {
+      const may = writer || (other && (isMe(other.by) || myName(other.by))) || isApprover();
+      /* the picks for everyone to see; only the two writers or an approver can press them (as Go on a plan) */
+      const who = onlyWho([c.by, other?.by], "pick");
+      const dis = may ? "" : ` disabled title="${esc(who)}"`;
+      out.push(`<div class="cl-clash"><div class="cl-h">${CLAUDE_AV()}Clashes with #${esc(String(k.n || other?.n || "?"))}</div><div class="cl-b">${linkHtml(mentionHtml(k.text))}<div class="cl-acts">${k.options.map((o) => `<button type="button" class="cl-pick" data-label="${esc(o.label)}" data-n="${o.n || ""}"${dis}>${esc(o.label)}${o.n ? ` (#${o.n})` : ""}</button>`).join("")}<button type="button" class="cl-talk"${dis}>Talk it out</button></div>${may ? "" : `<div class="th-only">${esc(who)}. You can still reply.</div>`}</div></div>`);
+    } else if (k.state === "settled" && k.pick) {
+      const mine = !k.pick.n || k.pick.n === c.n;
+      out.push(`<div class="cl-clash settled">Settled on <b>${esc(k.pick.label)}</b>${k.pick.n ? ` (#${k.pick.n})` : ""}, picked by ${esc(thName(k.by).replace(/^You$/, "you"))}.${mine ? "" : ` This one is covered by #${k.pick.n}.`}</div>`);
+    }
+  }
+  return { top: top.join(""), html: out.join("") };
+}
+/* two places: the writer's offers right under the comment's words; the list, the clash and the original above the thread */
+function clearSync(card, c) {
+  const { top, html } = clearHtml(c);
+  const put = (cls, h, where) => {
+    let box = card.querySelector(`.${cls}`);
+    if (!h) return box?.remove();
+    if (!box) {
+      box = document.createElement("div");
+      box.className = `card-clear ${cls}`;
+      where(box);
+    }
+    if (box.dataset.html === h) return; // unchanged: a box being typed in stays as it is
+    box.dataset.html = h;
+    box.innerHTML = h;
+  };
+  put("cl-top", top, (b) => card.querySelector(".card-line")?.after(b));
+  put("cl-low", html, (b) => card.insertBefore(b, card.querySelector(".card-th")));
+}
+async function clearClick(t, c, card) {
+  const redo = () => { clearSync(card, c); clampCard(card); };
+  if (t.classList.contains("cl-chip")) {
+    const k = t.dataset.open;
+    if (state.clOpen.get(c.id) === k) state.clOpen.delete(c.id);
+    else state.clOpen.set(c.id, k);
+    redo();
+    return true;
+  }
+  if (t.classList.contains("cl-x")) { state.clOpen.delete(c.id); redo(); return true; }
+  if (t.classList.contains("cl-sh-use")) { if (await applyUpdate({ id: c.id, sharpen: "use" }, t)) toast(`#${c.n}: the clearer words are in`); return true; }
+  if (t.classList.contains("cl-sh-keep")) { await applyUpdate({ id: c.id, sharpen: "keep" }, t); return true; }
+  if (t.classList.contains("cl-sh-edit")) {
+    const words = c.sharpen.text;
+    const now = await applyUpdate({ id: c.id, sharpen: "edited" }, t);
+    const el = panelBody.querySelector(`.card[data-id="${c.id}"] .card-text`);
+    if (now && el) editInPlace(el, { ...now, text: words }, () => clampCard(el.closest(".card")));
+    return true;
+  }
+  if (t.classList.contains("cl-orig-t")) {
+    if (state.origOpen.has(c.id)) state.origOpen.delete(c.id);
+    else state.origOpen.add(c.id);
+    redo();
+    return true;
+  }
+  if (t.classList.contains("cl-asks-list") || t.classList.contains("cl-asks-no")) { await applyUpdate({ id: c.id, asks: t.classList.contains("cl-asks-list") ? "list" : "no" }, t); return true; }
+  if (t.classList.contains("cl-it")) {
+    const i = Number(t.dataset.i), it = c.asks.items[i];
+    it.done = !it.done; // at once; the hub's answer follows
+    redo();
+    if (!(await applyUpdate({ id: c.id, asksTick: { i, done: it.done } }))) { it.done = !it.done; redo(); }
+    if (state.asksAsk === c.id && !asksOpen(c)) { state.asksAsk = null; redo(); }
+    return true;
+  }
+  if (t.classList.contains("cl-rm")) {
+    const i = Number(t.dataset.i), it = c.asks.items[i];
+    if (!it) return true;
+    c.asks.items.splice(i, 1); // off at once; the save follows
+    redo();
+    if (!(await applyUpdate({ id: c.id, asksRemove: { i, t: it.t } }))) { c.asks.items.splice(i, 0, it); redo(); }
+    return true;
+  }
+  if (t.classList.contains("cl-add-in")) return true; // typing; Enter adds
+  if (t.classList.contains("cl-add-t")) {
+    state.addOpen.add(c.id);
+    redo();
+    card.querySelector(".cl-add-in")?.focus();
+    return true;
+  }
+  if (t.classList.contains("cl-dlg-no")) { state.asksAsk = null; redo(); return true; }
+  if (t.classList.contains("cl-dlg-go")) {
+    const why = card.querySelector(".cl-why")?.value.trim(); // in the lower part
+    state.asksAsk = null;
+    if (why && !(await applyUpdate({ id: c.id, reply: why }, t))) return true;
+    await applyUpdate({ id: c.id, status: "approval" }, t);
+    toast(`#${c.n} ${statusToast.approval}`);
+    return true;
+  }
+  if (t.classList.contains("cl-why")) return true;
+  if (t.classList.contains("cl-pick") || t.classList.contains("cl-talk")) {
+    /* both comments say how it was settled */
+    const body = t.classList.contains("cl-pick") ? { clashPick: { label: t.dataset.label, n: Number(t.dataset.n) || null } } : { clashTalk: true };
+    if (await applyUpdate({ id: c.id, ...body }, t)) await api("update", { id: c.clash.with, ...body }).then((r) => r?.entry && applyEntry(r.entry) && renderPanel()).catch(() => {});
+    if (body.clashTalk) {
+      state.thOpen.add(c.id);
+      state.thDraft = { id: c.id, text: "", quote: null, focus: true };
+      threadSync(card, c);
+      clampCard(card);
+    }
+    return true;
+  }
+  return false;
+}
+/* "+ Add an item": Enter adds it, then the words come back (Nirav, 2026-11-06: the field stayed open); Escape or a click
+   elsewhere too */
+const closeAdd = (inp) => {
+  const card = inp.closest(".card");
+  const c = card && state.comments.find((x) => x.id === card.dataset.id);
+  state.addOpen.delete(card?.dataset.id);
+  if (c) clearSync(card, c);
+};
+panelBody.addEventListener("focusout", (e) => {
+  const inp = e.target.closest?.(".cl-add-in");
+  if (inp && !inp.disabled) setTimeout(() => inp.isConnected && document.activeElement !== inp && closeAdd(inp), 120);
+});
+panelBody.addEventListener("keydown", async (e) => {
+  const inp = e.target.closest?.(".cl-add-in");
+  if (inp && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); return closeAdd(inp); }
+  if (!inp || e.key !== "Enter" || !inp.value.trim()) return;
+  e.preventDefault();
+  const card = inp.closest(".card");
+  const words = inp.value.trim();
+  const c = state.comments.find((x) => x.id === card.dataset.id);
+  inp.disabled = true;
+  /* on the card at once (Nirav, 2026-11-06: it waited for the hub, the field still open); the save follows */
+  state.addOpen.delete(card.dataset.id);
+  const item = { t: words, done: false, added: true };
+  c?.asks?.items.push(item);
+  if (c) { clearSync(card, c); clampCard(card); }
+  if (!(await applyUpdate({ id: card.dataset.id, asksAdd: words })) && c) {
+    c.asks.items = c.asks.items.filter((x) => x !== item); // not saved: off the list again (applyUpdate said why)
+    if (card.isConnected) { clearSync(card, c); clampCard(card); }
+  }
+});
 /* NUMBERS (Nirav, 2026-10-27): how the review runs, on the full page, from the history the hub already keeps. Fixes
    only for the approval figures (a question is answered, not approved). Raised to approved and picked-up times are
    medians ("typical"), so one forgotten comment does not skew them; sent back is the share of fixes that came back
@@ -7451,6 +7757,7 @@ function renderPanel() {
     where.innerHTML = `<b class="cm-type" data-k="${c.severity}">${esc(sevLabel)}</b> · <span class="cm-place" data-tip="${esc(`${c.context || "Page"}${c.shot ? "" : " · no picture"}`)}">${esc(c.pageTitle || c.route)}</span>`;
     threadSync(card, c);
     draftSync(card, c);
+    clearSync(card, c);
     histSync(card, c);
     if (c.shot && c.rect) card.querySelector(".card-pic").appendChild(liveBadge(c, card.querySelector(".card-shot")));
     into.appendChild(card);
@@ -8020,6 +8327,9 @@ panelBody.addEventListener("click", async (e) => {
     draftSync(card, c); // drafting again: the box or the thread's last line, as the thread is open or shut
     clampCard(card);
   })) return;
+  /* found now: once the click has passed, a shadow root's event no longer knows its target */
+  const clr = e.target.closest(".card-clear button, .card-clear input");
+  if (clr) return void (await clearClick(clr, c, card));
   if (e.target.closest(".dr-ignore")) {
     await applyUpdate({ id: c.id, draftState: "ignored" }, e.target.closest("button"));
     return;
@@ -8030,9 +8340,12 @@ panelBody.addEventListener("click", async (e) => {
       if (await applyUpdate({ id: c.id, reply: c.draft.text, via: "claude", draftState: "accepted" }, b)) toast(`#${c.n}: Claude's answer posted`);
       return;
     }
-    /* New: picked up with Claude; already yours: only the mark that Claude is on it too */
-    const now = await applyUpdate(c.status === "progress" ? { id: c.id, withClaude: true, draftState: "accepted" } : { id: c.id, status: "progress", via: "claude", draftState: "accepted" }, b);
-    if (now) sendToClaude($('.panel-copy[data-kind="send"]'), [{ ...now, n: c.n }]); // Claude does what it suggested
+    /* New: picked up with Claude; already yours: only the mark that Claude is on it too. Claude hears it as a call on the
+       hub (Nirav, 2026-11-11: the always-on Claude runs on a server, not beside this browser), and like any change it
+       plans first and waits for Go */
+    const call = { callClaude: `Accepted your suggestion: "${String(c.draft.text || "").slice(0, 600)}". Plan it so we can say Go.`, callKind: "accepted" };
+    const now = await applyUpdate(c.status === "progress" ? { id: c.id, withClaude: true, draftState: "accepted", ...call } : { id: c.id, status: "progress", via: "claude", draftState: "accepted", ...call }, b);
+    if (now) watchCall(c.id);
     return;
   }
   if (e.target.closest(".hs-step .th-long")) {
@@ -8089,6 +8402,13 @@ panelBody.addEventListener("click", async (e) => {
     card.classList.remove("menu-open");
     const order = ["open", "progress", "approval", "approved"];
     if (order.indexOf(to) < order.indexOf(c.status)) return askNote(card, c, to, btn.textContent.trim());
+    if (to === "approval" && asksOpen(c)) { // boxes not ticked: asked first, on the card
+      state.asksAsk = c.id;
+      clearSync(card, c);
+      clampCard(card);
+      card.querySelector(".cl-why")?.focus();
+      return;
+    }
     await applyUpdate({ id: c.id, status: to }, btn);
     toast(`#${c.n} ${statusToast[to]}`);
     return;
@@ -8114,27 +8434,9 @@ panelBody.addEventListener("click", async (e) => {
   if (btn?.classList.contains("card-claude")) {
     card.querySelector(".card-more-wrap.open")?.classList.remove("open");
     card.classList.remove("menu-open");
-    /* CLAUDE ANSWERS (Nirav, 2026-10-24): a brief to paste into a Claude session in the project; Claude reads the code
-       the question points at and answers on the hub with the review command (marked as Claude's answer) */
-    const talk = (c.history || []).filter((h) => h.kind === "reply").map((h) => `  ${h.via === "claude" ? "Claude" : h.by}: ${h.note}`).join("\n");
-    const brief = [
-      `Answer this design-review question from the code, then post the answer on the review hub.`,
-      ``,
-      `#${c.n} (${c.id}), asked by ${c.by || "someone"}: "${c.text}"`,
-      `Where: ${c.pageTitle || c.route} (${c.route})${c.context ? `, ${c.context}` : ""}${typeof c.element === "string" && c.element ? `, on ${c.element}` : ""}`,
-      c.source ? `Code: ${srcLong(c.source)}` : "",
-      talk ? `So far:\n${talk}` : "",
-      ``,
-      `Run \`npx --no review-mode show ${c.id}\` for the element, the trail and the picture. Answer in one or two plain sentences, as you`,
-      `would to a designer, and post it: npx --no review-mode reply ${c.id} --claude "<your answer>"`,
-      `If the answer is that something should change, say so; the asker can make it a fix.`,
-    ].filter((l, i, xs) => l || xs[i - 1]).join("\n");
-    try {
-      await navigator.clipboard.writeText(brief);
-      toast(`#${c.n} copied for Claude: paste it into a Claude session`);
-    } catch {
-      toast("Could not copy: the browser said no", true);
-    }
+    /* CLAUDE ANSWERS (Nirav, 2026-10-24; through the hub since 2026-11-11): a call any running Claude answers in the
+       thread, on this machine or the team's server; no brief to paste */
+    await mentionClaude(c, "Answer this question from the code, in one or two plain sentences, as you would to a designer. If something should change, say so; the asker can make it a fix.");
     return;
   }
   if (btn?.classList.contains("card-take")) {
@@ -8680,7 +8982,7 @@ function showSheet(kind, o = {}) {
   };
   const n = o.count ? `${o.count} comment${o.count === 1 ? "" : "s"}` : "";
   const body = {
-    callnone: [ICON.warn, "No Claude session is connected", `<p>Your @Claude is saved on the comment. Claude answers it as soon as a session is connected: run this once, in a terminal in your project folder. After that, plain <code>claude</code> in that folder is connected, every time.</p>${cmdBox(CHANNEL_HINT, true)}`],
+    callnone: [ICON.warn, "No Claude has picked it up yet", `<p>Your @Claude is saved on the comment. Claude answers it as soon as one is running: the team's review server (if it is down: <code>sudo review-server status</code> on it), or a session on your own machine, from your project folder:</p>${cmdBox(CHANNEL_HINT, true)}`],
     none: [ICON.warn, "Start Claude to send directly", `<p>Run this once, in a terminal in your project folder. It connects Claude to this project and starts it; after that, plain <code>claude</code> in that folder has the plane on, every time. Until then the brief is on your clipboard: paste it into any Claude chat.</p>${cmdBox(CHANNEL_HINT, true)}`],
     intro: [`<span class="cs-intro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${CLAUDE_PATH}"/></svg></span>`, "Connect Claude to this project", `<p>Run this once, in a terminal in your project folder. From then on, plain <code>claude</code> there is connected: the plane next to "Copy for Claude" sends comments straight to it, and Claude works through them for you.</p>${cmdBox(CHANNEL_HINT, '<button type="button" class="cs-gotit">Got it</button>')}`], // Got it beside the command, like Check again
     sent: [ICON.wait, `Sent ${n} to Claude`, `<p class="cs-sub">${esc(o.label || "")} · waiting for Claude to confirm…</p>${o.hint ? `<p>If the session asks to use the review tools, allow them (choose "don't ask again").</p>` : ""}`],
@@ -8883,6 +9185,7 @@ function introSeen(set) {
 }
 async function maybeIntro() {
   if (introSeen() || window.__reviewSession || sheet.classList.contains("on")) return;
+  if (claudeSeen()) return introSeen(true); // a Claude already answers on the hub (the team's server): nothing to connect
   const q = window.__reviewSession ? `?session=${window.__reviewSession}` : "";
   const sessions = await rv(`/__review/claude/sessions${q}`).then((r) => r.json()).catch(() => []);
   if (Array.isArray(sessions) && sessions.length) return introSeen(true); // already connected
@@ -8928,12 +9231,19 @@ async function handToClaude(c, btn) {
    would have claimed it by then (it looks every 6 s) */
 function watchCall(id) {
   setTimeout(async () => {
+    if (state.comments.find((x) => x.id === id)?.call?.state !== "waiting") return;
+    await loadComments().catch(() => {}); // the hub's word, not this drawer's last copy: a server's Claude may have it already
     const c = state.comments.find((x) => x.id === id);
-    if (c?.call?.state !== "waiting") return;
+    if (c?.call?.state !== "waiting") return renderPanel();
     const q = window.__reviewSession ? `?session=${window.__reviewSession}` : "";
     const sessions = await rv(`/__review/claude/sessions${q}`).then((r) => r.json()).catch(() => []);
     if (!Array.isArray(sessions) || !sessions.length) showSheet("callnone");
-  }, 10_000);
+  }, 20_000);
+}
+/* a Claude answers on the hub (the team's server, or anyone's machine): its steps in the last three days say so */
+function claudeSeen() {
+  const since = Date.now() - 3 * 86400000;
+  return state.comments.some((c) => (c.history || []).some((h) => h.via === "claude" && h.at > since) || (c.draft?.via === "claude" && c.draft.at > since) || (c.call?.claimedAt || 0) > since);
 }
 async function mentionClaude(c, words) {
   if (!c?.id) return;
@@ -8964,12 +9274,8 @@ async function sendToClaude(btn, only, sure) {
   };
   const q = window.__reviewSession ? `?session=${window.__reviewSession}` : "";
   const sessions = await rv(`/__review/claude/sessions${q}`).then((r) => r.json()).catch(() => []);
+  if (!Array.isArray(sessions) || !sessions.length) return sendByHub(list, done);
   const md = await buildPrompt(list);
-  if (!Array.isArray(sessions) || !sessions.length) {
-    done();
-    await navigator.clipboard.writeText(md).catch(() => {});
-    return showSheet("none");
-  }
   const pick = sessions.length === 1 ? sessions[0] : await pickSession(btn, sessions);
   if (!pick) return done();
   const r = await rv(`/__review/claude/send${q}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ port: pick.port, text: md, count: list.length }) })
@@ -9002,6 +9308,30 @@ async function sendToClaude(btn, only, sure) {
   if (mine !== sendSeq) return;
   await navigator.clipboard.writeText(md).catch(() => {});
   showSheet("late");
+}
+/* NO CLAUDE ON THIS MACHINE (Nirav, 2026-11-11: the always-on Claude runs on the team's server): each comment becomes a
+   call on the hub, which whichever Claude is running answers in its thread: a question an answer, a fix a plan that waits
+   for Go. Comments already waiting on Claude are left as they are; ten at a time */
+async function sendByHub(list, done) {
+  const go = list.filter((c) => !c.pending && c.status !== "approved" && !callBusy(c)).slice(0, 10);
+  if (!go.length) {
+    done();
+    return toast("Claude already has these");
+  }
+  let ok = 0;
+  for (const c of go) {
+    const r = await api("update", { id: c.id, callClaude: "Sent to you from the review drawer. A question: answer it. A fix: plan the change so we can say Go.", callKind: "sent" }).catch(() => null);
+    if (r?.entry) {
+      ok++;
+      applyEntry(r.entry);
+    }
+  }
+  done();
+  renderPanel();
+  if (!ok) return toast("Could not reach the hub", true);
+  noteSent(go);
+  toast(`Sent ${ok} to Claude${list.length > go.length ? ` (${list.length - go.length} left: Claude has them already, or more than 10)` : ""}. Answers and plans come in each thread`);
+  for (const c of go) watchCall(c.id);
 }
 /* several sessions: a small menu under the button */
 function pickSession(btn, sessions) {
