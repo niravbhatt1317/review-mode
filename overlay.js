@@ -1507,7 +1507,8 @@ root.innerHTML = `
   .cl-acts button { height: 24px; padding: 0 10px; border: 0; border-radius: 999px; background: hsl(var(--rv-n10)); color: var(--rv-ink); font: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer; }
   .cl-acts button.pri { background: #D97757; color: #fff; }
   .cl-acts button.pri:hover { background: #C6613F; }
-  .cl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 2px; }
+  .card-clear.cl-top { margin-bottom: 10px; } /* the same 10px as under the words, before a picture, Claude's box or the thread (they merge, never add) */
+  .cl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 0; }
   .cl-chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px 0 3px; border: 0; border-radius: 999px; background: color-mix(in srgb, #D97757 9%, transparent); color: #B4532F; font: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer; }
   .cl-chip { padding-left: 7px; animation: clIn .32s cubic-bezier(.2,.8,.3,1) both; }
   .cl-ic { width: 14px; height: 14px; flex: 0 0 auto; color: #D97757; overflow: visible; }
