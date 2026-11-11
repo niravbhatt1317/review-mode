@@ -1964,7 +1964,8 @@ root.innerHTML = `
   .th-reading:not(.idle) .th-rd-t, .th-last .th-rd-t { background: linear-gradient(90deg, #b07a63 0%, #b07a63 40%, #6e3a26 50%, #b07a63 60%, #b07a63 100%) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rv-dr-shine 2.2s linear infinite; }
   @media (prefers-reduced-motion: reduce) { .th-rd-t { animation: none !important; color: #9a5a40 !important; } }
   .th-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .th-pick { height: 22px; padding: 0 9px; border: 0; border-radius: 999px; background: var(--rv-surface); box-shadow: inset 0 0 0 1px var(--rv-line-2); color: var(--rv-ink); font: 500 11px/22px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  /* a long choice wraps inside its button, never cut (Nirav, 2026-11-11) */
+  .th-pick { min-height: 22px; max-width: 100%; padding: 3px 10px; border: 0; border-radius: 11px; text-align: left; white-space: normal; line-height: 1.4 !important; background: var(--rv-surface); box-shadow: inset 0 0 0 1px var(--rv-line-2); color: var(--rv-ink); font: 500 11px/22px -apple-system, system-ui, sans-serif; cursor: pointer; }
   .th-pick:hover { box-shadow: inset 0 0 0 1px #D97757; color: #b4532f; }
   .th-pick.pri { background: hsl(214 98% 44%); box-shadow: none; color: #fff; }
   .th-pick.pri:hover { background: hsl(214 98% 38%); color: #fff; }

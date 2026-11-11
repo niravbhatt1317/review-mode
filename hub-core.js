@@ -326,7 +326,7 @@ export function applyChange(c, body, who, ctx = {}) {
     const list = (x) => (Array.isArray(x) ? x.map((v) => String(v || "").trim().slice(0, 200)).filter(Boolean).slice(0, 8) : []);
     const sum = claude && body.summary && typeof body.summary === "object" ? { summary: { decided: list(body.summary.decided), left: list(body.summary.left), who: String(body.summary.who || "").trim().slice(0, 120) } } : {};
     if (sum.summary && c.pinned) c.pinned = at;
-    const cask = claude && body.ask === true ? { ask: true, ...(Array.isArray(body.options) ? { options: body.options.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 60)).slice(0, 4) } : {}) } : {};
+    const cask = claude && body.ask === true ? { ask: true, ...(Array.isArray(body.options) ? { options: body.options.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 140)).slice(0, 4) } : {}) } : {};
     if (claude && c.call && c.call.state !== "done") Object.assign(c.call, cask.ask ? { state: "asked", askAt: at } : plan ? { state: "planned", planAt: at } : { state: "done", doneAt: at });
     else if (go) {
       const p = (c.history || []).find((h) => h.at === c.call.planAt && h.via === "claude");
