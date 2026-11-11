@@ -1614,7 +1614,7 @@ root.innerHTML = `
      own box shimmers until it is in, then fades in; one that still fails after a few tries is a calm box that says so */
   .ba-im:not(.ready) { background: linear-gradient(100deg, hsl(var(--rv-n10)) 30%, hsl(var(--rv-n20)) 50%, hsl(var(--rv-n10)) 70%) 0 0 / 300% 100%; animation: rv-sk-shimmer 1.3s ease-in-out infinite; }
   .ba-im.ready { animation: rv-fx-fade .3s ease-out; }
-  .ba-im.broken { opacity: 0; animation: none; }
+  .ba-im.broken { animation: none; background: hsl(var(--rv-n10)); }
   .ba-pic:has(.ba-im:not(.ready)) .ba-chg, .bav-im:has(.ba-im:not(.ready)) .ba-chg { display: none; }
   .ba-pic:has(.ba-im.broken)::after { content: "The picture didn't load"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; color: var(--rv-ink-3); }
   @media (prefers-reduced-motion: reduce) { .ba-im:not(.ready), .ba-im.ready { animation: none; } }
@@ -5929,7 +5929,7 @@ root.addEventListener("error", (e) => {
   const img = e.target;
   if (!img?.classList?.contains("ba-im")) return;
   const n = Number(img.dataset.tries) || 0;
-  if (n >= 3) return void img.classList.add("broken");
+  if (n >= 3) { img.src = BLANK_GIF; return void img.classList.add("broken"); } // a calm grey box, never the broken mark
   img.dataset.tries = n + 1;
   const want = img.dataset.src || img.src;
   img.dataset.src = want;
@@ -6294,7 +6294,7 @@ function picsFold(c, x, latestAt) {
   if (!p) return "";
   if (x.at === latestAt || state.baOpen.has(`${c.id}:${x.at}`)) return picsHtml(c, p);
   const n = baViews(p).length;
-  return `<button type="button" class="ba-fold" data-at="${x.at}"><span class="ba-mini"><img src="${esc(picUrl(p.before))}" alt=""><img src="${esc(picUrl(p.after))}" alt=""></span>Earlier before and after${n > 1 ? ` · ${n} pairs` : ""} · Show</button>`;
+  return `<button type="button" class="ba-fold" data-at="${x.at}"><span class="ba-mini"><img class="ba-im" src="${esc(picUrl(p.before))}" alt=""><img class="ba-im" src="${esc(picUrl(p.after))}" alt=""></span>Earlier before and after${n > 1 ? ` · ${n} pairs` : ""} · Show</button>`;
 }
 const baView = $(".ba-view");
 function openBa(c, p, mode = "side", vi = baPick(c, p)) {
@@ -6382,7 +6382,7 @@ function threadHtml(c, moves = true) {
     const pill = msgs.length === 1 ? "" : `<span class="th-n" title="${msgs.length} replies">${thFaces(c, msgs)}${msgs.length}</span>`;
     /* Claude's question waiting: the line in Claude's warm tint, "Answer" when nothing else would sit there */
     const tag = last.ask && msgs.length === 1 && talksToClaude(c) ? '<span class="th-tag">Answer</span>' : "";
-    return `<button type="button" class="th-last${last.ask ? " ask" : ""}" aria-label="Open the thread, ${msgs.length} ${msgs.length === 1 ? "reply" : "replies"}">${thLastFace(c, last)}<span class="th-w"><b>${thName(last.by)}</b> ${last.sug ? "suggested: " : ""}${mentionHtml(last.words)}</span>${last.claude && picsOf(c, last.at) && !picsOf(c, last.at).missed ? `<span class="ba-mini"><img src="${esc(picUrl(picsOf(c, last.at).before))}" alt=""><img src="${esc(picUrl(picsOf(c, last.at).after))}" alt=""></span>` : ""}${tag}${pill}</button>` + prRow;
+    return `<button type="button" class="th-last${last.ask ? " ask" : ""}" aria-label="Open the thread, ${msgs.length} ${msgs.length === 1 ? "reply" : "replies"}">${thLastFace(c, last)}<span class="th-w"><b>${thName(last.by)}</b> ${last.sug ? "suggested: " : ""}${mentionHtml(last.words)}</span>${last.claude && picsOf(c, last.at) && !picsOf(c, last.at).missed ? `<span class="ba-mini"><img class="ba-im" src="${esc(picUrl(picsOf(c, last.at).before))}" alt=""><img class="ba-im" src="${esc(picUrl(picsOf(c, last.at).after))}" alt=""></span>` : ""}${tag}${pill}</button>` + prRow;
   }
   const newest = [...items].reverse().find((x) => !x.sys)?.at;
   const picsAt = [...items].reverse().find((x) => x.claude && picsOf(c, x.at))?.at; // the newest pair: the only one shown open
