@@ -42,7 +42,23 @@ const FIND = `(() => {
   const norm = (t) => String(t || "").toLowerCase().replace(/\\s+/g, " ").trim();
   const txt = (e) => norm(e.textContent || "").slice(0, 80); // as the page recorded it (raw text, words run together)
   const seen = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  /* BY THE PAGE'S HEADING (Nirav, 2026-11-11: #33's header band): a spot that holds the page's heading is found on
+     any page, and in any build, as the box around that page's main heading of about the spot's size */
+  const byHead = ({ heading, w, h }) => {
+    const hs = Array.from(document.querySelectorAll("h1, h2, [role=heading]")).filter(seen);
+    const hd = (heading && hs.find((e) => norm(e.textContent) === norm(heading))) || hs.find((e) => e.tagName === "H1") || hs[0];
+    if (!hd) return null;
+    let best = hd;
+    for (let e = hd.parentElement; e && e !== document.body; e = e.parentElement) {
+      const r = e.getBoundingClientRect();
+      if (r.height > h * 1.8 + 40) break; // past the band: the panel around it
+      best = e;
+      if (r.width >= w * 0.85) break; // as wide as the spot was
+    }
+    return best;
+  };
   window.__snapFind = (step) => {
+    if (step.head) return byHead(step.head);
     const key = norm(step.textKey).slice(0, 80);
     const hits = step.selector ? queryDeep(step.selector).filter(seen) : [];
     const same = hits.find((e) => !key || txt(e) === key);
@@ -228,6 +244,15 @@ async function open(t, url, c, login, view) {
   const steps = [{ selector: own ? c.selector : "", textKey: view.target || c.textKey, loose: !!view.target }, ...(c.snapTarget || view.target ? [{ textKey: view.target || c.snapTarget, loose: true }] : [])];
   let step = null, el = null;
   for (const s of steps) if ((el = await t.json(`window.__snapBox(${JSON.stringify(s)})`))) { step = s; break; }
+  /* a spot that holds the page's heading (the header band): found by the heading when its address and words miss
+     (another page) or land on something much bigger (another build's structure) */
+  const headed = c.anchor?.heading && c.rect?.h;
+  const tooBig = el && headed && el.h > c.rect.h * 2.5 + 40;
+  if (headed && (!el || tooBig)) {
+    const s = { head: { heading: own ? c.anchor.heading : "", w: c.rect.w * (vw / (c.viewport?.w || vw)), h: c.rect.h } };
+    const got = await t.json(`window.__snapBox(${JSON.stringify(s)})`);
+    if (got && got.h <= c.rect.h * 2.5 + 40) { el = got; step = s; }
+  }
   /* the state asked for, on the element itself: the pointer over it, the focus ring, or open (clicked) */
   let layer = null;
   const st = view.state || c.snapState;
@@ -251,10 +276,15 @@ async function open(t, url, c, login, view) {
      strip: a wide frame takes in what is above it (the rows before, the header) up to 2.4 wide to 1 tall */
   if (frame && !a) {
     const cx = target.x + target.w / 2;
-    const w = Math.max(MAXW, target.w + 48);
-    if (frame.w > w) frame = { ...frame, x: Math.max(frame.x, Math.min(cx - w / 2, frame.x + frame.w - w)), w };
+    /* a spot wider than the card (a full-width header band, a table row): at most about 1040 wide, from its start,
+       where its words begin (a centred cut lost the page title) */
+    const w = Math.max(MAXW, Math.min(target.w + 48, 1040));
+    if (frame.w > w) frame = target.w + 48 > w ? { ...frame, x: Math.max(0, target.x - 24), w } : { ...frame, x: Math.max(frame.x, Math.min(cx - w / 2, frame.x + frame.w - w)), w };
     const h = Math.min(frame.w / 2.4, vh * 0.6, frame.h + 220); // some context, not the whole page
     if (h > frame.h) frame = { ...frame, y: Math.max(0, frame.y + frame.h - h), h }; // upward: the rows above, the header
+    /* and never a whole tall panel around a short spot: the spot with some room, more above than below */
+    const tall = Math.max(target.h + 160, Math.min(frame.w / 2.4, vh * 0.6));
+    if (frame.h > tall && target.h < tall) frame = { ...frame, y: Math.max(0, target.y - (tall - target.h) * 0.6), h: tall };
   }
   if (frame && layer) frame = union([frame, { x: layer.x - 12, y: layer.y - 12, w: layer.w + 24, h: layer.h + 24 }]);
   const docW = (await t.ev("Math.max(document.documentElement.scrollWidth, innerWidth)")) || vw;
