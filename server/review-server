@@ -104,10 +104,10 @@ case "$cmd" in
       if has_secrets; then
         set -a; . "$ENVF"; set +a
         cd "$APP"
-        echo "[$(date -u '+%F %T') UTC] Starting Claude"
+        echo "[$(date '+%F %T %Z')] Starting Claude"
         answer_startup &
         npx --no review-mode claude --no-shell --permission-mode auto || true
-        echo "[$(date -u '+%F %T') UTC] Claude stopped; starting again in 30 s"
+        echo "[$(date '+%F %T %Z')] Claude stopped; starting again in 30 s"
       else
         echo "No tokens yet: sudo review-server secrets"
       fi
