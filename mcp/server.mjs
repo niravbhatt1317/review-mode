@@ -336,6 +336,7 @@ async function call(name, a = {}) {
     const words = String(a.text || "").trim();
     if (!words) throw new Error("Say what is wrong in text");
     p.wrong = Date.now();
+    if (c.status === "approval") applyChange(c, { status: "progress", via: "claude" }, who); // not right: it stays with Claude, no "Done" for approval
     applyChange(c, { reply: words, via: "claude", ask: true, options: Array.isArray(a.options) ? a.options : [] }, who);
     const step = c.history.at(-1);
     if (c.call && c.call.state !== "asked") Object.assign(c.call, { state: "asked", askAt: step.at }); // their answer comes back to you
@@ -892,8 +893,21 @@ async function picsFor(id, sess, base, sha, quiet = false) {
       `options when it doesn't. Then carry on.`,
     ].join("\n"), meta: { kind: "check", comment: String(n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
   } catch (e) {
-    snapFails.set(`${id}:${sha}`, (snapFails.get(`${id}:${sha}`) || 0) + 1);
+    const tries = (snapFails.get(`${id}:${sha}`) || 0) + 1;
+    snapFails.set(`${id}:${sha}`, tries);
     process.stderr.write(`[review] before and after for ${id}: ${String(e?.message || e).split("\n")[0]}\n`);
+    /* the second miss stops the tries: the thread says so, once for this build, so nobody waits for pictures */
+    if (tries === 2) {
+      try {
+        const st = storeOf(sess);
+        const full = await st.get(id);
+        if (full && !(full.history || []).some((h) => h.picsFail === sha)) {
+          applyChange(full, { reply: "I couldn't take the before and after pictures this time, so please check it live with Open preview.", via: "claude" }, defaultAs);
+          full.history.at(-1).picsFail = sha;
+          await st.put(full);
+        }
+      } catch {}
+    }
   } finally {
     snapping.delete(id);
   }
