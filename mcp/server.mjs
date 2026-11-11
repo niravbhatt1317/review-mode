@@ -936,18 +936,8 @@ async function picsFor(id, sess, base, sha, quiet = false) {
     await st.put(full);
     if (quiet) return { views: local }; // a retake Claude asked for: it gets the pictures back in the tool's answer
     if (!canHear()) return;
-    const n = (await numbered(id, st))?.n;
-    send({ method: "notifications/claude/channel", params: { content: [
-      `CHECK on review comment #${n} (${id})${sess ? `, TEST SESSION ${sess} (pass session "${sess}" to the review tools)` : ""}: the before and after pictures of the spot are in the thread.`,
-      `Your plan: "${msg.note}"`,
-      ...picsLines(local),
-      `Then review_checked with id ${id}: ok true when the after shows your plan; nothing true when nothing on screen changes with this plan;`,
-      `missed true when the pictures don't show the part you changed at all, and you can't say how to get there. If the spot wasn't found`,
-      `or it's in another view (another tab, a customer or "All clients", a drawer, a hover or an open menu), FIRST try review_resnap: the clicks`,
-      `that get there from a fresh page load as a signed-in test user (read the code to know them), by their visible words, the words of the`,
-      `spot, and its state; then check those. ok false with text (what you see that is wrong, in design words, one or two sentences) and 2 or 3`,
-      `options when it doesn't. Then carry on.`,
-    ].join("\n"), meta: { kind: "check", comment: String(n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
+    checkSent.add(`${id}:${sha}`);
+    await sendCheck(id, sess, st, msg, local);
   } catch (e) {
     const tries = (snapFails.get(`${id}:${sha}`) || 0) + 1;
     snapFails.set(`${id}:${sha}`, tries);
@@ -968,6 +958,51 @@ async function picsFor(id, sess, base, sha, quiet = false) {
     snapping.delete(id);
   }
 }
+/* the CHECK brief: Claude reads the pair against its plan. Sent once per pair; after a restart, a pair still waiting
+   for its check is sent again (Nirav, 2026-11-11: an update restarted Claude mid-check and the card said "Claude is
+   looking into it" for ever) */
+const checkSent = new Set(); // "<id>:<sha>"
+async function sendCheck(id, sess, st, msg, local) {
+  const n = (await numbered(id, st))?.n;
+  send({ method: "notifications/claude/channel", params: { content: [
+      `CHECK on review comment #${n} (${id})${sess ? `, TEST SESSION ${sess} (pass session "${sess}" to the review tools)` : ""}: the before and after pictures of the spot are in the thread.`,
+      `Your plan: "${msg.note}"`,
+      ...picsLines(local),
+      `Then review_checked with id ${id}: ok true when the after shows your plan; nothing true when nothing on screen changes with this plan;`,
+      `missed true when the pictures don't show the part you changed at all, and you can't say how to get there. If the spot wasn't found`,
+      `or it's in another view (another tab, a customer or "All clients", a drawer, a hover or an open menu), FIRST try review_resnap: the clicks`,
+      `that get there from a fresh page load as a signed-in test user (read the code to know them), by their visible words, the words of the`,
+      `spot, and its state; then check those. ok false with text (what you see that is wrong, in design words, one or two sentences) and 2 or 3`,
+      `options when it doesn't. Then carry on.`,
+    ].join("\n"), meta: { kind: "check", comment: String(n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
+}
+async function checkAgainRound() {
+  if (!ready || !canHear()) return;
+  for (const sess of ["", ...localTests()]) {
+    try {
+      const st = storeOf(sess);
+      for (const c of await st.list()) {
+        const p = c.pics?.at(-1);
+        if (!p?.sha || p.checked || p.wrong || p.hidden || p.missed || !c.pr?.n || c.pr.state !== "open") continue;
+        if (Date.now() - (p.takenAt || 0) > 3 * 3600_000 || Date.now() - (p.takenAt || 0) < 5 * 60_000) continue; // fresh ones are still being checked
+        const key = `${c.id}:${p.sha}`;
+        if (checkSent.has(key) || snapping.has(c.id)) continue;
+        checkSent.add(key);
+        const full = await st.get(c.id);
+        const msg = (full.history || []).find((h) => h.at === p.at) || [...(full.history || [])].reverse().find((h) => h.via === "claude" && h.note);
+        if (!msg) continue;
+        const local = [];
+        for (const v of p.views || [p]) {
+          const loc = { before: path.join(PICS_DIR, v.before), after: path.join(PICS_DIR, v.after) };
+          for (const [k, f] of Object.entries({ before: v.before, after: v.after })) if (!fs.existsSync(loc[k])) { try { fs.mkdirSync(PICS_DIR, { recursive: true }); const b = await st.shot(f); if (b) fs.writeFileSync(loc[k], b); } catch {} }
+          local.push({ ...loc, label: v.label, found: v.found || { before: true, after: true }, same: v.same, chg: v.chg });
+        }
+        await sendCheck(c.id, sess, st, msg, local);
+      }
+    } catch {}
+  }
+}
+setInterval(checkAgainRound, 60_000).unref?.();
 /* CLEARER COMMENTS (step 5): a comment that tracks its asks as a list, shown to Claude with what is ticked */
 const asksLines = (c, how) => (c.asks?.state === "list" ? [`It tracks its asks as a list (tick boxes in the same comment): ${c.asks.items.map((x, i) => `${i + 1}. [${x.done ? "x" : " "}] ${x.t}${x.route ? ` (on ${x.page || x.route}, ${x.route})` : ""}`).join("  ")}`, how] : []);
 /* the pairs for Claude to Read, one line each: where the change shows, or that it does not */

@@ -5260,6 +5260,7 @@ function refreshCard(c, animate = false) {
   } else note?.remove();
   if (state.asking?.id !== c.id) threadSync(card, c); // Claude's call, a new reply: the thread follows (a move's box keeps its own)
   draftSync(card, c);
+  clearSync(card, c); // the offers, the list and the clash (Nirav, 2026-11-11: a clash pick waited for the hub)
   histSync(card, c);
   clampCard(card);
   return true;
@@ -5267,18 +5268,51 @@ function refreshCard(c, animate = false) {
 /* one write; the pressed button shows it is working and its neighbours go quiet; the hub's answer then crossfades
    into the chip and the buttons. A refusal puts the buttons back and says so. A rebuild only when the comment
    changed list (to or from Approved). */
+function guessUpdate(c, body) {
+  const keys = Object.keys(body).filter((k) => k !== "id" && k !== "via" && k !== "take");
+  const plain = keys.every((k) => ["status", "severity", "draftState", "withClaude", "callClaude", "callKind", "reply", "mentions", "quote", "go"].includes(k));
+  if (!keys.length || !plain || body.status === "approved") return null;
+  if (body.draftState && !c.draft) return null;
+  const was = { status: c.status, severity: c.severity, assignee: c.assignee, doneBy: c.doneBy, draft: c.draft && { ...c.draft }, call: c.call, withClaude: c.withClaude, history: c.history };
+  if (body.status) {
+    if (body.status === "progress" && (c.status === "open" || body.take)) c.assignee = state.me;
+    if (body.status === "approval") c.doneBy = state.me;
+    c.status = body.status;
+  }
+  if (body.severity) c.severity = body.severity;
+  if (body.draftState) c.draft.state = body.draftState;
+  if (body.withClaude) c.withClaude = true;
+  if (typeof body.reply === "string" && body.reply.trim()) c.history = [...(c.history || []), { kind: "reply", note: body.reply, by: state.me, at: Date.now(), ...(body.via ? { via: body.via } : {}), ...(body.quote ? { quote: body.quote } : {}), ...(body.mentions ? { mentions: body.mentions } : {}) }];
+  const justSet = c.call?.state === "waiting" && Date.now() - (c.call.at || 0) < 5000; // the button set it already, its own way
+  if (body.mentions?.includes("Claude") && !justSet && !body.callClaude) c.call = { state: "waiting", at: Date.now(), step: Date.now(), by: state.me, asker: state.me, words: body.reply || "", read: [] };
+  if (typeof body.callClaude === "string" && !justSet) c.call = { state: "waiting", at: Date.now(), step: Date.now(), by: state.me, asker: state.me, words: body.callClaude, read: [], ...(body.callKind ? { kind: body.callKind } : {}) }; // "Sent to Claude…" now
+  return () => Object.assign(c, was);
+}
 async function applyUpdate(body, btn) {
   const card = panelBody.querySelector(`.card[data-id="${body.id}"]`);
   const was = (state.comments.find((x) => x.id === body.id) || state.done.find((x) => x.id === body.id))?.status;
   const acts = btn?.closest(".acts, .tip-acts-in");
-  btn?.classList.add("loading");
-  acts?.classList.add("busy");
+  /* AT ONCE (Nirav, 2026-11-11: "it took a while to reflect", for every kind of button): the moves whose outcome is
+     plain (a status, a tag, Claude's suggestion taken or ignored) show on the card now; the hub's answer then settles
+     it, and a refusal puts the card back. Approving keeps its own moment, so it waits. */
+  const c0 = state.comments.find((x) => x.id === body.id) || state.done.find((x) => x.id === body.id);
+  const undo = c0 && card ? guessUpdate(c0, body) : null;
+  if (undo) refreshCard(c0, true);
+  else {
+    btn?.classList.add("loading");
+    acts?.classList.add("busy");
+  }
+  /* approving: its moment plays from the click while the hub saves (it waited for the hub before) */
+  const fx = body.status === "approved" && card && !PAGE_MODE_RESOLVED() ? approveFx(card).catch((e) => console.warn("[review] approval effect:", e)) : null;
   let r = null;
   try {
     r = await api("update", body);
   } catch {}
   btn?.classList.remove("loading");
   acts?.classList.remove("busy");
+  if (!r?.entry && undo) { undo(); refreshCard(c0); }
+  if (fx) await fx;
+  if (!r?.entry && fx) renderPanel(); // refused: the card comes back as it was
   if (!r?.entry) {
     /* a rule of the hub's ("Already picked up by Pranjal") is said as it is, and the list catches up with what won */
     const said = r?.error || "the hub did not answer";
@@ -5286,7 +5320,6 @@ async function applyUpdate(body, btn) {
     if (/picked up/i.test(said)) loadComments().then(() => renderPanel());
     return null;
   }
-  if (r.entry.status === "approved" && body.status === "approved" && card && !PAGE_MODE_RESOLVED()) await approveFx(card).catch((e) => console.warn("[review] approval effect:", e)); // its moment before it leaves; an effect that fails never stops the approval
   if (applyEntry(r.entry) || !refreshCard(r.entry, !!card)) renderPanel();
   /* Done or picked up by your own hand: a small happy moment for you */
   const moment = isQ(r.entry) ? null : was === "progress" && r.entry.status === "approval" && body.status === "approval" ? "done" : was === "open" && r.entry.status === "progress" && body.status === "progress" ? "pick" : null;
@@ -6548,10 +6581,38 @@ async function threadSend(c, input, btn, onSent) {
   const mentions = mentionsIn(words);
   /* quoting Claude's open question, it is the answer: Claude drafts again with it (Nirav, 2026-11-04) */
   const answers = !!d?.quote?.ask && claudeWaits(c) && d.quote.at === c.draft.at;
+  /* AT ONCE (Nirav, 2026-11-11: every button waited for the hub): the reply shows in the thread and the box empties
+     now; the hub's copy replaces it, and a refusal takes it back out and puts the words back in the box */
+  const mineNow = answers ? null : { kind: "reply", note: words, by: state.me, at: Date.now(), ...(d?.quote ? { quote: d.quote } : {}), ...(mentions.length ? { mentions } : {}) };
+  const cardNow = panelBody.querySelector(`.card[data-id="${c.id}"]`);
+  const draftWas = c.draft;
+  if (answers && cardNow) { // answering Claude's question: "Claude is drafting again with your answer…" now
+    c.draft = { state: "reply", at: Date.now(), by: state.me, thread: [...(c.draft.thread || []), { q: c.draft.text, qAt: c.draft.at, a: words, by: state.me, at: Date.now() }] };
+    state.thDraft = { id: c.id, text: "", quote: null, focus: true };
+    threadSync(cardNow, c);
+    draftSync(cardNow, c);
+    clampCard(cardNow);
+  }
+  if (mineNow && cardNow) {
+    c.history = [...(c.history || []), mineNow];
+    state.thDraft = { id: c.id, text: "", quote: null, focus: true };
+    threadSync(cardNow, c);
+    clampCard(cardNow);
+  }
   const r = await api("update", answers ? { id: c.id, draftReply: words } : { id: c.id, reply: words, ...(d?.quote ? { quote: d.quote } : {}), ...(mentions.length ? { mentions } : {}) }).catch(() => null);
   if (!r?.entry) {
     input.disabled = false;
     btn.classList.remove("loading");
+    if (answers && cardNow) {
+      c.draft = draftWas;
+      state.thDraft = { id: c.id, text: words, quote: d?.quote || null, focus: true };
+      if (cardNow.isConnected) { threadSync(cardNow, c); draftSync(cardNow, c); clampCard(cardNow); }
+    }
+    if (mineNow && cardNow) {
+      c.history = c.history.filter((h) => h !== mineNow);
+      state.thDraft = { id: c.id, text: words, quote: d?.quote || null, focus: true };
+      if (cardNow.isConnected) { threadSync(cardNow, c); clampCard(cardNow); }
+    }
     toast(`Could not save that: ${r?.error || "the hub did not answer"}`, true);
     return;
   }
@@ -6998,17 +7059,26 @@ async function askGo(card, c, input, btn) {
   if (!a || a.id !== c.id) return;
   let note = input.value.trim();
   if (a.who && note.toLowerCase() === `@${mentionWord(a.who)}`.toLowerCase()) note = ""; // only the tag: no reason given
-  input.disabled = true;
-  btn.classList.add("loading");
   const mentions = mentionsIn(note).filter((m) => m !== a.who); // the move tells them already
+  /* AT ONCE (Nirav, 2026-11-11): the box closes and the card moves now; a refusal opens the box again with the words */
+  const was = { status: c.status, assignee: c.assignee, note: c.note, history: c.history };
+  if (a.assignTo) c.assignee = a.toName || c.assignee;
+  else c.status = a.to;
+  if (note || a.assignTo) c.note = a.assignTo ? { kind: "hand", toWho: a.toName, by: state.me, text: note } : { text: note, by: state.me, to: a.to, from: was.status };
+  c.history = [...(c.history || []), a.assignTo ? { kind: "hand", toWho: a.toName, ...(note ? { note } : {}), by: state.me, at: Date.now() } : { status: a.to, from: was.status, ...(note ? { note } : {}), by: state.me, at: Date.now() }];
+  state.asking = null;
+  const footNow = card.querySelector(".card-foot");
+  if (footNow) footNow.innerHTML = footHtml(c); // the box goes
+  if (!refreshCard(c, true)) renderPanel();
   const r = await api("update", { ...(a.assignTo ? { id: c.id, assignTo: a.assignTo, note } : { id: c.id, status: a.to, note }), ...(mentions.length ? { mentions } : {}) }).catch(() => null);
   if (!r?.entry) {
-    input.disabled = false;
-    btn.classList.remove("loading");
+    Object.assign(c, was);
+    a.text = note;
+    state.asking = a;
+    renderPanel(); // the box back, with the words
     toast(`Could not save that: ${r?.error || "the hub did not answer"}`);
     return;
   }
-  if (state.asking === a) state.asking = null;
   if (!note && !a.wasOpen) state.thOpen.delete(c.id); // a bare move leaves nothing to read in the thread
   const crossed = applyEntry(r.entry);
   const now = state.comments.find((x) => x.id === c.id) || state.done.find((x) => x.id === c.id) || r.entry;
@@ -9354,8 +9424,14 @@ function claudeSeen() {
 }
 async function mentionClaude(c, words) {
   if (!c?.id) return;
-  const r = await api("update", { id: c.id, callClaude: String(words || c.text || "").slice(0, 1200) }).catch(() => null);
-  if (!r?.entry) return toast(`@Claude: could not reach the hub${r?.error ? `: ${r.error}` : ""}`, true);
+  const body = { id: c.id, callClaude: String(words || c.text || "").slice(0, 1200) };
+  const undo = guessUpdate(c, body); // "Sent to Claude…" at once
+  if (undo && !refreshCard(c, true)) renderPanel();
+  const r = await api("update", body).catch(() => null);
+  if (!r?.entry) {
+    if (undo) { undo(); if (!refreshCard(c)) renderPanel(); }
+    return toast(`@Claude: could not reach the hub${r?.error ? `: ${r.error}` : ""}`, true);
+  }
   if (applyEntry(r.entry) || !refreshCard(r.entry, !!panelBody.querySelector(`.card[data-id="${c.id}"]`))) renderPanel();
   toast(`#${c.n}: Claude will read it and reply in the thread`);
   watchCall(c.id);
@@ -9426,14 +9502,17 @@ async function sendByHub(list, done) {
     return toast("Claude already has these");
   }
   let ok = 0;
+  const body = (c) => ({ id: c.id, callClaude: "Sent to you from the review drawer. A question: answer it. A fix: plan the change so we can say Go.", callKind: "sent" });
+  const undos = new Map(go.map((c) => [c.id, guessUpdate(c, body(c))])); // every card says "Sent to Claude…" at once
+  done();
+  renderPanel();
   for (const c of go) {
-    const r = await api("update", { id: c.id, callClaude: "Sent to you from the review drawer. A question: answer it. A fix: plan the change so we can say Go.", callKind: "sent" }).catch(() => null);
+    const r = await api("update", body(c)).catch(() => null);
     if (r?.entry) {
       ok++;
       applyEntry(r.entry);
-    }
+    } else undos.get(c.id)?.();
   }
-  done();
   renderPanel();
   if (!ok) return toast("Could not reach the hub", true);
   noteSent(go);
