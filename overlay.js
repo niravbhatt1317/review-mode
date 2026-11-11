@@ -3537,7 +3537,7 @@ function noticesNow() {
        still waits on someone: accepted, ignored, answered or settled, the line goes */
     if (c.status !== "approved" && mine(c)) {
       /* a question back stands alone: Claude waits on you */
-      if (c.draft?.state === "new" && c.draft.via === "claude" && c.draft.unsure) made.push({ at: c.draft.at, by: "Claude", claudeKind: "cask", note: c.draft.text });
+      if (c.draft?.state === "new" && c.draft.via === "claude" && c.draft.unsure && !clashMoot(c)) made.push({ at: c.draft.at, by: "Claude", claudeKind: "cask", note: c.draft.text });
       /* the rest in one line: a suggestion, clearer wording, separate asks */
       const found = [
         c.draft?.state === "new" && c.draft.via === "claude" && !c.draft.unsure ? [c.draft.at, c.draft.kind === "answer" ? "an answer" : "a suggestion"] : null,
@@ -6235,7 +6235,9 @@ function threadOf(c) {
   return out.sort((a, b) => a.at - b.at);
 }
 /* Claude's question waits on the card while the comment is still to do */
-const claudeWaits = (c) => c.draft?.state === "new" && !!c.draft.unsure && (c.status === "open" || c.status === "progress");
+/* a clash settled the other way: this comment is covered by the other one, so Claude's question or suggestion on it is moot */
+const clashMoot = (c) => c.clash?.state === "settled" && !!c.clash.pick?.n && c.clash.pick.n !== c.n;
+const claudeWaits = (c) => c.draft?.state === "new" && !!c.draft.unsure && (c.status === "open" || c.status === "progress") && !clashMoot(c);
 /* who answers Claude: the person on it, the writer, an approver */
 const talksToClaude = (c) => myName(c.assignee) || isMe(c.by) || isApprover();
 /* the open question as a quote, for the reply box: a reply quoting it is the answer (the draft's question, or the
@@ -7173,7 +7175,7 @@ const myName = (x) => !!x && (isMe(x) || (!!state.hub?.handle && String(x).toLow
 const draftShown = (c) => {
   const d = c.draft;
   if (!d || (d.state === "new" && d.unsure)) return false; // Claude's question is a thread message (Nirav, 2026-11-04)
-  if (c.clash?.state === "settled" && c.clash.pick?.n && c.clash.pick.n !== c.n) return false; // settled the other way: its suggestion is moot
+  if (clashMoot(c)) return false; // settled the other way: its suggestion is moot
   if (c.clash?.state === "open" && c.status !== "approved") return false; // a clash first: the suggestion waits for which way it goes (one Claude box)
   if (claudeAgain(c) && state.thOpen.has(c.id)) return false; // drafting again: said at the end of the open thread
   const fresh = d.state === "drafting" && Date.now() - (d.at || 0) < DRAFT_LIVE_MS;
