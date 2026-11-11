@@ -3449,8 +3449,8 @@ function noticeSave(m) {
 /* SMART WORDING (Nirav, 2026-10-27): who, what, which. One to three comments by number, more as a count ("20 of your
    comments", never a long list); Claude credited when the move was made with it; several kinds by one person in one
    sentence ("Pranjal picked up 2 and sent back #9"), the most pressing first. */
-const NOTICE_RANK = { cask: 0, cplan: 0, mention: 1, all: 2, cdraft: 3, cstop: 3, back: 3, cgo: 5, reopen: 4, putback: 5, hand: 6, cpr: 6, cpreview: 6, done: 7, cans: 7, answer: 8, cmerged: 8, approved: 9, pick: 10, new: 11 };
-const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", reopen: "prog", putback: "new", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new", cask: "claude", cplan: "claude", cans: "claude", cdraft: "claude", cpr: "claude", cpreview: "claude", cmerged: "appr", cgo: "claude", cstop: "prog" };
+const NOTICE_RANK = { cask: 0, cplan: 0, cclash: 2, clook: 6, mention: 1, all: 2, cdraft: 3, cstop: 3, back: 3, cgo: 5, reopen: 4, putback: 5, hand: 6, cpr: 6, cpreview: 6, done: 7, cans: 7, answer: 8, cmerged: 8, approved: 9, pick: 10, new: 11 };
+const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", reopen: "prog", putback: "new", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new", cask: "claude", cplan: "claude", cans: "claude", cdraft: "claude", cpr: "claude", cpreview: "claude", cmerged: "appr", cgo: "claude", cstop: "prog", clook: "claude", cclash: "claude" };
 const numsOf = (ns) => (ns.length === 1 ? `#${ns[0]}` : ns.length <= 3 ? `${ns.slice(0, -1).map((n) => `#${n}`).join(", ")} and #${ns[ns.length - 1]}` : `${ns.length} comments`);
 function noticePhrase(kind, ns) {
   const n = ns.length, nums = numsOf(ns), many = n > 3;
@@ -3477,13 +3477,18 @@ function noticePhrase(kind, ns) {
     /* someone else said Go on your plan, or stopped Claude on a change of yours (Nirav, 2026-11-05) */
     case "cgo": return `said Go on your plan for ${nums}`;
     case "cstop": return `stopped Claude on ${nums}`;
+    /* WHAT CLAUDE DID UNASKED (Nirav, 2026-11-11: "so user can see yeah Claude did suggest something for me", and "the
+       thin line where we won't send too many"): one line per comment of yours, whatever Claude found on it; what it found
+       is the line's second row */
+    case "clook": return `looked at your ${nums}`;
+    case "cclash": return n === 1 ? `found a clash on your ${nums}` : `found a clash: ${nums} ask for opposite things`;
   }
   return "";
 }
 /* the short form, for several kinds in one sentence: "picked up 2", "sent back #9" */
 function noticeShort(kind, ns) {
   const x = ns.length === 1 ? `#${ns[0]}` : String(ns.length);
-  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, putback: `put back ${x}`, reopen: `reopened ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}`, cans: `answered you on ${x}`, cask: `asks you on ${x}`, cplan: `has a plan for ${x}`, cdraft: `drafted a reply on ${x}`, cpr: `opened a PR for ${x}`, cpreview: `has a preview of ${x}`, cmerged: `reports ${x} merged`, cgo: `said Go on ${x}`, cstop: `stopped Claude on ${x}` }[kind]; // "added 2" alone read oddly
+  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, putback: `put back ${x}`, reopen: `reopened ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}`, cans: `answered you on ${x}`, cask: `asks you on ${x}`, cplan: `has a plan for ${x}`, cdraft: `drafted a reply on ${x}`, cpr: `opened a PR for ${x}`, cpreview: `has a preview of ${x}`, cmerged: `reports ${x} merged`, cgo: `said Go on ${x}`, cstop: `stopped Claude on ${x}`, clook: `looked at ${x}`, cclash: `found a clash on ${x}` }[kind]; // "added 2" alone read oddly
 }
 function noticeSentence(who, parts, claude) {
   const name = String(who).split(/\s+/)[0] + (claude && who !== "Claude" ? ", with Claude," : "");
@@ -3507,6 +3512,21 @@ function noticesNow() {
     if (c.call?.draft && isMe(c.call.draft.for)) made.push({ at: c.call.draft.at, by: "Claude", claudeKind: "cdraft" });
     if (c.pr?.previewAt && isMe(c.pr.for)) made.push({ at: c.pr.previewAt, by: "Claude", claudeKind: "cpreview" });
     if (c.pr?.mergedAt && isMe(c.pr.for)) made.push({ at: c.pr.mergedAt, by: "Claude", claudeKind: "cmerged" });
+    /* Claude's drafting pass, unasked: for the writer (a clash also for the other writer and approvers), only while it
+       still waits on someone: accepted, ignored, answered or settled, the line goes */
+    if (c.status !== "approved" && mine(c)) {
+      /* a question back stands alone: Claude waits on you */
+      if (c.draft?.state === "new" && c.draft.via === "claude" && c.draft.unsure) made.push({ at: c.draft.at, by: "Claude", claudeKind: "cask", note: c.draft.text });
+      /* the rest in one line: a suggestion, clearer wording, separate asks */
+      const found = [
+        c.draft?.state === "new" && c.draft.via === "claude" && !c.draft.unsure ? [c.draft.at, c.draft.kind === "answer" ? "an answer" : "a suggestion"] : null,
+        c.sharpen?.state === "new" ? [c.sharpen.at, "clearer wording"] : null,
+        c.asks?.state === "offered" ? [c.asks.at, `${c.asks.items.length} asks to track`] : null,
+      ].filter(Boolean);
+      if (found.length) made.push({ at: Math.max(...found.map((f) => f[0])), by: "Claude", claudeKind: "clook", note: found.map((f) => f[1]).join(" · ").replace(/^./, (m) => m.toUpperCase()) });
+      /* a clash: to the two writers (approvers see it on the cards; a notice each would be too many) */
+      if (c.clash?.state === "open") made.push({ at: c.clash.at, by: "Claude", claudeKind: "cclash", note: c.clash.text });
+    }
     let doer = null, was = "open"; // who last sent it for approval, as the steps go: a reopen tells them
     for (const s of [...made, ...(c.history || [])]) {
       const finished = doer;
@@ -3559,7 +3579,11 @@ const noteFace = (name) => {
 function noticeRowsHtml(list) {
   return list.map((g, i) => {
     const one = new Set(g.steps.map((x) => x.c.id)).size === 1 ? g.steps.reduce((x, y) => (y.s.at > x.s.at ? y : x)) : null; // one comment: its latest step's reason
-    const why = !one ? "" : one.s.note && (g.kind === "back" || g.kind === "putback" || g.kind === "reopen" || g.kind === "hand" || g.kind === "answer" || g.kind === "mention" || g.kind === "all" || /^c(ans|ask|plan)$/.test(g.kind)) ? `<span class="note-why">"${esc(one.s.note.slice(0, 80))}"</span>` : `<span class="note-why">${esc(noticeSnippet(one.c))}</span>`; // the reason when there is one, else what the comment is
+    let why = !one ? "" : one.s.note && (g.kind === "back" || g.kind === "putback" || g.kind === "reopen" || g.kind === "hand" || g.kind === "answer" || g.kind === "mention" || g.kind === "all" || /^c(ans|ask|plan|clash)$/.test(g.kind)) ? `<span class="note-why">"${esc(one.s.note.slice(0, 80))}"</span>` : one.s.note && g.kind === "clook" ? `<span class="note-why">${esc(one.s.note)}</span>` : `<span class="note-why">${esc(noticeSnippet(one.c))}</span>`; // the reason when there is one, else what the comment is
+    /* Claude looked at several of yours: what it found, counted, on the second row */
+    const tally = (k) => g.steps.filter((x) => k.test(x.s.note || "")).length;
+    const sum = !one && g.kind === "clook" ? [[tally(/suggestion|answer/), (n) => `${n} suggestion${n > 1 ? "s" : ""}`], [tally(/clearer wording/i), (n) => `clearer wording on ${n}`], [tally(/asks to track/), (n) => `asks to track on ${n}`]].filter(([n]) => n).map(([n, f]) => f(n)).join(" · ") : "";
+    if (sum) why = `<span class="note-why">${esc(sum.replace(/^./, (m) => m.toUpperCase()))}</span>`;
     const go = g.steps.some((x) => x.c.status !== "approved"); // approved ones are not in this list to go to
     return `<div class="join-row note-row${go ? " go" : ""}" data-i="${i}">${noteFace(g.who)}<span class="join-who"><span class="note-txt">${esc(noticeText(g))}</span>${why}</span><span class="note-when">${esc(agoText(g.at))}</span><button type="button" class="note-x" aria-label="Clear this">×</button></div>`;
   }).join("");
@@ -6548,7 +6572,10 @@ function threadClick(e, c, box, onChange) {
   const pin = t.closest(".th-pin");
   if (pin) {
     const at = Number(pin.dataset.at);
-    applyUpdate({ id: c.id, pinSummary: c.pinned === at ? null : at });
+    const was = c.pinned;
+    c.pinned = was === at ? null : at; // at once; the save behind it
+    if (!refreshCard(c)) renderPanel();
+    applyUpdate({ id: c.id, pinSummary: c.pinned }).then((r) => { if (!r) { c.pinned = was; if (!refreshCard(c)) renderPanel(); } });
     return true;
   }
   if (t.closest(".th-sum-again")) {
@@ -7104,6 +7131,15 @@ function clearSync(card, c) {
 }
 async function clearClick(t, c, card) {
   const redo = () => { clearSync(card, c); clampCard(card); };
+  /* at once on the card, the save behind it (Nirav, 2026-11-11: "Track as a list" waited for the hub); a save the hub
+     refuses puts the hub's version back */
+  const soon = async (change, body) => {
+    change();
+    state.clOpen.delete(c.id);
+    if (!refreshCard(c)) renderPanel();
+    if (!(await applyUpdate({ id: c.id, ...body }))) { await loadComments().catch(() => {}); renderPanel(); }
+    return true;
+  };
   if (t.classList.contains("cl-chip")) {
     const k = t.dataset.open;
     if (state.clOpen.get(c.id) === k) state.clOpen.delete(c.id);
@@ -7112,8 +7148,8 @@ async function clearClick(t, c, card) {
     return true;
   }
   if (t.classList.contains("cl-x")) { state.clOpen.delete(c.id); redo(); return true; }
-  if (t.classList.contains("cl-sh-use")) { if (await applyUpdate({ id: c.id, sharpen: "use" }, t)) toast(`#${c.n}: the clearer words are in`); return true; }
-  if (t.classList.contains("cl-sh-keep")) { await applyUpdate({ id: c.id, sharpen: "keep" }, t); return true; }
+  if (t.classList.contains("cl-sh-use")) return soon(() => { c.textOriginal = c.text; c.text = c.sharpen.text; c.sharpen.state = "used"; }, { sharpen: "use" });
+  if (t.classList.contains("cl-sh-keep")) return soon(() => { c.sharpen.state = "kept"; }, { sharpen: "keep" });
   if (t.classList.contains("cl-sh-edit")) {
     const words = c.sharpen.text;
     const now = await applyUpdate({ id: c.id, sharpen: "edited" }, t);
@@ -7127,7 +7163,10 @@ async function clearClick(t, c, card) {
     redo();
     return true;
   }
-  if (t.classList.contains("cl-asks-list") || t.classList.contains("cl-asks-no")) { await applyUpdate({ id: c.id, asks: t.classList.contains("cl-asks-list") ? "list" : "no" }, t); return true; }
+  if (t.classList.contains("cl-asks-list") || t.classList.contains("cl-asks-no")) {
+    const list = t.classList.contains("cl-asks-list");
+    return soon(() => { c.asks.state = list ? "list" : "declined"; }, { asks: list ? "list" : "no" });
+  }
   if (t.classList.contains("cl-it")) {
     const i = Number(t.dataset.i), it = c.asks.items[i];
     it.done = !it.done; // at once; the hub's answer follows
@@ -7164,7 +7203,15 @@ async function clearClick(t, c, card) {
   if (t.classList.contains("cl-pick") || t.classList.contains("cl-talk")) {
     /* both comments say how it was settled */
     const body = t.classList.contains("cl-pick") ? { clashPick: { label: t.dataset.label, n: Number(t.dataset.n) || null } } : { clashTalk: true };
-    if (await applyUpdate({ id: c.id, ...body }, t)) await api("update", { id: c.clash.with, ...body }).then((r) => r?.entry && applyEntry(r.entry) && renderPanel()).catch(() => {});
+    const other = [...state.comments, ...(state.done || [])].find((x) => x.id === c.clash.with);
+    const settle = (x) => x?.clash && Object.assign(x.clash, body.clashPick ? { state: "settled", pick: body.clashPick, by: state.me } : { state: "talk" });
+    settle(c);
+    settle(other);
+    if (!refreshCard(c)) renderPanel();
+    if (other) refreshCard(other);
+    const withId = c.clash.with;
+    if (await applyUpdate({ id: c.id, ...body })) await api("update", { id: withId, ...body }).then((r) => r?.entry && applyEntry(r.entry) && renderPanel()).catch(() => {});
+    else { await loadComments().catch(() => {}); renderPanel(); }
     if (body.clashTalk) {
       state.thOpen.add(c.id);
       state.thDraft = { id: c.id, text: "", quote: null, focus: true };
