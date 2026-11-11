@@ -68,6 +68,7 @@ fi
 
 say "The review user (Claude runs as it, never as root)"
 id review >/dev/null 2>&1 || useradd -m -s /bin/bash review
+install -d -o review -g review /home/review/.config # the review user's own: Chrome keeps its folder here (root-owned, it crashed)
 install -d -m 700 -o review -g review /home/review/.config/review
 
 say "Claude Code"

@@ -136,6 +136,7 @@ case "$cmd" in
   update)
     root
     if [ "${1:-}" = --nightly ] && busy; then echo "Claude is in the middle of a change: the update waits for tomorrow."; exit 0; fi
+    chown "$U:$U" "$H/.config" # older setups made it as root: Chrome could not start, so no before and after pictures
     "$0" prepare
     systemctl restart review-claude
     echo "Updated and restarted."
