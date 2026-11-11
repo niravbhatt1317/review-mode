@@ -1610,6 +1610,14 @@ root.innerHTML = `
   .th-ba.stack { grid-template-columns: minmax(0, 1fr); } /* a wide pair: one above the other, big enough to read */
   .ba-pic { position: relative; display: block; padding: 0; border: 0; border-radius: 8px; overflow: hidden; background: hsl(var(--rv-n10)); box-shadow: inset 0 0 0 1px var(--rv-line); cursor: zoom-in; aspect-ratio: var(--ar, 16 / 9); }
   .ba-pic img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  /* BEFORE AND AFTER ARRIVING (Nirav, 2026-11-11: a broken picture showed, on first load and on a new tab): the picture's
+     own box shimmers until it is in, then fades in; one that still fails after a few tries is a calm box that says so */
+  .ba-im:not(.ready) { background: linear-gradient(100deg, hsl(var(--rv-n10)) 30%, hsl(var(--rv-n20)) 50%, hsl(var(--rv-n10)) 70%) 0 0 / 300% 100%; animation: rv-sk-shimmer 1.3s ease-in-out infinite; }
+  .ba-im.ready { animation: rv-fx-fade .3s ease-out; }
+  .ba-im.broken { opacity: 0; animation: none; }
+  .ba-pic:has(.ba-im:not(.ready)) .ba-chg, .bav-im:has(.ba-im:not(.ready)) .ba-chg { display: none; }
+  .ba-pic:has(.ba-im.broken)::after { content: "The picture didn't load"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; color: var(--rv-ink-3); }
+  @media (prefers-reduced-motion: reduce) { .ba-im:not(.ready), .ba-im.ready { animation: none; } }
   .ba-pic:hover, .ba-pic:focus-visible { box-shadow: inset 0 0 0 1px var(--rv-line), 0 0 0 2px hsl(214 98% 44% / .35); outline: none; }
   .ba-lb { position: absolute; left: 5px; top: 5px; height: 16px; padding: 0 6px; border-radius: 999px; font-size: 9.5px; font-weight: 600; line-height: 16px; color: #fff; background: rgba(29,43,62,.72); }
   .ba-pic.af .ba-lb { background: #1E8C81; }
@@ -5912,6 +5920,27 @@ root.addEventListener("load", (e) => {
 root.addEventListener("error", (e) => {
   if (e.target?.classList?.contains("card-shot")) e.target.closest(".card-pic")?.classList.add("broken");
 }, true);
+const BLANK_GIF = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+/* a before or after: shimmers until loaded; a miss (just uploaded, a slow moment) tries again at 1.5, 4 and 10 s */
+root.addEventListener("load", (e) => {
+  if (e.target?.classList?.contains("ba-im") && !e.target.src.startsWith("data:")) e.target.classList.add("ready"); // not the blank held while it waits
+}, true);
+root.addEventListener("error", (e) => {
+  const img = e.target;
+  if (!img?.classList?.contains("ba-im")) return;
+  const n = Number(img.dataset.tries) || 0;
+  if (n >= 3) return void img.classList.add("broken");
+  img.dataset.tries = n + 1;
+  const want = img.dataset.src || img.src;
+  img.dataset.src = want;
+  img.src = BLANK_GIF; // the shimmer, not the browser's broken mark and the alt words, while it waits
+  setTimeout(() => {
+    if (!img.isConnected) return;
+    const u = new URL(want, location.href);
+    u.searchParams.set("try", n + 1);
+    img.src = u.href;
+  }, [1500, 4000, 10000][n]);
+}, true);
 /* a picture that fails to load becomes the initial (no inline handlers: a page's CSP may forbid them) */
 root.addEventListener("error", (e) => {
   const img = e.target;
@@ -6240,7 +6269,7 @@ function picsHtml(c, p) {
   const lost = !v.found?.before || !v.found?.after ? `<div class="ba-note">The spot wasn't found on ${!v.found?.before && !v.found?.after ? "either page" : !v.found?.before ? "staging" : "the preview"}, so this is the whole window.</div>` : "";
   const st = v.state || (p.views ? null : c.snapState);
   const how = st ? `<div class="ba-note">${st === "hover" ? "With the pointer over it" : st === "focus" ? "With the focus on it" : "With it open"}</div>` : "";
-  return `<div class="th-ba-w" data-sha="${esc(p.sha)}">${tabs}<div class="th-ba${v.w && v.h && v.w / v.h > 1.4 ? " stack" : ""}" data-sha="${esc(p.sha)}" data-v="${i}"><button type="button" class="ba-pic" data-which="before"${ar}><img src="${esc(picUrl(v.before))}" alt="Before, on staging" loading="lazy"><span class="ba-lb">Before · staging</span></button><button type="button" class="ba-pic af" data-which="after"${ar}><img src="${esc(picUrl(v.after))}" alt="After, on the preview" loading="lazy">${chgHtml(v)}<span class="ba-lb">${draft ? "Planned · preview" : "After · preview"}</span></button></div>${how}${lost}${same}${note}</div>`;
+  return `<div class="th-ba-w" data-sha="${esc(p.sha)}">${tabs}<div class="th-ba${v.w && v.h && v.w / v.h > 1.4 ? " stack" : ""}" data-sha="${esc(p.sha)}" data-v="${i}"><button type="button" class="ba-pic" data-which="before"${ar}><img class="ba-im" src="${esc(picUrl(v.before))}" alt="Before, on staging" loading="lazy"><span class="ba-lb">Before · staging</span></button><button type="button" class="ba-pic af" data-which="after"${ar}><img class="ba-im" src="${esc(picUrl(v.after))}" alt="After, on the preview" loading="lazy">${chgHtml(v)}<span class="ba-lb">${draft ? "Planned · preview" : "After · preview"}</span></button></div>${how}${lost}${same}${note}</div>`;
 }
 /* SUM UP (step 5): Claude's summary, in three parts, the same in the thread and pinned */
 /* the icons say which is which (Nirav, 2026-11-06: labels in capitals and a border looked like a form): a tick for what
@@ -6275,12 +6304,13 @@ function openBa(c, p, mode = "side", vi = baPick(c, p)) {
   baView.dataset.v = vi;
   baView.querySelectorAll(".bav-seg button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
   const b = esc(picUrl(v.before)), a = esc(picUrl(v.after));
+  const ar = v.w && v.h ? ` style="aspect-ratio:${v.w} / ${v.h}"` : ""; // its size before it arrives: the shimmer has a shape
   baView.querySelector(".bav-t").textContent = `Before and after · #${c.n}${baViews(p).length > 1 && v.label ? ` · ${v.label}` : ""}`;
   /* the slide starts at the change: the line on its left edge, so one drag across shows it */
   const at = v.chg && !v.same ? Math.max(2, Math.min(98, Math.round(v.chg.x * 100))) : 50;
   baView.querySelector(".bav-body").innerHTML = mode === "side"
-    ? `<div class="bav-side"><figure><img src="${b}" alt="Before"><figcaption>Before · staging</figcaption></figure><figure><span class="bav-im"><img src="${a}" alt="After">${chgHtml(v)}</span><figcaption>After · preview</figcaption></figure></div>`
-    : `<div class="bav-slide" style="--x:${at}%"><img src="${a}" alt="After"><div class="bav-top-img"><img src="${b}" alt="Before"></div>${chgHtml(v)}<span class="bav-line"></span><span class="bav-l">Before</span><span class="bav-l af">After</span><input type="range" min="0" max="100" value="${at}" aria-label="Before to after"></div>`;
+    ? `<div class="bav-side"><figure><img class="ba-im" src="${b}" alt="Before"${ar}><figcaption>Before · staging</figcaption></figure><figure><span class="bav-im"><img class="ba-im" src="${a}" alt="After"${ar}>${chgHtml(v)}</span><figcaption>After · preview</figcaption></figure></div>`
+    : `<div class="bav-slide" style="--x:${at}%"><img class="ba-im" src="${a}" alt="After"${ar}><div class="bav-top-img"><img class="ba-im" src="${b}" alt="Before"${ar}></div>${chgHtml(v)}<span class="bav-line"></span><span class="bav-l">Before</span><span class="bav-l af">After</span><input type="range" min="0" max="100" value="${at}" aria-label="Before to after"></div>`;
   baView.querySelector(".bav-cap").textContent = v.same ? "No difference between the two. Esc closes." : mode === "side" ? "Esc closes." : "Drag across to wipe from before to after. Esc closes.";
   const range = baView.querySelector(".bav-slide input");
   range?.addEventListener("input", () => baView.querySelector(".bav-slide").style.setProperty("--x", `${range.value}%`));

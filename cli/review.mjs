@@ -56,7 +56,8 @@ const HOOK = `${HOOK_START}
 # Anywhere else it is the usual claude. Remove these lines to undo.
 claude() {
   if [ -f .mcp.json ] && grep -q '"review-mode"' .mcp.json 2>/dev/null || node -e 'try{const j=require(require("os").homedir()+"/.claude.json");process.exit(j.projects&&j.projects[process.cwd()]&&j.projects[process.cwd()].mcpServers&&j.projects[process.cwd()].mcpServers.review?0:1)}catch(e){process.exit(1)}' 2>/dev/null; then
-    command claude --dangerously-load-development-channels server:review "$@"
+    mkdir -p "$HOME/.review-mode/work"
+    command claude --dangerously-load-development-channels server:review --add-dir "$HOME/.review-mode/work" "$@"
   else
     command claude "$@"
   fi
@@ -153,7 +154,11 @@ if (cmd === "claude") {
   await shellHook();
   if (SETUP_ONLY) process.exit(0);
   console.log(`Starting Claude with "Send to Claude" on (project ${loadConfig(app).project}). Claude Code shows a one-time warning for this preview feature: choose "I am using this for local development".`);
-  const child = spawn("claude", ["--dangerously-load-development-channels", "server:review", ...args], { cwd: here, stdio: "inherit" });
+  /* Claude makes a Go's change in a work folder outside this project: allowed up front, or Claude Code stops to ask
+     and nobody answers on the always-on server (Nirav, 2026-11-11: #33 sat on "Claude is making the change…") */
+  const work = path.join(process.env.HOME || "", ".review-mode", "work");
+  fs.mkdirSync(work, { recursive: true });
+  const child = spawn("claude", ["--dangerously-load-development-channels", "server:review", "--add-dir", work, ...args], { cwd: here, stdio: "inherit" });
   child.on("exit", (code) => process.exit(code ?? 0));
   await new Promise(() => {});
 } else if (cmd === "mcp") {
