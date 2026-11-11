@@ -1946,6 +1946,10 @@ root.innerHTML = `
   .th-reading.idle { align-items: center; color: var(--rv-ink-3); background: hsl(var(--rv-n10)); }
   .th-rd-t { font-weight: 500; }
   .th-idle-t { flex: 1; min-width: 0; }
+  .th-reading.stuck { background: hsl(38 100% 95%); }
+  .th-stuck-t { font-weight: 600; color: #9A5B00; }
+  .th-stuck-w { margin-top: 2px; color: var(--rv-ink-2); }
+  .th-stuck-fix { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
   .th-reading.idle .th-pick { flex: 0 0 auto; white-space: nowrap; padding: 0 12px; }
   .th-reading.idle .th-again { color: var(--rv-ink); }
   .th-rd-b { flex: 1; min-width: 0; }
@@ -3460,8 +3464,8 @@ function noticeSave(m) {
 /* SMART WORDING (Nirav, 2026-10-27): who, what, which. One to three comments by number, more as a count ("20 of your
    comments", never a long list); Claude credited when the move was made with it; several kinds by one person in one
    sentence ("Pranjal picked up 2 and sent back #9"), the most pressing first. */
-const NOTICE_RANK = { cask: 0, cplan: 0, cclash: 2, clook: 6, mention: 1, all: 2, cdraft: 3, cstop: 3, back: 3, cgo: 5, reopen: 4, putback: 5, hand: 6, cpr: 6, cpreview: 6, done: 7, cans: 7, answer: 8, cmerged: 8, approved: 9, pick: 10, new: 11 };
-const NOTICE_TONE = { mention: "blue", all: "blue", back: "prog", reopen: "prog", putback: "new", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new", cask: "claude", cplan: "claude", cans: "claude", cdraft: "claude", cpr: "claude", cpreview: "claude", cmerged: "appr", cgo: "claude", cstop: "prog", clook: "claude", cclash: "claude" };
+const NOTICE_RANK = { cstuck: 0, cask: 0, cplan: 0, cclash: 2, clook: 6, mention: 1, all: 2, cdraft: 3, cstop: 3, back: 3, cgo: 5, reopen: 4, putback: 5, hand: 6, cpr: 6, cpreview: 6, done: 7, cans: 7, answer: 8, cmerged: 8, approved: 9, pick: 10, new: 11 };
+const NOTICE_TONE = { cstuck: "prog", mention: "blue", all: "blue", back: "prog", reopen: "prog", putback: "new", pick: "prog", done: "appr", approved: "appr", hand: "blue", answer: "blue", new: "new", cask: "claude", cplan: "claude", cans: "claude", cdraft: "claude", cpr: "claude", cpreview: "claude", cmerged: "appr", cgo: "claude", cstop: "prog", clook: "claude", cclash: "claude" };
 const numsOf = (ns) => (ns.length === 1 ? `#${ns[0]}` : ns.length <= 3 ? `${ns.slice(0, -1).map((n) => `#${n}`).join(", ")} and #${ns[ns.length - 1]}` : `${ns.length} comments`);
 function noticePhrase(kind, ns) {
   const n = ns.length, nums = numsOf(ns), many = n > 3;
@@ -3488,6 +3492,7 @@ function noticePhrase(kind, ns) {
     /* someone else said Go on your plan, or stopped Claude on a change of yours (Nirav, 2026-11-05) */
     case "cgo": return `said Go on your plan for ${nums}`;
     case "cstop": return `stopped Claude on ${nums}`;
+    case "cstuck": return `is stuck on ${nums} and needs someone`;
     /* WHAT CLAUDE DID UNASKED (Nirav, 2026-11-11: "so user can see yeah Claude did suggest something for me", and "the
        thin line where we won't send too many"): one line per comment of yours, whatever Claude found on it; what it found
        is the line's second row */
@@ -3499,7 +3504,7 @@ function noticePhrase(kind, ns) {
 /* the short form, for several kinds in one sentence: "picked up 2", "sent back #9" */
 function noticeShort(kind, ns) {
   const x = ns.length === 1 ? `#${ns[0]}` : String(ns.length);
-  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, putback: `put back ${x}`, reopen: `reopened ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}`, cans: `answered you on ${x}`, cask: `asks you on ${x}`, cplan: `has a plan for ${x}`, cdraft: `drafted a reply on ${x}`, cpr: `opened a PR for ${x}`, cpreview: `has a preview of ${x}`, cmerged: `reports ${x} merged`, cgo: `said Go on ${x}`, cstop: `stopped Claude on ${x}`, clook: `looked at ${x}`, cclash: `found a clash on ${x}` }[kind]; // "added 2" alone read oddly
+  return { pick: `picked up ${x}`, hand: `handed you ${x}`, done: `finished ${x}`, approved: `approved ${x}`, back: `sent back ${x}`, putback: `put back ${x}`, reopen: `reopened ${x}`, answer: `answered ${x}`, new: ns.length === 1 ? `added ${x}` : `added ${x} comments`, mention: `mentioned you on ${x}`, all: `mentioned everyone on ${x}`, cans: `answered you on ${x}`, cask: `asks you on ${x}`, cplan: `has a plan for ${x}`, cdraft: `drafted a reply on ${x}`, cpr: `opened a PR for ${x}`, cpreview: `has a preview of ${x}`, cmerged: `reports ${x} merged`, cgo: `said Go on ${x}`, cstop: `stopped Claude on ${x}`, cstuck: `is stuck on ${x}`, clook: `looked at ${x}`, cclash: `found a clash on ${x}` }[kind]; // "added 2" alone read oddly
 }
 function noticeSentence(who, parts, claude) {
   const name = String(who).split(/\s+/)[0] + (claude && who !== "Claude" ? ", with Claude," : "");
@@ -3523,6 +3528,8 @@ function noticesNow() {
     if (c.call?.draft && isMe(c.call.draft.for)) made.push({ at: c.call.draft.at, by: "Claude", claudeKind: "cdraft" });
     if (c.pr?.previewAt && isMe(c.pr.for)) made.push({ at: c.pr.previewAt, by: "Claude", claudeKind: "cpreview" });
     if (c.pr?.mergedAt && isMe(c.pr.for)) made.push({ at: c.pr.mergedAt, by: "Claude", claudeKind: "cmerged" });
+    /* Claude stuck mid-call: for whoever called it and the approvers, until it moves again */
+    if (c.call?.state === "reading" && c.call.stuck && (isMe(c.call.by) || isMe(c.call.asker) || isApprover())) made.push({ at: c.call.stuck.at, by: "Claude", claudeKind: "cstuck", note: stuckWords(c.call.stuck) });
     /* Claude's drafting pass, unasked: for the writer (a clash also for the other writer and approvers), only while it
        still waits on someone: accepted, ignored, answered or settled, the line goes */
     if (c.status !== "approved" && mine(c)) {
@@ -3559,7 +3566,7 @@ function noticesNow() {
         : s.kind === "hand" ? (isMe(s.toWho) ? "hand" : null)
         : s.status === "approved" ? (mine(c) || isMe(c.assignee) || isMe(c.doneBy) ? "approved" : null)
         : s.from === "open" && s.status === "progress" ? (mine(c) ? "pick" : null)
-        : s.from === "progress" && s.status === "approval" ? (!isQ(c) && isApprover() ? "done" : null)
+        : s.from === "progress" && s.status === "approval" ? (!isQ(c) && (isApprover() || mine(c)) ? "done" : null) // the writer hears it is finished too, not the steps before (Nirav, 2026-11-11)
         : s.from === "approval" && s.status === "progress" && s.kind !== "take" ? (isMe(c.assignee) ? "back" : null) // taking your own back is not a send-back
         : s.from === "approved" && (s.status === "open" || s.status === "progress") ? (isMe(finished) ? "reopen" : null) // to whoever finished it
         : s.from === "progress" && s.status === "open" && s.kind !== "to_fix" ? (mine(c) ? "putback" : null) // to the writer: New again
@@ -6227,6 +6234,18 @@ function onlyWho(names, verb) {
   const all = [...new Set([...names.filter(Boolean), ...teamCache.list.filter((p) => p.approver).map((p) => p.name)])];
   return `Only ${all.length > 1 ? `${all.slice(0, -1).join(", ")} or ${all.at(-1)}` : all[0] || "an approver"} can ${verb}`;
 }
+const stuckWords = (k) => ({
+  question: k.text ? `It is waiting for an answer on the machine it runs on: "${k.text}"` : "It is waiting for an answer on the machine it runs on.",
+  signin: "Its sign-in to Claude has run out, so it can't carry on.",
+  limit: `It has hit its usage limit${k.text ? ` (${k.text})` : ""}.`,
+  quiet: "It has made no progress for 20 minutes.",
+})[k.why] || "It can't carry on.";
+const stuckFix = (k) => ({
+  question: "Whoever looks after the review server: sudo review-server attach, answer it, then Ctrl-b d. Or press Stop.",
+  signin: "Whoever looks after the review server: claude setup-token on a Mac, then sudo review-server secrets and restart.",
+  limit: "It carries on by itself when the limit resets. Or press Stop.",
+  quiet: "Whoever looks after the review server: sudo review-server attach to see what it is doing. Or press Stop.",
+})[k.why] || "Press Stop, or ask whoever looks after the review server.";
 const STOP_BTN = '<button type="button" class="th-stop" aria-label="Stop Claude"><i></i>Stop</button>';
 function callBusyHtml(c) {
   const k = c.call;
@@ -6235,6 +6254,8 @@ function callBusyHtml(c) {
   /* stopped mid-change: Claude says what it had done and asks what next */
   if (k.state === "stopped") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">Stopped by ${esc(isMe(k.stoppedBy) ? "you" : k.stoppedBy || "someone")}. Claude is saying what it had done…</span></div></div>`;
   const stop = k.state === "reading" || k.state === "waiting" ? (canStop(c) ? STOP_BTN : "") : "";
+  /* stuck on the machine it runs on: said plainly, with what unblocks it (Nirav, 2026-11-11) */
+  if (k.state === "reading" && k.stuck) return `<div class="th-reading stuck">${CLAUDE_AV()}<div class="th-rd-b"><span class="th-rd-h"><span class="th-stuck-t">Claude got stuck · ${esc(agoText(k.stuck.at))}</span>${stop}</span><div class="th-stuck-w">${esc(stuckWords(k.stuck))}</div><div class="th-stuck-fix">${esc(stuckFix(k.stuck))}</div></div></div>`;
   /* Go: Claude is making the change in its own copy of the code; the PR comes back here */
   /* a follow-up on the same PR (step 4): "make it 16" from the asker is the go */
   if (k.kind === "go" && k.followup) return `<div class="th-reading">${CLAUDE_AV()}<div class="th-rd-b"><span class="th-rd-h"><span class="th-rd-t">Claude is updating PR #${c.pr?.n || ""}…</span>${stop}</span><ul><li class="ok">The PR's own branch</li><li class="now">The change you asked for</li><li class="now">New before and after</li></ul></div></div>`;

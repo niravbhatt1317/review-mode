@@ -142,6 +142,13 @@ export function applyChange(c, body, who, ctx = {}) {
   if (body.callState === "planned" && c.call?.planAt) Object.assign(c.call, { state: "planned", builtAt: Date.now() });
   if (body.callState === "reading" && callOpen(c.call)) Object.assign(c.call, { state: "reading", claimedAt: Date.now(), alive: Date.now() });
   if (body.callAlive === true && c.call?.state === "reading") c.call.alive = Date.now();
+  /* STUCK (Nirav, 2026-11-11: #33 sat on a permission question on the server and nobody knew): what the session holding
+     the call is waiting on, said on the card until it moves again */
+  if ("callStuck" in body && c.call?.state === "reading") {
+    const k = body.callStuck;
+    if (k && typeof k === "object") c.call.stuck = { why: ["question", "signin", "limit", "quiet"].includes(k.why) ? k.why : "question", text: String(k.text || "").slice(0, 200), at: c.call.stuck?.at || Date.now() };
+    else delete c.call.stuck;
+  }
   /* Ask again: a call whose session closed waits for any session again (a new time, so no session thinks it has it) */
   if (body.callAgain === true && callGone(c.call)) Object.assign(c.call, { state: "waiting", at: Date.now(), claimedAt: null, alive: null });
   if (typeof body.claudeRead === "string" && c.call && !c.call.read?.includes(body.claudeRead)) c.call.read = [...(c.call.read || []), body.claudeRead.slice(0, 20)];

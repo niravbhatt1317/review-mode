@@ -627,6 +627,62 @@ async function callRound() {
   } catch {}
 }
 setInterval(callRound, CALL_EVERY).unref?.();
+/* STUCK (Nirav, 2026-11-11: #33's Go sat on a permission question on the always-on server; it moved only because we
+   happened to look). When this Claude runs in tmux (the review server), its own screen is read every 20 s. A screen
+   that has not changed for a while (a working Claude's spinner always moves) and shows a question, a sign-in that ran
+   out or a usage limit marks every call this session holds as stuck, with what it waits on; the card and the caller's
+   notices say so with how to unblock it. Nothing here answers the question: a person does. When the screen moves, the
+   mark goes. Also written to ~/.review-mode/stuck.json for `review-server status`. */
+const STUCK_EVERY = 20_000, STUCK_STILL = 45_000, QUIET_STILL = 10 * 60_000;
+let paneWas = "", paneSince = Date.now(), stuckNow = null;
+function paneWait(text) {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const tail = lines.slice(-14).join("\n");
+  const opt = lines.findIndex((l) => /^❯\s*1\./.test(l));
+  if (opt > 0 && /Esc to cancel|Enter to confirm/i.test(tail)) {
+    const q = lines.slice(0, opt).reverse().find((l) => /\?$/.test(l)) || lines[opt - 1];
+    return { why: "question", text: q.replace(/^[│|>\s]+/, "").slice(0, 160) };
+  }
+  if (/\/login\b|token (has )?expired|invalid api key|authentication_error|not logged in/i.test(tail)) return { why: "signin", text: "" };
+  const lim = tail.split("\n").find((l) => /usage limit|limit reached|credit balance is too low/i.test(l));
+  if (lim) return { why: "limit", text: (lim.match(/resets? [^·.]*/i)?.[0] || "").slice(0, 60) };
+  return null;
+}
+async function stuckRound() {
+  if (!process.env.TMUX || !ready) return;
+  let pane = "";
+  try {
+    pane = run("tmux", ["capture-pane", "-p", ...(process.env.TMUX_PANE ? ["-t", process.env.TMUX_PANE] : [])], { timeout: 5000 });
+  } catch {
+    return;
+  }
+  const flat = pane.replace(/\d+s\b|\d+m\s*\d*s?\b/g, ""); // the elapsed-time counter alone is not a change
+  if (flat !== paneWas) { paneWas = flat; paneSince = Date.now(); }
+  const still = Date.now() - paneSince;
+  const seen = still >= STUCK_STILL ? paneWait(pane) : null;
+  const changed = (seen ? `${seen.why}:${seen.text}` : "") !== (stuckNow || "");
+  if (!seen && !changed && still < QUIET_STILL) return; // moving, and nothing marked: nothing to do
+  for (const sess of ["", ...localTests()]) {
+    try {
+      const st = storeOf(sess);
+      const mine = (await st.list()).filter((x) => x.call?.state === "reading" && held.has(callKey(x)));
+      const k = seen || (still >= QUIET_STILL && mine.length ? { why: "quiet", text: "" } : null);
+      const key = k ? `${k.why}:${k.text}` : "";
+      if (!sess && key !== (stuckNow || "")) {
+        stuckNow = key || null;
+        try { fs.writeFileSync(path.join(os.homedir(), ".review-mode", "stuck.json"), JSON.stringify(k ? { ...k, at: Date.now() } : null)); } catch {}
+        if (k) process.stderr.write(`[review] stuck: ${k.why} ${k.text}\n`);
+      }
+      for (const c of mine) {
+        const full = await st.get(c.id);
+        if (!full || full.call?.state !== "reading" || !!full.call.stuck === !!k && (!k || full.call.stuck.why === k.why)) continue;
+        applyChange(full, { callStuck: k || null }, defaultAs);
+        await st.put(full);
+      }
+    } catch {}
+  }
+}
+setInterval(stuckRound, STUCK_EVERY).unref?.();
 
 /* a follow-up or an undo on Claude's PR is a go: from the person the PR is for (who asked, or said Go), or an approver */
 const sameWho = (a, b) => !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();

@@ -157,6 +157,8 @@ case "$cmd" in
     else
       echo "Claude: OFF ($up). Start it: sudo review-server start"
     fi
+    st="$H/.review-mode/stuck.json" # written by the review tools when Claude's screen shows it waiting
+    if [ -s "$st" ] && [ "$(jq -r 'if . then .why else "" end' "$st" 2>/dev/null)" != "" ]; then echo "STUCK: $(jq -r '.why + (if .text != "" then ": " + .text else "" end)' "$st"). Look: sudo review-server attach"; fi
     has_secrets && echo "Tokens: saved" || echo "Tokens: missing (sudo review-server secrets)"
     [ -d "$DIR/.git" ] && echo "Console: $(runuser -u "$U" -- git -C "$DIR" log -1 --format='%h %s, %cr' 2>/dev/null | cut -c1-80)" # as its owner: git refuses another user's folder
     echo "Last update: $(systemctl show review-update -p ExecMainExitTimestamp --value 2>/dev/null | sed 's/^$/never/')"
