@@ -219,9 +219,11 @@ async function call(name, a = {}) {
   }
   if (c.call?.state === "stopped" && (name === "review_ship" || name === "review_preview"))
     throw new Error(`${withNames(c, await people()).call.stoppedBy || "Someone"} pressed Stop: do not ship. Say what you had done with review_talk (kind "ask", options Throw it away / Carry on / Push what's done) and wait for their answer`);
-  if (name === "review_ship" && Array.isArray(a.asks_done) && c.asks?.state === "list") {
-    applyChange(c, { asksDone: a.asks_done }, who);
-    await st.put(c);
+  /* A LIST (step 5): Claude says which items its change did, every time (Nirav, 2026-11-11: #33 shipped with 0 of 3
+     ticked); a ship without it is refused before anything is committed */
+  if (name === "review_ship" && c.asks?.state === "list") {
+    if (!Array.isArray(a.asks_done)) throw new Error(`#${(await numbered(c.id, st))?.n} tracks its asks as a list: ${c.asks.items.map((x, i) => `${i + 1}. [${x.done ? "x" : " "}] ${x.t}`).join("  ")}. Call review_ship again with asks_done: the numbers of the items this change did ([] if none of them)`);
+    shipTicks.set(c.id, a.asks_done); // ticked once the change is really out (finishGo / the follow-up)
   }
   if (name === "review_ship") return works.get(c.id)?.mode === "preview" ? previewBuild(c, st, a) : ship(c, st, a);
   if (name === "review_preview") return previewBuild(c, st, a);
@@ -718,10 +720,12 @@ async function ship(c, st, a) {
     dropWork(c.id);
     try { run("gh", ["pr", "edit", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--title", title]); } catch {} // the title follows the latest change
     const fresh = await st.get(c.id);
-    applyChange(fresh, { reply: `Updated PR #${fresh.pr.n}: ${summary} New before and after pictures come here in a minute or two.`, via: "claude", prN: fresh.pr.n }, w.by);
-    if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, w.by);
+    tickShipped(fresh, w.by);
+    applyChange(fresh, { reply: `Updated PR #${fresh.pr.n}: ${summary}${stillOpen(fresh)} New before and after pictures come here in a minute or two.`, via: "claude", prN: fresh.pr.n }, w.by);
+    const left = openAsks(fresh);
+    if (fresh.status === "progress" && !left.length) applyChange(fresh, { status: "approval", via: "claude" }, w.by);
     await st.put(fresh);
-    return `PR #${fresh.pr.n} updated; #${n} is For approval.`;
+    return left.length ? `PR #${fresh.pr.n} updated; #${n} stays In progress: ${left.length} of its list still open.` : `PR #${fresh.pr.n} updated; #${n} is For approval.`;
   }
   if (c.pr?.draft && c.pr.branch === w.branch && c.pr.state === "open") {
     run("gh", ["pr", "ready", String(c.pr.n), "--repo", gh.repo]);
@@ -743,11 +747,18 @@ async function ship(c, st, a) {
 async function finishGo(c, st, prN, url, summary, by) {
   const fresh = await st.get(c.id);
   applyChange(fresh, { pr: { n: prN, draft: false } }, by);
-  applyChange(fresh, { reply: `${summary ? `Done: ${summary}` : "Done, as planned."} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview and before and after pictures show here in a minute or two"}.`, via: "claude", prN }, by);
-  if (fresh.status === "progress") applyChange(fresh, { status: "approval", via: "claude" }, by);
+  tickShipped(fresh, by);
+  applyChange(fresh, { reply: `${summary ? `Done: ${summary}` : "Done, as planned."} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview and before and after pictures show here in a minute or two"}.${stillOpen(fresh)}`, via: "claude", prN }, by);
+  const left = openAsks(fresh);
+  if (fresh.status === "progress" && !left.length) applyChange(fresh, { status: "approval", via: "claude" }, by);
   await st.put(fresh);
-  return `PR ${url} is ready; #${(await numbered(c.id, st))?.n} is For approval. A person merges it.`;
+  return left.length ? `PR ${url} is ready; #${(await numbered(c.id, st))?.n} stays In progress: ${left.length} of its list still open (${left.join("; ")}). A person merges the PR.` : `PR ${url} is ready; #${(await numbered(c.id, st))?.n} is For approval. A person merges it.`;
 }
+/* a comment's list after a change: what is still open stays In progress, said in Claude's Done */
+const shipTicks = new Map(); // comment id -> the list items (from 1) its shipping change did
+const tickShipped = (c, by) => { const t = shipTicks.get(c.id); shipTicks.delete(c.id); if (t?.length) applyChange(c, { asksDone: t }, by); };
+const openAsks = (c) => (c.asks?.state === "list" ? c.asks.items.filter((x) => !x.done).map((x) => x.t) : []);
+const stillOpen = (c) => { const l = openAsks(c); return l.length ? ` Still open on the list: ${l.join("; ")}.` : ""; };
 /* a live preview before Go (Nirav, 2026-11-05): the planned change on a DRAFT PR, so its preview is the real page */
 async function previewBuild(c, st, a) {
   const w = works.get(c.id);
