@@ -1950,6 +1950,8 @@ root.innerHTML = `
   .th-stuck-t { font-weight: 600; color: #9A5B00; }
   .th-stuck-w { margin-top: 2px; color: var(--rv-ink-2); }
   .th-stuck-fix { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
+  .th-stuck-opts { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; }
+  .th-stuck-opts .th-pick { text-align: left; white-space: normal; height: auto; padding: 5px 12px; line-height: 1.35; }
   .th-reading.idle .th-pick { flex: 0 0 auto; white-space: nowrap; padding: 0 12px; }
   .th-reading.idle .th-again { color: var(--rv-ink); }
   .th-rd-b { flex: 1; min-width: 0; }
@@ -6288,7 +6290,15 @@ function callBusyHtml(c) {
   if (k.state === "stopped") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">Stopped by ${esc(isMe(k.stoppedBy) ? "you" : k.stoppedBy || "someone")}. Claude is saying what it had done…</span></div></div>`;
   const stop = k.state === "reading" || k.state === "waiting" ? (canStop(c) ? STOP_BTN : "") : "";
   /* stuck on the machine it runs on: said plainly, with what unblocks it (Nirav, 2026-11-11) */
-  if (k.state === "reading" && k.stuck) return `<div class="th-reading stuck">${CLAUDE_AV()}<div class="th-rd-b"><span class="th-rd-h"><span class="th-stuck-t">Claude got stuck · ${esc(agoText(k.stuck.at))}</span>${stop}</span><div class="th-stuck-w">${esc(stuckWords(k.stuck))}</div><div class="th-stuck-fix">${esc(stuckFix(k.stuck))}</div></div></div>`;
+  if (k.state === "reading" && k.stuck) {
+    const q = k.stuck, a = q.answer, opts = q.why === "question" && q.options?.length ? q.options : null;
+    /* ANSWER IT HERE (Nirav, 2026-11-11): the choices Claude's screen shows, for an approver to pick; the server presses
+       it while the same question is still up, and the thread keeps who answered what */
+    const body = a ? `<div class="th-stuck-fix">${esc(isMe(a.by) ? "You" : a.by || "An approver")} answered: ${esc(a.label)}. ${a.sent ? "Sent to the server, Claude carries on." : "Sending it to the server…"}</div>`
+      : opts ? `<div class="th-stuck-opts">${opts.map((o) => `<button type="button" class="th-pick th-stuck-opt" data-n="${o.n}"${isApprover() ? "" : " disabled"}>${esc(o.label)}</button>`).join("")}</div><div class="th-stuck-fix">${isApprover() ? "Pick one and the server answers it for Claude. Or press Stop." : `${esc(onlyWho([], "answer it"))}. Or press Stop.`}</div>`
+      : `<div class="th-stuck-fix">${esc(stuckFix(q))}</div>`;
+    return `<div class="th-reading stuck">${CLAUDE_AV()}<div class="th-rd-b"><span class="th-rd-h"><span class="th-stuck-t">Claude got stuck · ${esc(agoText(q.at))}</span>${stop}</span><div class="th-stuck-w">${esc(stuckWords(q))}</div>${body}</div></div>`;
+  }
   /* Go: Claude is making the change in its own copy of the code; the PR comes back here */
   /* a follow-up on the same PR (step 4): "make it 16" from the asker is the go */
   if (k.kind === "go" && k.followup) return `<div class="th-reading">${CLAUDE_AV()}<div class="th-rd-b"><span class="th-rd-h"><span class="th-rd-t">Claude is updating PR #${c.pr?.n || ""}…</span>${stop}</span><ul><li class="ok">The PR's own branch</li><li class="now">The change you asked for</li><li class="now">New before and after</li></ul></div></div>`;
@@ -6701,6 +6711,18 @@ function threadClick(e, c, box, onChange) {
   if (bf) {
     state.baOpen.add(`${c.id}:${bf.dataset.at}`);
     onChange();
+    return true;
+  }
+  const so = t.closest(".th-stuck-opt");
+  if (so) {
+    const k = c.call?.stuck, opt = k?.options?.find((o) => o.n === Number(so.dataset.n));
+    if (!opt || k.answer) return true;
+    k.answer = { n: opt.n, label: opt.label, by: state.me, at: Date.now() }; // at once; the hub checks it is an approver
+    onChange();
+    applyUpdate({ id: c.id, stuckAnswer: { n: opt.n, q: k.text } }).then((r) => {
+      if (!r) delete k.answer;
+      onChange();
+    });
     return true;
   }
   if (t.closest(".th-stop")) {

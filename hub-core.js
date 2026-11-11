@@ -146,9 +146,25 @@ export function applyChange(c, body, who, ctx = {}) {
      the call is waiting on, said on the card until it moves again */
   if ("callStuck" in body && c.call?.state === "reading") {
     const k = body.callStuck;
-    if (k && typeof k === "object") c.call.stuck = { why: ["question", "signin", "limit", "quiet"].includes(k.why) ? k.why : "question", text: String(k.text || "").slice(0, 200), at: c.call.stuck?.at || Date.now() };
-    else delete c.call.stuck;
+    if (k && typeof k === "object") {
+      const text = String(k.text || "").slice(0, 200);
+      const same = c.call.stuck?.text === text;
+      const options = Array.isArray(k.options) ? k.options.slice(0, 6).map((o) => ({ n: Number(o.n) || 0, label: String(o.label || "").slice(0, 120) })).filter((o) => o.n >= 1 && o.n <= 9 && o.label) : [];
+      c.call.stuck = { why: ["question", "signin", "limit", "quiet"].includes(k.why) ? k.why : "question", text, at: same ? c.call.stuck.at : Date.now(), ...(options.length ? { options } : {}), ...(same && c.call.stuck.answer ? { answer: c.call.stuck.answer } : {}) };
+    } else delete c.call.stuck;
   }
+  /* ANSWERED FROM THE DRAWER (Nirav, 2026-11-11): an approver picks one of the choices Claude's screen shows; the review
+     server presses it only while that same question is still on the screen */
+  if (body.stuckAnswer && typeof body.stuckAnswer === "object") {
+    const k = c.call?.stuck;
+    if (c.call?.state !== "reading" || k?.why !== "question" || k.answer) refuse("Claude isn't waiting on that question any more");
+    if (ctx.approvers && !ctx.approvers.some((x) => sameWho(x, who))) refuse("Only an approver can answer Claude's question on the server");
+    if (String(body.stuckAnswer.q || "") !== k.text) refuse("Claude's question has changed: look again");
+    const opt = (k.options || []).find((o) => o.n === Number(body.stuckAnswer.n));
+    if (!opt) refuse("That isn't one of the choices");
+    k.answer = { n: opt.n, label: opt.label, by: who, at: Date.now() };
+  }
+  if (body.stuckAnswerSent === true && c.call?.stuck?.answer) c.call.stuck.answer.sent = Date.now();
   /* Ask again: a call whose session closed waits for any session again (a new time, so no session thinks it has it) */
   if (body.callAgain === true && callGone(c.call)) Object.assign(c.call, { state: "waiting", at: Date.now(), claimedAt: null, alive: null });
   if (typeof body.claudeRead === "string" && c.call && !c.call.read?.includes(body.claudeRead)) c.call.read = [...(c.call.read || []), body.claudeRead.slice(0, 20)];
@@ -398,7 +414,7 @@ export function withNames(c, people = {}) {
   /* Claude's part of the thread names its people too: who answered, who accepted or set it aside (2026-11-04) */
   if (c.pr?.for) out.pr = { ...c.pr, for: name(c.pr.for) };
   if (c.clash?.by) out.clash = { ...c.clash, by: name(c.clash.by) }; // who settled a clash (step 5)
-  if (c.call) out.call = { ...c.call, by: name(c.call.by), ...(c.call.asker ? { asker: name(c.call.asker) } : {}), ...(c.call.stoppedBy ? { stoppedBy: name(c.call.stoppedBy) } : {}), ...(c.call.draft ? { draft: { ...c.call.draft, for: name(c.call.draft.for) } } : {}) };
+  if (c.call) out.call = { ...c.call, by: name(c.call.by), ...(c.call.asker ? { asker: name(c.call.asker) } : {}), ...(c.call.stoppedBy ? { stoppedBy: name(c.call.stoppedBy) } : {}), ...(c.call.stuck?.answer ? { stuck: { ...c.call.stuck, answer: { ...c.call.stuck.answer, by: name(c.call.stuck.answer.by) } } } : {}), ...(c.call.draft ? { draft: { ...c.call.draft, for: name(c.call.draft.for) } } : {}) };
   if (c.draft) out.draft = { ...c.draft, ...(c.draft.decidedBy ? { decidedBy: name(c.draft.decidedBy) } : {}), ...(Array.isArray(c.draft.thread) ? { thread: c.draft.thread.map((t) => ({ ...t, by: name(t.by) })) } : {}) };
   return out;
 }

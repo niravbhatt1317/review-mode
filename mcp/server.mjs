@@ -628,12 +628,12 @@ async function callRound() {
 }
 setInterval(callRound, CALL_EVERY).unref?.();
 /* STUCK (Nirav, 2026-11-11: #33's Go sat on a permission question on the always-on server; it moved only because we
-   happened to look). When this Claude runs in tmux (the review server), its own screen is read every 20 s. A screen
+   happened to look). When this Claude runs in tmux (the review server), its own screen is read every 5 s. A screen
    that has not changed for a while (a working Claude's spinner always moves) and shows a question, a sign-in that ran
    out or a usage limit marks every call this session holds as stuck, with what it waits on; the card and the caller's
    notices say so with how to unblock it. Nothing here answers the question: a person does. When the screen moves, the
    mark goes. Also written to ~/.review-mode/stuck.json for `review-server status`. */
-const STUCK_EVERY = 20_000, STUCK_STILL = 45_000, QUIET_STILL = 10 * 60_000;
+const STUCK_EVERY = 5_000, STUCK_STILL = 45_000, QUIET_STILL = 10 * 60_000;
 let paneWas = "", paneSince = Date.now(), stuckNow = null;
 function paneWait(text) {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -641,7 +641,14 @@ function paneWait(text) {
   const opt = lines.findIndex((l) => /^❯\s*1\./.test(l));
   if (opt > 0 && /Esc to cancel|Enter to confirm/i.test(tail)) {
     const q = lines.slice(0, opt).reverse().find((l) => /\?$/.test(l)) || lines[opt - 1];
-    return { why: "question", text: q.replace(/^[│|>\s]+/, "").slice(0, 160) };
+    /* the choices, as the screen numbers them: an approver can pick one from the drawer */
+    const options = [];
+    for (const l of lines.slice(opt)) {
+      const m = l.match(/^(?:❯\s*)?(\d)\.\s+(.+)$/);
+      if (m) options.push({ n: Number(m[1]), label: m[2].trim() });
+      else if (options.length) break;
+    }
+    return { why: "question", text: q.replace(/^[│|>\s]+/, "").slice(0, 160), options };
   }
   if (/\/login\b|token (has )?expired|invalid api key|authentication_error|not logged in/i.test(tail)) return { why: "signin", text: "" };
   const lim = tail.split("\n").find((l) => /usage limit|limit reached|credit balance is too low/i.test(l));
@@ -661,7 +668,7 @@ async function stuckRound() {
   const still = Date.now() - paneSince;
   const seen = still >= STUCK_STILL ? paneWait(pane) : null;
   const changed = (seen ? `${seen.why}:${seen.text}` : "") !== (stuckNow || "");
-  if (!seen && !changed && still < QUIET_STILL) return; // moving, and nothing marked: nothing to do
+  if (!seen && !changed && (still < QUIET_STILL || !held.size)) return; // moving, or idle with nothing held: nothing to do
   for (const sess of ["", ...localTests()]) {
     try {
       const st = storeOf(sess);
@@ -675,7 +682,24 @@ async function stuckRound() {
       }
       for (const c of mine) {
         const full = await st.get(c.id);
-        if (!full || full.call?.state !== "reading" || !!full.call.stuck === !!k && (!k || full.call.stuck.why === k.why)) continue;
+        if (!full || full.call?.state !== "reading") continue;
+        const ans = full.call.stuck?.answer;
+        /* an approver answered in the drawer: pressed only while that very question is still on the screen, once */
+        if (ans && !ans.sent && seen?.why === "question" && seen.text === full.call.stuck.text && seen.options?.some((o) => o.n === ans.n)) {
+          const pane = process.env.TMUX_PANE ? ["-t", process.env.TMUX_PANE] : [];
+          try {
+            run("tmux", ["send-keys", ...pane, String(ans.n)], { timeout: 5000 });
+            await new Promise((r) => setTimeout(r, 700));
+            run("tmux", ["send-keys", ...pane, "Enter"], { timeout: 5000 });
+          } catch {}
+          applyChange(full, { stuckAnswerSent: true }, defaultAs);
+          applyChange(full, { reply: `${withNames(full, await people()).call?.stuck?.answer?.by || "An approver"} answered the question on the server ("${full.call.stuck.text}"): ${ans.label}. Carrying on.`, via: "claude" }, defaultAs);
+          await st.put(full);
+          paneWas = ""; // look again on the next round
+          continue;
+        }
+        const same = !!full.call.stuck === !!k && (!k || (full.call.stuck.why === k.why && full.call.stuck.text === k.text));
+        if (same) continue;
         applyChange(full, { callStuck: k || null }, defaultAs);
         await st.put(full);
       }
