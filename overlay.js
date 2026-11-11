@@ -6211,7 +6211,7 @@ function threadOf(c) {
     /* a question Claude asked on a call: warm, with its quick picks, while the call still waits on it */
     const live = claudeSays && s.ask && c.call?.state === "asked" && c.call.askAt === s.at && c.status !== "approved";
     const planLive = claudeSays && s.plan && c.call?.state === "planned" && c.call.planAt === s.at && c.status !== "approved";
-    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}), ...(s.plan && claudeSays ? { plan: true, planLive, planAt: s.at, previewPlan: !!s.preview } : {}), ...(claudeSays && s.summary ? { summary: s.summary } : {}) });
+    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(claudeSays && s.pr ? { prN: s.pr } : {}), ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}), ...(s.plan && claudeSays ? { plan: true, planLive, planAt: s.at, previewPlan: !!s.preview } : {}), ...(claudeSays && s.summary ? { summary: s.summary } : {}) });
     /* a move's reason is a reply, labelled with the move ("You put it back"); a bare move is the history's
        (Nirav, 2026-10-30: the words were written for someone to read) */
     else if (s.note && s.kind !== "mention") out.push({ msg: true, at: s.at, by: s.by, words: s.note, move: stepVerb(c, s, from), st: s.status, mk: moveKey(s, from), pill: movePill(c, s, from, doer) });
@@ -6322,6 +6322,18 @@ const picsOf = (c, at) => (c.pics || []).filter((p) => p.at === at && !p.hidden)
 const baViews = (p) => (p.views?.length ? p.views : [p]);
 const baPick = (c, p) => Math.min(state.baTab.get(`${c.id}:${p.sha}`) || 0, baViews(p).length - 1);
 const chgHtml = (v) => (v.chg && !v.same ? `<span class="ba-chg${v.chg.y < 0.12 ? " low" : ""}" style="left:${(v.chg.x * 100).toFixed(2)}%;top:${(v.chg.y * 100).toFixed(2)}%;width:${(v.chg.w * 100).toFixed(2)}%;height:${(v.chg.h * 100).toFixed(2)}%"><i>Changed</i></span>` : "");
+/* PICTURES ON THE WAY (Nirav, 2026-11-11: "80% done but Claude is still making sure"): under the message a new build
+   came with, until its pair arrives, the stage it is at, shimmering: the preview building, then the pictures */
+function picsComing(c, x) {
+  const pr = c.pr;
+  if (!pr?.n || pr.state !== "open" || !pr.builtAt || Date.now() - pr.builtAt > 30 * 60_000) return "";
+  const mine = x.prN === pr.n || (pr.draft && pr.planAt === x.at);
+  if (!mine || (c.pics || []).some((p) => (p.takenAt || 0) >= pr.builtAt)) return "";
+  const later = (c.history || []).filter((h) => h.at > x.at);
+  if (later.some((h) => h.picsFail || (h.via === "claude" && h.prN === pr.n)) || later.some((h) => h.via === "claude" && h.pr === pr.n)) return ""; // a newer message has them, or they could not be taken
+  const built = pr.previewAt && pr.previewAt >= pr.builtAt;
+  return `<div class="ba-note busy"><span>${built ? "Taking the before and after pictures…" : "The preview is building, then the before and after pictures come…"}</span></div>`;
+}
 function picsHtml(c, p) {
   if (p.missed) return `<div class="ba-note">Claude couldn't get the change into a picture, so try it live.</div>`;
   const draft = c.pr?.draft && c.pr.planAt === p.at;
@@ -6467,7 +6479,7 @@ function threadHtml(c, moves = true) {
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
     const long = !x.sug && x.at !== newest && !x.ask && !x.planLive && isLong(x.words, 280), open = state.longOpen.has(`${c.id}:${x.at}`);
     const words = x.summary ? (c.pinned === x.at ? `<div class="th-words">${linkHtml(mentionHtml(x.words))} <span class="th-at">Pinned to the top</span></div>` : `<div class="th-words">${linkHtml(mentionHtml(x.words))}</div>${sumHtml(x.summary)}<div class="th-picks"><button type="button" class="th-pick th-pin" data-at="${x.at}">Pin to the top</button></div>`) : x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
-    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.claude && picsOf(c, x.at) ? picsFold(c, x, picsAt) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
+    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.claude && picsOf(c, x.at) ? picsFold(c, x, picsAt) : x.claude ? picsComing(c, x) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
   if (callBusy(c)) rows.push(callBusyHtml(c));
