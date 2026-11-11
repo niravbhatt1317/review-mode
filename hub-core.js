@@ -235,8 +235,9 @@ export function applyChange(c, body, who, ctx = {}) {
   if (body.draft && typeof body.draft === "object") {
     const d = body.draft;
     if (typeof d.sharper === "string" && d.sharper.trim() && !c.sharpen && d.sharper.trim() !== String(c.text || "").trim()) c.sharpen = { text: d.sharper.trim().slice(0, 600), state: "new", at: Date.now() };
-    const items = Array.isArray(d.asks) ? d.asks.map((x) => String(x || "").trim().slice(0, 140)).filter(Boolean).slice(0, 8) : [];
-    if (items.length >= 2 && !c.asks) c.asks = { state: "offered", items: items.map((t) => ({ t, done: false })), at: Date.now() };
+    /* an ask is its words, or its words and the page it is on (asks on different pages, 2026-11-11) */
+    const items = (Array.isArray(d.asks) ? d.asks : []).map((x) => (x && typeof x === "object" ? { t: String(x.text || x.t || "").trim().slice(0, 140), ...(x.route && /^\//.test(String(x.route)) ? { route: String(x.route).slice(0, 300), page: String(x.page || "").trim().slice(0, 40) } : {}) } : { t: String(x || "").trim().slice(0, 140) })).filter((x) => x.t).slice(0, 8);
+    if (items.length >= 2 && !c.asks) c.asks = { state: "offered", items: items.map((x) => ({ ...x, done: false })), at: Date.now() };
   }
   if (body.sharpen === "use" && c.sharpen?.state === "new") {
     c.textOriginal = c.text;

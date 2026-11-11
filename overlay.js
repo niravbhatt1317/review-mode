@@ -1547,6 +1547,7 @@ root.innerHTML = `
   .cl-ck { width: 14px; height: 14px; margin-top: 2px; border-radius: 4px; flex: 0 0 auto; box-shadow: inset 0 0 0 1.5px var(--rv-ink-3); background: var(--rv-surface); display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; line-height: 1; }
   .cl-it.done .cl-ck { background: #1E8C81; box-shadow: none; } .cl-it.done .cl-ck::after { content: "✓"; }
   .cl-it.done .cl-t { color: var(--rv-ink-2); }
+  .cl-pg { color: var(--rv-ink-3); font-size: .92em; white-space: nowrap; } /* the page an ask is on, when the asks span pages */
   .cl-add { display: flex; gap: 6px; padding: 4px 0 2px; }
   .cl-add-t { display: block; padding: 5px 0 3px; border: 0; background: none; color: var(--rv-ink-3); font: inherit; font-size: 12px; cursor: pointer; }
   .cl-add-t:hover { color: hsl(214 98% 44%); }
@@ -7067,6 +7068,9 @@ const CL_ICON = {
 state.clOpen = new Map(); // id -> the writer's offer opened ("sharpen" or "asks")
 state.addOpen = new Set(); // lists whose "+ Add an item" is a field now
 state.asksAsk = null; // the comment whose Done is asking about boxes not ticked
+/* asks on different pages: each item says its page, in grey after its words; one page: nothing */
+const asksSpan = (c) => new Set((c.asks?.items || []).map((x) => (x.route ? x.route.split("?")[0] : String(c.route || "").split("?")[0]))).size > 1;
+const askPage = (c, x) => (!asksSpan(c) ? "" : `<span class="cl-pg">· ${esc(x.page || (x.route ? x.route.split("?")[0].split("/").filter(Boolean).pop()?.replace(/[-_]+/g, " ") || "" : c.pageTitle || "this page"))}</span>`);
 function clearHtml(c) {
   const out = [], top = [];
   const writer = isMe(c.by) || myName(c.by);
@@ -7077,11 +7081,11 @@ function clearHtml(c) {
   const open = state.clOpen.get(c.id);
   if (sh || ak) {
     const chip = (k, label) => `<button type="button" class="cl-chip${open === k ? " on" : ""}" data-open="${k}" aria-expanded="${open === k}" title="Only you see this">${CL_ICON[k]}<span>${label}</span></button>`;
-    top.push(`<div class="cl-chips">${sh ? chip("sharpen", "Clearer wording") : ""}${ak ? chip("asks", `${c.asks.items.length} asks · track as a list?`) : ""}</div>`);
+    top.push(`<div class="cl-chips">${sh ? chip("sharpen", "Clearer wording") : ""}${ak ? chip("asks", `${c.asks.items.length} asks${asksSpan(c) ? ` on ${new Set(c.asks.items.map((x) => x.route || c.route)).size} pages` : ""} · track as a list?`) : ""}</div>`);
     if (open === "sharpen" && sh)
       top.push(`<div class="cl-pop"><div class="cl-ph">Claude's clearer wording<span class="cl-only">Only you see this</span><button type="button" class="cl-x" aria-label="Close">×</button></div><div class="cl-q">${esc(c.sharpen.text)}</div><div class="cl-acts"><button type="button" class="pri cl-sh-use">Use this</button><button type="button" class="cl-sh-edit">Edit</button><button type="button" class="cl-sh-keep">Keep mine</button></div></div>`);
     if (open === "asks" && ak)
-      top.push(`<div class="cl-pop"><div class="cl-ph">${c.asks.items.length} separate asks<span class="cl-only">Only you see this</span><button type="button" class="cl-x" aria-label="Close">×</button></div><ol>${c.asks.items.map((x) => `<li>${esc(x.t)}</li>`).join("")}</ol><div class="cl-acts"><button type="button" class="pri cl-asks-list">Track as a list</button><button type="button" class="cl-asks-no">No thanks</button></div></div>`);
+      top.push(`<div class="cl-pop"><div class="cl-ph">${c.asks.items.length} separate asks<span class="cl-only">Only you see this</span><button type="button" class="cl-x" aria-label="Close">×</button></div><ol>${c.asks.items.map((x) => `<li>${esc(x.t)} ${askPage(c, x)}</li>`).join("")}</ol><div class="cl-acts"><button type="button" class="pri cl-asks-list">Track as a list</button><button type="button" class="cl-asks-no">No thanks</button></div></div>`);
   }
   if (c.textOriginal && c.textOriginal !== c.text)
     top.push(`<div class="cl-orig">Sharpened with Claude · <button type="button" class="cl-orig-t">${state.origOpen.has(c.id) ? "Hide the original" : "Show the original"}</button>${state.origOpen.has(c.id) ? `<q>${esc(c.textOriginal)}</q>` : ""}</div>`);
@@ -7089,7 +7093,7 @@ function clearHtml(c) {
     const n = c.asks.items.length, done = n - asksOpen(c);
     const tick = live && (can("answer", c) || canEdit(c) || isApprover());
     const add = live && (canEdit(c) || myName(c.assignee) || isApprover());
-    out.push(`<div class="cl-list"><div class="cl-lh">${done} of ${n} done<span class="cl-bar"><i style="width:${(done / n) * 100}%"></i></span></div>${c.asks.items.map((x, i) => `<div class="cl-row"><${tick ? 'button type="button"' : "div"} class="cl-it${x.done ? " done" : ""}" data-i="${i}"${tick ? ` aria-pressed="${x.done}"` : ""}><span class="cl-ck"></span><span class="cl-t">${esc(x.t)}</span></${tick ? "button" : "div"}>${add ? `<button type="button" class="cl-rm" data-i="${i}" aria-label="Remove this item" title="Remove">×</button>` : ""}</div>`).join("")}${add ? (state.addOpen.has(c.id) ? `<div class="cl-add"><input class="cl-add-in" type="text" maxlength="140" placeholder="A new item, then Enter" aria-label="Add an item"></div>` : `<button type="button" class="cl-add-t">+ Add an item</button>`) : ""}</div>`);
+    out.push(`<div class="cl-list"><div class="cl-lh">${done} of ${n} done<span class="cl-bar"><i style="width:${(done / n) * 100}%"></i></span></div>${c.asks.items.map((x, i) => `<div class="cl-row"><${tick ? 'button type="button"' : "div"} class="cl-it${x.done ? " done" : ""}" data-i="${i}"${tick ? ` aria-pressed="${x.done}"` : ""}><span class="cl-ck"></span><span class="cl-t">${esc(x.t)} ${askPage(c, x)}</span></${tick ? "button" : "div"}>${add ? `<button type="button" class="cl-rm" data-i="${i}" aria-label="Remove this item" title="Remove">×</button>` : ""}</div>`).join("")}${add ? (state.addOpen.has(c.id) ? `<div class="cl-add"><input class="cl-add-in" type="text" maxlength="140" placeholder="A new item, then Enter" aria-label="Add an item"></div>` : `<button type="button" class="cl-add-t">+ Add an item</button>`) : ""}</div>`);
     if (state.asksAsk === c.id) {
       const k = asksOpen(c);
       out.push(`<div class="cl-dlg"><b>${k} ask${k === 1 ? " isn't" : "s aren't"} ticked</b>Send for approval anyway?<input class="cl-why" type="text" maxlength="400" placeholder="Why, in a line (optional)"><div class="cl-acts"><button type="button" class="cl-dlg-no">Keep working</button><button type="button" class="pri cl-dlg-go">Send anyway</button></div></div>`);
