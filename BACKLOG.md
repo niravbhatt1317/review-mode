@@ -260,6 +260,29 @@ with the next Firefox build; `hub-core.js` accepts `fix` (reload the extension t
   - [x] **Go and Stop, who can press them** (Nirav, 2026-11-05): Go is the asker or an approver, Stop the asker,
     whoever said Go or an approver; the hub checks it. Stop before start puts the plan back; mid-change Claude says
     what it had done and asks Throw it away / Carry on / Push what's done (`review_drop`). Notices for both.
+  - [ ] **The right model for each job** (Nirav, 2026-11-12): use bigger models only where they are needed, and
+    smaller, cheaper, faster ones for repeated or simple work (summing up, the drafting pass, clearer wording, list
+    asks, picture checks of "same or not"), with Claude handing those to sub-agents on another model. Touches: the
+    server Claude starts on one model today (Sonnet 5.5 on the screen); the briefs in `mcp/server.mjs` could carry a
+    "kind" that maps to a model, and the work could go to sub-agents (Claude Code's Agent tool takes a model per
+    agent), or the review server could call a small model directly for the passes that need no code reading. Plans,
+    Go changes and checks stay on the strong model. Measure cost and time per kind first, then decide.
+  - [ ] **Faster answers** (Nirav, 2026-11-12: "my biggest concern is the speed"). Today a call goes drawer → hub
+    (Supabase) → the review server's round, every 6 s → Claude, who then reads the comment, its picture, the code and
+    the design system each time. Ways to cut it: (1) the hub tells the server at once (Supabase realtime) instead of the
+    6 s round; (2) a ready brief per comment, cached on the server (its source, picture, thread, earlier decisions), so
+    Claude does not read them again for every reply; (3) the design system and the console's layout summarised once
+    in the project's CLAUDE.md, which Claude Code's prompt cache keeps warm; (4) the drawer shows Claude's first words
+    as they come (an early "Reading the code…" line already exists; later, the answer streaming in); (5) the smaller
+    models above for the quick kinds. First step: time each leg of one real call (click, hub, claim, first word, done)
+    to see where the seconds go.
+  - [ ] **Which Claude answers: the server or this machine** (Nirav, 2026-11-12, not sure yet): in review mode calls go
+    to the always-on server; in design mode (the person designing in their own project) to their own local Claude;
+    and maybe "the local Claude when it is running, the server otherwise". Touches: calls carry no target today (any
+    running session claims a waiting call, `callRound`); a session would say where it runs and for whom (a heartbeat
+    on the hub), and a call would name who should take it, with the server as the fallback after a few seconds.
+    Watch: two sessions on one call (the claim already guards it), and a local Claude seeing only that person's
+    machine (no test sessions on the server, no work folders on the Mac). Decide what design mode needs first.
 
 ## Ideas from Claude (2026-10-26, to pick from)
 
