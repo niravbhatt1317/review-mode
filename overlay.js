@@ -1964,7 +1964,7 @@ root.innerHTML = `
   .jn-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .jn-row .av { width: 16px; height: 16px; font-size: 9px; flex: 0 0 auto; }
   .jn-left { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
-  .jn-line { display: flex; align-items: center; gap: 6px; width: 100%; margin: 0 0 10px; padding: 7px 10px; border: 0; border-radius: 8px; background: hsl(var(--rv-n10)); font: 12px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); text-align: left; cursor: pointer; }
+  .jn-line { display: flex; align-items: center; gap: 6px; width: 100%; margin: 10px 0 0; padding: 7px 10px; border: 0; border-radius: 8px; background: hsl(var(--rv-n10)); font: 12px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); text-align: left; cursor: pointer; }
   .jn-line .rv-cl-av, .jn-line svg { flex: 0 0 auto; }
   .jn-line b { color: hsl(214 98% 42%); font-weight: 600; }
   .jn-line:hover b { text-decoration: underline dotted; text-underline-offset: 3px; }
@@ -5320,7 +5320,7 @@ function guessUpdate(c, body) {
   if (typeof body.reply === "string" && body.reply.trim()) c.history = [...(c.history || []), { kind: "reply", note: body.reply, by: state.me, at: Date.now(), ...(body.via ? { via: body.via } : {}), ...(body.quote ? { quote: body.quote } : {}), ...(body.mentions ? { mentions: body.mentions } : {}) }];
   const justSet = c.call?.state === "waiting" && Date.now() - (c.call.at || 0) < 5000; // the button set it already, its own way
   if (body.mentions?.includes("Claude") && !justSet && !body.callClaude) c.call = { state: "waiting", at: Date.now(), step: Date.now(), by: state.me, asker: state.me, words: body.reply || "", read: [] };
-  if (typeof body.callClaude === "string" && !justSet) c.call = { state: "waiting", at: Date.now(), step: Date.now(), by: state.me, asker: state.me, words: body.callClaude, read: [], ...(body.callKind ? { kind: body.callKind } : {}) }; // "Sent to Claude…" now
+  if (typeof body.callClaude === "string" && !justSet) c.call = { state: "waiting", at: Date.now(), step: Date.now(), by: state.me, asker: state.me, words: body.callClaude, read: [], ...(body.callKind ? { kind: body.callKind } : {}), ...(Array.isArray(body.callCovers) ? { covers: body.callCovers } : {}) }; // "Sent to Claude…" now
   return () => Object.assign(c, was);
 }
 async function applyUpdate(body, btn) {
@@ -6477,6 +6477,15 @@ function elsewhereHtml(c) {
 /* a covered comment: where its plan is, until the PR is out (then the PR row says "with #…") */
 function joinedHtml(c) {
   const j = c.joined;
+  /* asked, not planned yet (Nirav, 2026-11-12: the line came only once Claude had planned): a Together call that names
+     this one says so from the click */
+  if (!j && c.status !== "approved") {
+    const lead = state.comments.find((x) => x.id !== c.id && x.call?.kind === "together" && (x.call.state === "waiting" || x.call.state === "reading") && (x.call.covers || []).includes(c.id));
+    if (lead) {
+      const withN = lead.call.covers.map((id) => state.comments.find((x) => x.id === id)).filter((x) => x && x.id !== c.id).map((x) => x.n);
+      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${CLAUDE_AV()}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""} · Claude is reading them</span></button>`;
+    }
+  }
   if (!j || j.state !== "plan" || c.status === "approved") return "";
   const lead = anyComment({ id: j.lead });
   if (!lead) return "";
@@ -9579,13 +9588,22 @@ async function togetherClaude() {
   const go = list.slice(0, 10), lead = go[0];
   const body = { id: lead.id, callClaude: `Do these together, as one change: #${go.map((c) => c.n).join(", #")}`, callKind: "together", callCovers: go.slice(1).map((c) => c.id) };
   const undo = guessUpdate(lead, body); // "Claude is reading…" on the first one now
-  if (undo && !refreshCard(lead, true)) renderPanel();
+  const redraw = () => { for (const c of go) if (!refreshCard(c, c === lead)) return renderPanel(); };
+  /* the selection is done with, and the list goes to the first one, where Claude works (Nirav, 2026-11-12) */
+  state.selected.clear();
+  state.onlyPicked = false;
+  for (const x of panelBody.querySelectorAll(".card.picked")) setPicked(x, false);
+  renderPickPill();
+  refreshCopyLabels();
+  redraw();
+  showInList(lead);
   const r = await api("update", body).catch(() => null);
   if (!r?.entry) {
-    if (undo) { undo(); if (!refreshCard(lead)) renderPanel(); }
+    if (undo) { undo(); redraw(); }
     return toast(`Could not reach the hub${r?.error ? `: ${r.error}` : ""}`, true);
   }
-  if (applyEntry(r.entry) || !refreshCard(r.entry)) renderPanel();
+  if (applyEntry(r.entry)) renderPanel();
+  else redraw();
   toast(`Claude plans #${go.map((c) => c.n).join(", #")} as one change, on #${lead.n}${list.length > 10 ? ` (the first 10; ${list.length - 10} for a next plan)` : ""}`);
   watchCall(lead.id);
 }
