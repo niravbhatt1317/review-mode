@@ -298,6 +298,27 @@ export function applyChange(c, body, who, ctx = {}) {
     if (j && typeof j === "object" && j.id && j.id !== c.id) c.joined = { lead: String(j.id).slice(0, 40), n: Number(j.n) || null, with: Array.isArray(j.with) ? j.with.map(Number).filter(Boolean).slice(0, 9) : [], state: j.state === "pr" ? "pr" : "plan", at: Date.now() };
     else delete c.joined;
   }
+  /* THE SAME PROBLEM ELSEWHERE (step 6): Claude's offer under its Done, and the answer. A yes adds those pages to the
+     comment's list (as items with their page) and calls Claude: a clear yes is the go on the same PR */
+  if (body.elsewhere && typeof body.elsewhere === "object") {
+    const e = body.elsewhere;
+    const pages = (Array.isArray(e.pages) ? e.pages : []).filter((x) => x && x.route).slice(0, 8).map((x) => ({ route: String(x.route).slice(0, 200), page: String(x.page || "").slice(0, 60), why: String(x.why || "").slice(0, 120) }));
+    if (pages.length) c.elsewhere = { state: "offered", pages, item: String(e.item || "").trim().slice(0, 80), forAt: Number(e.forAt) || null, pr: Number(e.pr) || null, at: Date.now() };
+  }
+  if (body.elsewhereAnswer && typeof body.elsewhereAnswer === "object" && c.elsewhere?.state === "offered") {
+    if (!mayGo(c, who, ctx.approvers) && !sameWho(c.pr?.for, who)) refuse("Only the person the PR is for or an approver can say that");
+    const yes = Array.isArray(body.elsewhereAnswer.yes) ? body.elsewhereAnswer.yes.map(String).filter((r) => c.elsewhere.pages.some((p) => p.route === r)) : [];
+    const at = Date.now();
+    if (!yes.length) Object.assign(c.elsewhere, { state: "no", by: who, decidedAt: at });
+    else {
+      Object.assign(c.elsewhere, { state: "yes", picked: yes, by: who, decidedAt: at });
+      const what = c.elsewhere.item || "The same fix";
+      const pagesOf = yes.map((r) => c.elsewhere.pages.find((p) => p.route === r));
+      if (c.asks?.state !== "list") c.asks = { state: "list", at, by: who, decidedAt: at, items: [{ t: what, done: true, route: c.route || "", page: c.pageTitle || "", by: who, at }] };
+      for (const p of pagesOf) c.asks.items.push({ t: what, done: false, route: p.route, page: p.page, by: who, at, added: true });
+      c.call = newCall(who, `Fix it on ${pagesOf.map((p) => p.page || p.route).join(", ")} too`, at, { kind: "elsewhere", step: at });
+    }
+  }
   /* a pinned summary sits at the top of the thread; a newer summary from Claude takes its place */
   if ("pinSummary" in body) c.pinned = Number(body.pinSummary) || null;
   const answer = typeof body.draftReply === "string" ? body.draftReply.trim().slice(0, 600) : "";

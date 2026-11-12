@@ -84,6 +84,7 @@ const TOOLS = [
   { name: "review_checked", description: "After a CHECK brief: you looked at the before and after pictures against your plan. ok true: they match (the pair is marked checked). ok false: say in text what you see that is wrong, one question with options; it goes in the thread as your question. nothing true: nothing on screen changes with this plan (a link, a screen reader label), so the pictures are hidden. missed true: the pictures don't show the part you changed (another tab, scrolled away, a closed drawer), so they are hidden and the thread says to try it live.", inputSchema: { type: "object", properties: { id: { type: "string" }, ok: { type: "boolean" }, nothing: { type: "boolean" }, missed: { type: "boolean" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "2 or 3 quick picks, a few words each (under 60 characters): they are buttons" }, session: { type: "string" } }, required: ["id", "ok"] } },
   { name: "review_resnap", description: "Take the before and after again: after a CHECK brief whose pictures missed the spot or the state, or when someone asks to see it another way (\"show me on a small screen\", \"what about the settings page\", \"with the menu open\"). steps: the clicks that reach the comment's view from a fresh page load (by their visible words: \"click Internal\", \"click All clients\", \"hover Try again\", \"press Escape\"); target: the spot's own words there, if they differ; state, pages, widths: as in review_talk's pictures. All remembered for this comment's later pictures. Answers with the new pictures' paths: Read them, then review_checked.", inputSchema: { type: "object", properties: { id: { type: "string" }, steps: { type: "array", items: { type: "string" } }, target: { type: "string" }, ...picsProps, session: { type: "string" } }, required: ["id"] } },
   { name: "review_undo", description: "When the person the PR is for or an approver says undo (a clear instruction is the go). On an open PR: no files closes the PR (nothing reaches staging, the comment goes back to In progress); files puts those back as they are on staging, on the same PR (\"undo the Agents part\"). On a merged PR: opens a PR that takes the whole change back out. text: one short line for the thread on what goes back, in design words; the thread adds which PRs closed.", inputSchema: { type: "object", properties: { id: { type: "string" }, files: { type: "array", items: { type: "string" }, description: "Paths in the app (src/...) to put back as on staging; leave out to undo all of it" }, text: { type: "string" }, session: { type: "string" } }, required: ["id", "text"] } },
+  { name: "review_elsewhere", description: "After an ELSEWHERE brief: the same old style your change replaced is also in other files. Say which PAGES really have the same problem (the same piece or the same wrong value, looking the same way), with why in a few words; leave out the ones that are different on purpose. pages [] when none. Changes nothing: the person the PR is for sees an offer (Fix those too, Pick pages, Not now).", inputSchema: { type: "object", properties: { id: { type: "string" }, pages: { type: "array", items: { type: "object", properties: { route: { type: "string" }, page: { type: "string", description: "The page's name as people say it" }, why: { type: "string", description: "A few words: \"the same filter bar, old gap\"" } }, required: ["route", "page"] } }, item: { type: "string", description: "The fix in a few words, for the list item on each page (\"The filter bar gap\")" }, session: { type: "string" } }, required: ["id", "pages"] } },
   { name: "review_ack", description: "Call first when a <channel source=\"review\"> brief arrives, with its delivery_id, so the drawer shows that you have it.", inputSchema: { type: "object", properties: { delivery_id: { type: "string" } }, required: ["delivery_id"] } },
 ];
 const line = (c) => `#${c.n} ${c.id} ${c.status} ${kind(c.severity)}${holder(c) ? ` [${holder(c)}${c.withClaude ? " + Claude" : ""}]` : ""}: ${c.text}${c.note?.text ? ` [note: ${c.note.text}]` : ""}`;
@@ -387,6 +388,16 @@ async function call(name, a = {}) {
     called.delete(callKey(c));
     return `Work on #${(await numbered(c.id, st))?.n} thrown away; the plan waits for Go again.`;
   }
+  if (name === "review_elsewhere") {
+    const asked = elsewhereAsked.get(c.id);
+    if (!asked) throw new Error("No ELSEWHERE question is open on this comment");
+    elsewhereAsked.delete(c.id);
+    const pages = (Array.isArray(a.pages) ? a.pages : []).filter((x) => x?.route).slice(0, 8);
+    if (!pages.length) return "Noted: nowhere else. Nothing is offered.";
+    applyChange(c, { elsewhere: { pages, item: a.item, forAt: asked.forAt, pr: asked.pr } }, who);
+    await st.put(c);
+    return `Offered on #${(await numbered(c.id, st))?.n}: ${pages.map((x) => x.page || x.route).join(", ")}. The person says Fix those too, Pick pages or Not now; a yes comes back to you as a call.`;
+  }
   if (name === "review_ack") {
     const d = deliveries.get(a.delivery_id);
     if (d) d.acked = Date.now();
@@ -603,6 +614,7 @@ async function callRound() {
         : k.kind === "sent" ? `${k.by} sent this comment to you from the drawer. A question: answer it (kind "answer"). A fix: plan the change (kind "plan"), it waits for their Go.`
         : k.kind === "accepted" ? `${k.by} accepted your suggestion ("${full.draft?.text || k.words}"). Plan exactly that (kind "plan"), in design words: it waits for their Go.`
         : k.kind === "draft" ? `${k.by} asked for help writing a reply: "${k.words}". Draft it (kind "draft"), only they see it.`
+        : k.kind === "elsewhere" ? `${k.by} said yes to fixing it on other pages too: ${(full.elsewhere?.picked || []).map((r) => (full.elsewhere.pages || []).find((p) => p.route === r)?.page || r).join(", ")}. That is the go: kind "change" on the same PR #${full.pr?.n}, the same fix on those pages, then review_ship with asks_done for their list items.`
         : k.kind === "together" ? [`${k.by} selected these to be done together, as ONE change: this comment and the ones below. Plan one change for all of them`, `(kind "plan", covers: [their numbers]). Leave out any that don't fit (someone else has it, a different kind of change) and say why in left_out.`, ...coverLines(k.covers || [], all, ppl)].join("\n")
         : asked ? `${k.by} answered your question ("${asked.note}"): "${k.words}". Carry on from there.`
         : `${k.by} wrote: "${k.words}"`;
@@ -833,6 +845,8 @@ async function ship(c, st, a) {
   const summary = String(a.summary || "").trim().slice(0, 600);
   run("git", ["-C", w.dir, "add", "-A"]);
   run("git", ["-C", w.dir, "commit", "-q", "-m", `${title}\n\nReview comment #${n}: ${c.text}\nGo by ${goer} to the plan: ${w.plan}\n\nCo-Authored-By: Claude <noreply@anthropic.com>`], asGitHub());
+  const diff = (() => { try { return run("git", ["-C", w.dir, "show", "--format=", "-U0", "HEAD"]); } catch { return ""; } })(); // for "the same problem elsewhere"
+  const later = (prN) => setTimeout(() => elsewhereCheck(c.id, w.sess || "", diff, prN).catch(() => {}), 1500);
   if (process.env.REVIEW_SHIP_DRY === "1") {
     const files = run("git", ["-C", w.dir, "show", "--stat", "--format=", "HEAD"]);
     dropWork(c.id);
@@ -845,6 +859,7 @@ async function ship(c, st, a) {
     applyChange(fresh, { pr: { n: 9999, url: "https://example.invalid/pull/9999", branch: w.branch, repo: gh.repo, state: "open", draft: false, for: w.by } }, w.by);
     fresh.pr.builtAt = Date.now();
     await st.put(fresh);
+    later(9999);
     return finishGo(fresh, st, 9999, fresh.pr.url, summary, w.by);
   }
   run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
@@ -860,12 +875,14 @@ async function ship(c, st, a) {
     const left = openAsks(fresh);
     if (fresh.status === "progress" && !left.length) applyChange(fresh, { status: "approval", via: "claude" }, w.by);
     await st.put(fresh);
+    if (!fresh.elsewhere) later(fresh.pr.n); // a follow-up that is itself "elsewhere" is not looked at again
     return left.length ? `PR #${fresh.pr.n} updated; #${n} stays In progress: ${left.length} of its list still open.` : `PR #${fresh.pr.n} updated; #${n} is For approval.`;
   }
   if (c.pr?.draft && c.pr.branch === w.branch && c.pr.state === "open") {
     run("gh", ["pr", "ready", String(c.pr.n), "--repo", gh.repo]);
     run("gh", ["pr", "edit", String(c.pr.n), "--repo", gh.repo, "--title", title]);
     dropWork(c.id);
+    later(c.pr.n);
     return finishGo(c, st, c.pr.n, c.pr.url, summary, w.by);
   }
   const page = c.pageTitle || c.route || "the page";
@@ -877,6 +894,7 @@ async function ship(c, st, a) {
   applyChange(fresh, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open", draft: false, for: w.by } }, w.by);
   fresh.pr.builtAt = Date.now();
   await st.put(fresh);
+  later(prN);
   return finishGo(fresh, st, prN, url, summary, w.by);
 }
 /* the work is in a ready PR: Claude says so, and the comment waits for approval */
@@ -1110,6 +1128,66 @@ async function checkAgainRound() {
 }
 setInterval(checkAgainRound, 60_000).unref?.();
 setTimeout(checkAgainRound, 20_000).unref?.(); // just after a start: what the last run left unchecked
+/* THE SAME PROBLEM ELSEWHERE (step 6, Nirav 2026-11-12: "won't it use too many tokens?"). After a change, the review
+   server looks with no AI at all: the style lines and values the PR removed, searched for in the other files on the
+   base branch. Only when that finds something is Claude asked (a small brief) which pages really have the same
+   problem; only on a person's yes does the real work start. Words-only changes find nothing to look for. */
+const elsewhereAsked = new Map(); // comment id -> { forAt, pr }
+const STYLE = /className=|style=|\bclass=|[a-z-]+\s*:\s*[^;{}]+;|\d+(\.\d+)?(px|rem|em)\b|var\(--|#[0-9a-f]{3,8}\b|\b(gap|p[xytrbl]?|m[xytrbl]?|text|font|leading|tracking|rounded|border|bg|w|h|space|size|min-w|max-w)-[\w./-]+/i;
+function oldStyles(diff) {
+  const files = new Set(), lines = new Set(), vals = new Set(), added = new Set();
+  let file = "";
+  for (const l of String(diff).split("\n")) {
+    if (l.startsWith("+++ ")) { file = l.slice(6); if (file) files.add(file); continue; }
+    if (l.startsWith("--- ")) continue;
+    if (!/\.(tsx?|jsx?|css|scss)$/.test(file)) continue;
+    if (l.startsWith("+")) { added.add(l.slice(1).trim()); continue; }
+    if (!l.startsWith("-")) continue;
+    const t = l.slice(1).trim();
+    if (!STYLE.test(t) || /^(import|export|\/\/|\*)/.test(t)) continue;
+    if (t.length >= 12 && t.length <= 160) lines.add(t);
+    for (const v of t.match(/--[a-z0-9-]+|#[0-9a-f]{3,8}\b|\b[a-z]+(?:-[a-z0-9.\/]+)*-\d[\w./-]*/gi) || []) vals.add(v);
+  }
+  for (const a of added) for (const v of [...vals]) if (a.includes(v)) vals.delete(v); // still used after the change: not "old"
+  return { files, lines: [...lines].slice(0, 6), vals: [...vals].slice(0, 6) };
+}
+async function elsewhereCheck(id, sess, diff, prN) {
+  if (!GIT_ROOT || !diff || !cfg.github || !canHear()) return;
+  const old = oldStyles(diff);
+  if (!old.lines.length && !old.vals.length) return; // words only, or nothing styled: nothing to look for
+  const gh = cfg.github, remote = remoteFor(gh.repo);
+  if (!remote) return;
+  const hits = new Map(); // file -> [line numbers and text]
+  const look = (needle, max) => {
+    let out = "";
+    try { out = run("git", ["-C", GIT_ROOT, "grep", "-n", "-F", "-e", needle, `${remote}/${gh.base}`, "--", APP_REL ? `${APP_REL}/src` : "src"], { timeout: 20_000 }); } catch { return; } // no match exits 1
+    const rows = out.split("\n").filter(Boolean);
+    if (rows.length > max) return; // everywhere: too common to mean the same problem
+    for (const r of rows) {
+      const m = r.match(/^[^:]+:([^:]+):(\d+):(.*)$/);
+      if (!m || [...old.files].some((f) => m[1].endsWith(f) || f.endsWith(m[1]))) continue;
+      if (!hits.has(m[1])) hits.set(m[1], []);
+      if (hits.get(m[1]).length < 3) hits.get(m[1]).push(`${m[2]}: ${m[3].trim().slice(0, 140)}`);
+    }
+  };
+  for (const l of old.lines) look(l, 25);
+  for (const v of old.vals) look(v, 15);
+  if (!hits.size) return;
+  const st = storeOf(sess);
+  const c = await st.get(id);
+  const msg = [...(c?.history || [])].reverse().find((h) => h.via === "claude" && h.pr === prN);
+  if (!c || !msg || c.elsewhere?.pr === prN) return;
+  elsewhereAsked.set(id, { forAt: msg.at, pr: prN });
+  const n = (await numbered(id, st))?.n;
+  send({ method: "notifications/claude/channel", params: { content: [
+    `ELSEWHERE for review comment #${n} (${id})${sess ? `, TEST SESSION ${sess} (pass session "${sess}" to the review tools)` : ""}: your change in PR #${prN} replaced old style in ${[...old.files].join(", ")}.`,
+    `The same old ${old.lines.length ? "lines or values" : "values"} are also in these files on ${gh.base}:`,
+    ...[...hits].slice(0, 12).map(([f, ls]) => `  ${f}\n    ${ls.join("\n    ")}`),
+    `Look only as far as you need: which PAGES show these, and is it really the same problem there (the same piece, or the same wrong value looking`,
+    `the same way)? Leave out what is different on purpose. Then review_elsewhere with id ${id}: pages [{route, page, why}] and item (the fix in a few`,
+    `words), or pages [] if none. Change nothing and say nothing in the thread: the person the PR is for decides. Then carry on.`,
+  ].join("\n"), meta: { kind: "elsewhere", comment: String(n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
+}
 /* ONE PLAN FOR MANY (step 6): each covered comment, for Claude to read and change too */
 const coverLines = (ids, all, ppl) => ids.map((id) => all.find((x) => x.id === (id.id || id))).filter(Boolean).map((o) => {
   const src = o.source?.file ? `${o.source.file}${o.source.line ? `:${o.source.line}` : ""}` : "find it from the page";

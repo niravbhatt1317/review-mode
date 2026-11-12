@@ -58,7 +58,12 @@ when they apply: `sharper` for a vague comment (the same comment said clearly), 
 (never the steps of one change; the writer may track them as tick boxes in the same comment, never a split), `clash`
 when another open comment asks for the opposite on the same element or token. A go brief that shows a list: pass
 `asks_done` to `review_ship`; a reply asking one more thing on a list: `asks_add`. "Sum up": `review_talk` kind
-"summary" with `summary` {decided, left, who}. After the PR (step 4): on a comment with your open PR, a clear
+"summary" with `summary` {decided, left, who}. Many and elsewhere (step 6): asked for several comments at once ("all the
+spacing comments on this page", or a call of kind together from a selection), make ONE plan on the comment you were
+called on with `covers` (the other numbers, up to 9, any page) and `left_out` (who you left and why); the go brief lists
+them, make all of it, and `covers_skipped` on `review_ship` for any you could not do. An ELSEWHERE brief (the review
+server found the same old style in other files, with no AI): answer only with `review_elsewhere`, the pages that really
+have the same problem and why, or pages []; a yes comes back as a call of kind elsewhere: kind "change" on the same PR. After the PR (step 4): on a comment with your open PR, a clear
 instruction from the person the PR is for or an approver ("make it 16", a send-back reason that says how) is the go:
 `review_talk` kind "change", then edit the PR's work folder and `review_ship` (it updates the same PR). "Undo":
 `review_undo` (files for a part; on a merged PR it opens a PR that takes it back out). Anyone else: plan as usual. Show changes

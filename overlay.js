@@ -1968,6 +1968,17 @@ root.innerHTML = `
   .jn-line .rv-cl-av, .jn-line svg { flex: 0 0 auto; }
   .jn-line b { color: hsl(214 98% 42%); font-weight: 600; }
   .jn-line:hover b { text-decoration: underline dotted; text-underline-offset: 3px; }
+  .ew { margin-top: 8px; padding: 8px 10px; border: 1px dashed color-mix(in srgb, #D97757 45%, transparent); border-radius: 10px; background: color-mix(in srgb, #D97757 4%, var(--rv-surface)); font-size: 12.5px; line-height: 1.45; color: var(--rv-ink); }
+  .ew b { color: #b4532f; font-weight: 600; }
+  .ew-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .ew .cl-pri { background: #D97757; color: #fff; box-shadow: none; }
+  .ew .cl-pri:hover { background: #c4572f; color: #fff; }
+  .ew-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-top: 1px solid color-mix(in srgb, #D97757 14%, transparent); cursor: pointer; }
+  .ew-row:first-of-type { margin-top: 4px; }
+  .ew-row i { font-style: normal; color: var(--rv-ink-3); font-size: 11.5px; }
+  .ew-done { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; color: #1E8C81; }
+  .ew-done svg { width: 12px; height: 12px; }
+  .ew-done.no { color: var(--rv-ink-3); }
   .th-with { display: inline-block; margin-left: 8px; font-size: 12px; color: var(--rv-ink-3); white-space: nowrap; }
   .th-with .jn-go { border: 0; padding: 0; background: none; font: inherit; color: hsl(214 98% 42%); cursor: pointer; }
   .th-with .jn-go:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
@@ -6450,6 +6461,19 @@ function coversHtml(x) {
   }).join("");
   return `<div class="jn-cov"><div class="jn-h">Covers ${x.covers.length} more</div>${rows}${x.leftOut ? `<div class="jn-left">Left out: ${esc(x.leftOut)}</div>` : ""}</div>`;
 }
+/* THE SAME PROBLEM ELSEWHERE (step 6): Claude's offer under its Done; a yes adds the pages to the list, on the same PR */
+state.ewPick = new Map(); // comment id -> routes ticked in "Pick pages"
+function elsewhereHtml(c) {
+  const e = c.elsewhere, pages = e.pages || [];
+  const name = (r) => pages.find((p) => p.route === r)?.page || r;
+  if (e.state === "yes") return `<div class="ew-done">${MOVE_SVG("accepted")}${esc(isMe(e.by) ? "You" : e.by || "Someone")} said fix it on ${esc((e.picked || []).map(name).join(", "))} too</div>`;
+  if (e.state === "no") return `<div class="ew-done no">Not now: the other pages stay as they are</div>`;
+  const may = canGo(c) || isMe(c.pr?.for);
+  const list = pages.map((p) => `${esc(p.page || p.route)}`).join(", ");
+  const picking = state.ewPick.get(c.id);
+  if (picking) return `<div class="ew"><b>Which pages?</b>${pages.map((p) => `<label class="ew-row"><input type="checkbox" class="ew-cb" value="${esc(p.route)}"${picking.includes(p.route) ? " checked" : ""}><span>${esc(p.page || p.route)}</span>${p.why ? `<i>· ${esc(p.why)}</i>` : ""}</label>`).join("")}<div class="ew-acts"><button type="button" class="th-pick ew-fix-some cl-pri"${picking.length ? "" : " disabled"}>Fix ${picking.length} page${picking.length === 1 ? "" : "s"}</button><button type="button" class="th-pick ew-cancel">Cancel</button></div></div>`;
+  return `<div class="ew"><span><b>Also on ${pages.length} other page${pages.length === 1 ? "" : "s"}:</b> ${list}${pages.length === 1 && pages[0].why ? ` (${esc(pages[0].why)})` : ""}.</span><div class="ew-acts"><button type="button" class="th-pick ew-yes cl-pri"${may ? "" : " disabled"}>Fix ${pages.length === 1 ? "it there" : "those"} too</button>${pages.length > 1 ? `<button type="button" class="th-pick ew-pick"${may ? "" : " disabled"}>Pick pages</button>` : ""}<button type="button" class="th-pick ew-no"${may ? "" : " disabled"}>Not now</button></div>${may ? "" : `<div class="th-only">${esc(onlyWho([c.pr?.for, c.call?.by].filter(Boolean), "say yes"))}</div>`}</div>`;
+}
 /* a covered comment: where its plan is, until the PR is out (then the PR row says "with #…") */
 function joinedHtml(c) {
   const j = c.joined;
@@ -6525,7 +6549,7 @@ function threadHtml(c, moves = true) {
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
     const long = !x.sug && x.at !== newest && !x.ask && !x.planLive && isLong(x.words, 280), open = state.longOpen.has(`${c.id}:${x.at}`);
     const words = x.summary ? (c.pinned === x.at ? `<div class="th-words">${linkHtml(mentionHtml(x.words))} <span class="th-at">Pinned to the top</span></div>` : `<div class="th-words">${linkHtml(mentionHtml(x.words))}</div>${sumHtml(x.summary)}<div class="th-picks"><button type="button" class="th-pick th-pin" data-at="${x.at}">Pin to the top</button></div>`) : x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
-    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.covers ? coversHtml(x) : ""}${x.claude && picsOf(c, x.at) ? picsFold(c, x, picsAt) : x.claude ? picsComing(c, x) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
+    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.covers ? coversHtml(x) : ""}${c.elsewhere && c.elsewhere.forAt === x.at ? elsewhereHtml(c) : ""}${x.claude && picsOf(c, x.at) ? picsFold(c, x, picsAt) : x.claude ? picsComing(c, x) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
   if (callBusy(c)) rows.push(callBusyHtml(c));
@@ -6770,6 +6794,34 @@ function threadClick(e, c, box, onChange) {
   if (bf) {
     state.baOpen.add(`${c.id}:${bf.dataset.at}`);
     onChange();
+    return true;
+  }
+  /* the elsewhere offer: at once on the card, the hub behind it */
+  if (t.closest(".ew-yes, .ew-no, .ew-pick, .ew-cancel, .ew-fix-some, .ew-cb")) {
+    const e = c.elsewhere;
+    if (!e || e.state !== "offered") return true;
+    if (t.closest(".ew-cb")) {
+      state.ewPick.set(c.id, [...box.querySelectorAll(".ew-cb:checked")].map((x) => x.value));
+      onChange();
+      return true;
+    }
+    if (t.closest(".ew-pick")) { state.ewPick.set(c.id, e.pages.map((p) => p.route)); onChange(); return true; }
+    if (t.closest(".ew-cancel")) { state.ewPick.delete(c.id); onChange(); return true; }
+    const yes = t.closest(".ew-yes") ? e.pages.map((p) => p.route) : t.closest(".ew-fix-some") ? state.ewPick.get(c.id) || [] : [];
+    state.ewPick.delete(c.id);
+    const was = { e: { ...e }, asks: c.asks && JSON.parse(JSON.stringify(c.asks)), call: c.call };
+    Object.assign(e, yes.length ? { state: "yes", picked: yes, by: state.me } : { state: "no", by: state.me });
+    if (yes.length) {
+      const what = e.item || "The same fix";
+      if (c.asks?.state !== "list") c.asks = { state: "list", items: [{ t: what, done: true, route: c.route, page: c.pageTitle }] };
+      for (const r of yes) c.asks.items.push({ t: what, done: false, route: r, page: e.pages.find((p) => p.route === r)?.page, added: true });
+      c.call = { state: "waiting", at: Date.now(), by: state.me, kind: "elsewhere", words: "", read: [] };
+    }
+    if (!refreshCard(c)) renderPanel();
+    applyUpdate({ id: c.id, elsewhereAnswer: { yes } }).then((r) => {
+      if (!r) { Object.assign(c, { elsewhere: was.e, asks: was.asks, call: was.call }); if (!refreshCard(c)) renderPanel(); }
+      else if (yes.length) watchCall(c.id);
+    });
     return true;
   }
   const so = t.closest(".th-stuck-opt");
@@ -7338,6 +7390,11 @@ function clearSync(card, c) {
   };
   put("cl-top", top, (b) => card.querySelector(".card-line")?.after(b));
   put("cl-low", html, (b) => card.insertBefore(b, card.querySelector(".card-th")));
+  /* the "2 / 5" pill beside the status follows the list (Nirav, 2026-11-12: it stayed 2 / 4 after a yes added a page) */
+  const pill = card.querySelector(".asks-pill"), ph = asksPill(c);
+  if (!ph) pill?.remove();
+  else if (!pill) card.querySelector(".card-status")?.insertAdjacentHTML("afterend", ph);
+  else if (pill.outerHTML !== ph) pill.outerHTML = ph;
 }
 async function clearClick(t, c, card) {
   const redo = () => { clearSync(card, c); clampCard(card); };
