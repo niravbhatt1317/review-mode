@@ -137,7 +137,9 @@ export function applyChange(c, body, who, ctx = {}) {
   if (typeof body.callClaude === "string" && body.callClaude.trim()) {
     /* "Show me live" on a plan (Nirav, 2026-11-05): the plan stays the plan, Claude builds its preview, then it waits for Go */
     const keep = body.callKind === "preview" && c.call?.planAt ? { planAt: c.call.planAt } : {};
-    c.call = newCall(who, body.callClaude, Date.now(), { ...(body.callKind ? { kind: String(body.callKind).slice(0, 20) } : {}), ...keep });
+    /* TOGETHER (step 6, Nirav 2026-11-12): from a selection, the other comments Claude should plan with this one */
+    const want = Array.isArray(body.callCovers) ? { covers: [...new Set(body.callCovers.map((x) => String(x || "").slice(0, 40)).filter(Boolean))].slice(0, 9) } : {};
+    c.call = newCall(who, body.callClaude, Date.now(), { ...(body.callKind ? { kind: String(body.callKind).slice(0, 20) } : {}), ...keep, ...want });
   }
   if (body.callState === "planned" && c.call?.planAt) Object.assign(c.call, { state: "planned", builtAt: Date.now() });
   if (body.callState === "reading" && callOpen(c.call)) Object.assign(c.call, { state: "reading", claimedAt: Date.now(), alive: Date.now() });
@@ -210,7 +212,7 @@ export function applyChange(c, body, who, ctx = {}) {
     const had = c.pr?.n === n ? c.pr : null;
     /* a new PR beside one still open: the open one is remembered, so an undo can close both */
     if (Number.isFinite(n) && n > 0 && c.pr?.n && c.pr.n !== n && (c.pr.state || "open") === "open") c.prsOpen = [...new Set([...(c.prsOpen || []), c.pr.n])].slice(-5);
-    if (Number.isFinite(n) && n > 0) c.pr = { ...(c.pr?.n === n ? c.pr : {}), n, url: String(body.pr.url || c.pr?.url || "").slice(0, 300), ...(body.pr.branch ? { branch: String(body.pr.branch).slice(0, 120) } : {}), ...(body.pr.repo ? { repo: String(body.pr.repo).slice(0, 120) } : {}), ...(body.pr.preview ? { preview: String(body.pr.preview).slice(0, 300) } : {}), ...(body.pr.state ? { state: String(body.pr.state).slice(0, 20) } : {}), ...(typeof body.pr.draft === "boolean" ? { draft: body.pr.draft } : {}), ...(body.pr.for ? { for: String(body.pr.for).slice(0, 80) } : had?.for ? { for: had.for } : {}), at: c.pr?.n === n ? c.pr.at : Date.now() };
+    if (Number.isFinite(n) && n > 0) c.pr = { ...(c.pr?.n === n ? c.pr : {}), n, url: String(body.pr.url || c.pr?.url || "").slice(0, 300), ...(body.pr.branch ? { branch: String(body.pr.branch).slice(0, 120) } : {}), ...(body.pr.repo ? { repo: String(body.pr.repo).slice(0, 120) } : {}), ...(body.pr.preview ? { preview: String(body.pr.preview).slice(0, 300) } : {}), ...(body.pr.state ? { state: String(body.pr.state).slice(0, 20) } : {}), ...(typeof body.pr.draft === "boolean" ? { draft: body.pr.draft } : {}), ...(body.pr.for ? { for: String(body.pr.for).slice(0, 80) } : had?.for ? { for: had.for } : {}), ...(Array.isArray(body.pr.with) ? { with: body.pr.with.map(Number).filter(Boolean).slice(0, 9) } : {}), at: c.pr?.n === n ? c.pr.at : Date.now() }; // with: the other comments one PR covers (step 6)
     if (c.pr?.n === n && c.pr.preview && !had?.preview) c.pr.previewAt = Date.now();
     if (c.pr?.n === n && c.pr.state === "merged" && had?.state !== "merged") c.pr.mergedAt = Date.now();
     if (had?.previewAt && !c.pr.previewAt) c.pr.previewAt = had.previewAt;
@@ -290,6 +292,12 @@ export function applyChange(c, body, who, ctx = {}) {
   }
   if (body.clashPick && typeof body.clashPick === "object" && c.clash?.state === "open") Object.assign(c.clash, { state: "settled", pick: { label: String(body.clashPick.label || "").slice(0, 40), n: Number(body.clashPick.n) || null }, by: who, settledAt: Date.now() });
   if (body.clashTalk === true && c.clash?.state === "open") Object.assign(c.clash, { state: "talk", by: who, settledAt: Date.now() });
+  /* a comment covered by another's plan: where that plan is (the lead), and whether its PR is out yet */
+  if ("joinTo" in body) {
+    const j = body.joinTo;
+    if (j && typeof j === "object" && j.id && j.id !== c.id) c.joined = { lead: String(j.id).slice(0, 40), n: Number(j.n) || null, with: Array.isArray(j.with) ? j.with.map(Number).filter(Boolean).slice(0, 9) : [], state: j.state === "pr" ? "pr" : "plan", at: Date.now() };
+    else delete c.joined;
+  }
   /* a pinned summary sits at the top of the thread; a newer summary from Claude takes its place */
   if ("pinSummary" in body) c.pinned = Number(body.pinSummary) || null;
   const answer = typeof body.draftReply === "string" ? body.draftReply.trim().slice(0, 600) : "";
@@ -327,16 +335,18 @@ export function applyChange(c, body, who, ctx = {}) {
     const sum = claude && body.summary && typeof body.summary === "object" ? { summary: { decided: list(body.summary.decided), left: list(body.summary.left), who: String(body.summary.who || "").trim().slice(0, 120) } } : {};
     if (sum.summary && c.pinned) c.pinned = at;
     const cask = claude && body.ask === true ? { ask: true, ...(Array.isArray(body.options) ? { options: body.options.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 140)).slice(0, 4) } : {}) } : {};
+    /* ONE PLAN FOR MANY (step 6): the other comments a plan covers, each {id, n}, and who it left out and why */
+    const covers = plan && Array.isArray(body.covers) ? { covers: body.covers.filter((x) => x && x.id).map((x) => ({ id: String(x.id).slice(0, 40), n: Number(x.n) || null })).slice(0, 9), ...(body.leftOut ? { leftOut: String(body.leftOut).trim().slice(0, 300) } : {}) } : {};
     if (claude && c.call && c.call.state !== "done") Object.assign(c.call, cask.ask ? { state: "asked", askAt: at } : plan ? { state: "planned", planAt: at } : { state: "done", doneAt: at });
     else if (go) {
       const p = (c.history || []).find((h) => h.at === c.call.planAt && h.via === "claude");
-      c.call = newCall(who, p?.note || "", at, { kind: "go", step: at, planAt: c.call.planAt, asker: planAsker });
+      c.call = newCall(who, p?.note || "", at, { kind: "go", step: at, planAt: c.call.planAt, asker: planAsker, ...(p?.covers?.length ? { covers: p.covers } : {}) });
     }
     /* replying to one of Claude's messages (its quote) talks to Claude too, @ or not (Nirav, 2026-11-04) */
     else if (!claude && !go && (mentions.includes("Claude") || c.call?.state === "asked" || qt.quote?.by === "Claude")) c.call = newCall(who, reply, at, { step: at, ...(c.call?.state === "asked" ? { answers: c.call.askAt } : {}) });
     /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
     if (!isQ) {
-      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true, ...(body.preview === true ? { preview: true } : {}) } : {}), ...(go ? { go: true, ...(planAsker && !sameWho(planAsker, who) ? { tell: [planAsker] } : {}) } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...sum, ...ment, ...qt });
+      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true, ...(body.preview === true ? { preview: true } : {}), ...(covers.covers?.length ? covers : {}) } : {}), ...(go ? { go: true, ...(planAsker && !sameWho(planAsker, who) ? { tell: [planAsker] } : {}) } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...sum, ...ment, ...qt });
       /* Go on a New comment picks it up: the person who said go is on it, with Claude */
       if (go && from === "open") {
         Object.assign(c, { status: "progress", assignee: who, pickedAt: at, withClaude: true });

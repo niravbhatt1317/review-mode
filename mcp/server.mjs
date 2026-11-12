@@ -42,6 +42,9 @@ const localTests = () => {
     return [];
   }
 };
+/* the stores the rounds go through: the team's and the local test sessions; REVIEW_TESTS_ONLY=1 (a test run) keeps
+   them to the test sessions, so a test never claims a team call another Claude should answer */
+const roundSessions = () => (process.env.REVIEW_TESTS_ONLY === "1" ? localTests() : ["", ...localTests()]);
 const PORTS = [47831, 47840];
 const startedAt = Date.now();
 const deliveries = new Map(); // id -> { at, acked }
@@ -74,8 +77,8 @@ const TOOLS = [
   { name: "review_reply", description: "Answer a question (one or two plain sentences, from the code it points at). If something should change, say so; the asker can make it a fix.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, ...asProp }, required: ["id", "text"] } },
   { name: "review_picture", description: "Save a comment's picture (the element boxed, its number on it) and return the file path to Read.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" } }, required: ["id"] } },
   { name: "review_suggest", description: "Claude drafts first: leave a short suggestion on a new comment, for a person to accept or ignore. For a fix, what you would change and where (file and line), in one or two plain sentences; for a question, the answer. When you cannot tell what is meant, or the code shows no clear change, set unsure and say in one sentence what you would need to know, instead of guessing. Draft only: change no code and no status.", inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, unsure: { type: "boolean", description: "True when the text is a question back to the person, not a suggestion" }, sharper: { type: "string", description: "Only for a vague comment (\"this looks off\", \"feels wrong\"): the same comment said clearly, in the writer's voice and design words, from what the picture and the code show (\"The card title sits 2px lower than the icon. Align them to the centre?\"). Offered to the writer only; leave out when the comment is already clear" }, asks: { type: "array", items: { anyOf: [{ type: "string" }, { type: "object", properties: { text: { type: "string" }, route: { type: "string", description: "The page this ask is on, as a route (\"/jobs\")" }, page: { type: "string", description: "That page's name as people say it (\"Jobs\")" } }, required: ["text"] }] }, description: "Only when the comment holds 2 or more separate asks, each its own change (different elements or different things): each ask in a few words (\"The title in bold\"). When the asks are on DIFFERENT pages, give each as {text, route, page}, the comment's own page included, so the list says where each lives and the pictures show every page. Never the steps of one change (\"make Retry the primary button\" is one ask). Offered to the writer as a tick list inside the same comment; never a split" }, clash: { type: "object", properties: { with: { type: "number", description: "The other open comment's number" }, text: { type: "string", description: "One or two sentences, naming who asked what: \"This clashes with #14: Pranjal asked for 8px on the same gap. Which one?\"" }, options: { type: "array", items: { type: "object", properties: { label: { type: "string" }, n: { type: "number" } }, required: ["label"] }, description: "The two choices, each with the comment that asked for it: [{label: \"12px\", n: 12}, {label: \"8px\", n: 14}]" } }, required: ["with", "text", "options"], description: "Only when another OPEN comment asks for the opposite on the same element, or a different value of the same token. Said on both comments" }, session: { type: "string", description: "The test session (the brief names it); leave out for the team comments" }, ...asProp }, required: ["id", "text"] } },
-  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan", "change", "summary"], description: "change: only on a comment with an open PR, when they told you exactly what to change (\"make it 16\"): that is the go; the text is one short line of what you'll do, and the reply names the PR's work folder" }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each (under 60 characters): they are buttons" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, summary: { type: "object", properties: { decided: { type: "array", items: { type: "string" } }, left: { type: "array", items: { type: "string" } }, who: { type: "string" } }, description: "For kind summary (someone asked you to sum up the thread): what was decided, what is left, and who has it, each a few words; text is one short line before it" }, asks_add: { type: "string", description: "When a reply asks for one more thing on a comment that tracks its asks as a list: that ask in a few words, added to the list" }, pictures: { type: "object", properties: picsProps, description: "For plan or change: how the before and after should be taken, when one plain pair of the spot would not show your change (a hover style, other pages that use the piece, a narrow screen)" }, ...asProp }, required: ["id", "kind", "text"] } },
-  { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, asks_done: { type: "array", items: { type: "number" }, description: "When the comment tracks its asks as a list (the brief shows it): the numbers of the items this change did, ticked for you" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
+  { name: "review_talk", description: "Answer a call: someone mentioned @Claude on a comment (or handed it to Claude). Read first (review_show, review_picture, the code, the design system), then ONE of: kind \"answer\" (a message in the thread, as a designer would say it), kind \"ask\" (one question back when you cannot tell what is meant, with 2 to 4 short quick picks in options; their reply comes back to you as a new call), kind \"draft\" (when they asked for help writing a reply: words only they see, to send as their own), or kind \"plan\" (they want something changed: what you will change and where, in design words; it waits for a person's Go, then comes back to you as a go call). Never changes code or status.", inputSchema: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: ["answer", "ask", "draft", "plan", "change", "summary"], description: "change: only on a comment with an open PR, when they told you exactly what to change (\"make it 16\"): that is the go; the text is one short line of what you'll do, and the reply names the PR's work folder" }, preview: { type: "boolean", description: "For plan: true to build a live preview before Go (the brief says when); the reply names a work folder to make the change in, then review_preview" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "For ask: 2 to 4 quick picks, a few words each (under 60 characters): they are buttons" }, session: { type: "string", description: "The test session a call came from (the brief names it, e.g. _test); leave out for the team comments" }, summary: { type: "object", properties: { decided: { type: "array", items: { type: "string" } }, left: { type: "array", items: { type: "string" } }, who: { type: "string" } }, description: "For kind summary (someone asked you to sum up the thread): what was decided, what is left, and who has it, each a few words; text is one short line before it" }, asks_add: { type: "string", description: "When a reply asks for one more thing on a comment that tracks its asks as a list: that ask in a few words, added to the list" }, covers: { type: "array", items: { type: "number" }, description: "For plan: the OTHER open comments (their numbers) this one change also does, when they asked for several at once (\"all the spacing comments on this page\", a selection). Up to 9, any page. One plan, one Go, one PR; each keeps its own status and approval" }, left_out: { type: "string", description: "For a plan with covers: which comments you left out and why, a few words each (\"#16 a copy change, #17 Kishan is on it\")" }, pictures: { type: "object", properties: picsProps, description: "For plan or change: how the before and after should be taken, when one plain pair of the spot would not show your change (a hover style, other pages that use the piece, a narrow screen)" }, ...asProp }, required: ["id", "kind", "text"] } },
+  { name: "review_ship", description: "After a go call: you made the planned change in the work folder the brief named. The review server commits it, pushes the branch, opens the pull request, puts it on the comment and moves the comment to For approval. Never merges.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changed (\"Agent Fleet: 8px between the score and its arrow\")" }, summary: { type: "string", description: "One or two sentences in design words: what changed and where" }, asks_done: { type: "array", items: { type: "number" }, description: "When the comment tracks its asks as a list (the brief shows it): the numbers of the items this change did, ticked for you" }, covers_skipped: { type: "array", items: { type: "number" }, description: "When the plan covered other comments and you could not do some of them as planned: their numbers (say why in the summary); the rest go into the PR with this one" }, session: { type: "string" } }, required: ["id", "title", "summary"] } },
   { name: "review_preview", description: "After a plan with preview (or a preview call): you made the planned change in the work folder named. The review server commits it, pushes the branch and opens (or updates) a DRAFT pull request, whose live preview link shows on the plan. The plan still waits for a person's Go.", inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string", description: "The PR title: short, what changes" }, session: { type: "string" } }, required: ["id", "title"] } },
   { name: "review_drop", description: "After a Stop, when they chose to throw your work away: the work folder goes, nothing is pushed, and your plan waits for Go again. Says so in the thread.", inputSchema: { type: "object", properties: { id: { type: "string" }, session: { type: "string" } }, required: ["id"] } },
   { name: "review_checked", description: "After a CHECK brief: you looked at the before and after pictures against your plan. ok true: they match (the pair is marked checked). ok false: say in text what you see that is wrong, one question with options; it goes in the thread as your question. nothing true: nothing on screen changes with this plan (a link, a screen reader label), so the pictures are hidden. missed true: the pictures don't show the part you changed (another tab, scrolled away, a closed drawer), so they are hidden and the thread says to try it live.", inputSchema: { type: "object", properties: { id: { type: "string" }, ok: { type: "boolean" }, nothing: { type: "boolean" }, missed: { type: "boolean" }, text: { type: "string" }, options: { type: "array", items: { type: "string" }, description: "2 or 3 quick picks, a few words each (under 60 characters): they are buttons" }, session: { type: "string" } }, required: ["id", "ok"] } },
@@ -192,11 +195,41 @@ async function call(name, a = {}) {
       return `On PR #${c.pr.n}'s branch: make exactly that, nothing more, in ${w.app} (never ${ROOT}; no installs, no git). Then review_ship with id ${c.id}, a short title and a one-sentence summary: it updates the same PR.`;
     }
     if (a.asks_add && c.asks?.state === "list") applyChange(c, { asksAdd: String(a.asks_add) }, who);
+    /* ONE PLAN FOR MANY (step 6, Nirav 2026-11-12): the other comments this plan covers, checked before it is said */
+    const covered = [];
+    const all = a.kind === "plan" ? prepare(await st.list()) : [];
+    const me = all.find((x) => x.id === c.id);
+    if (a.kind === "plan" && Array.isArray(a.covers) && a.covers.length) {
+      const bad = [];
+      for (const num of [...new Set(a.covers.map(Number))].filter((x) => x && x !== me?.n)) {
+        const o = all.find((x) => x.n === num);
+        const has = o && holder(o);
+        if (!o) bad.push(`#${num} doesn't exist`);
+        else if (o.status === "approved") bad.push(`#${num} is approved`);
+        else if (o.status === "approval") bad.push(`#${num} is waiting for approval`);
+        else if (kind(o.severity) === "question") bad.push(`#${num} is a question`);
+        else if (has && !o.withClaude && !sameWho(has, c.call.by)) bad.push(`#${num}: ${withNames(o, ppl).assignee || has} has it`);
+        else if (o.joined?.state === "plan" && o.joined.lead !== c.id) bad.push(`#${num} is in the plan on #${o.joined.n}`);
+        else covered.push({ id: o.id, n: o.n });
+      }
+      if (bad.length) throw new Error(`Can't cover ${bad.join("; ")}. Leave those out (say why in left_out) and call review_talk again`);
+      if (covered.length > 9) throw new Error("At most 9 other comments in one plan (10 in all): plan these, and say the rest come in a next plan");
+    }
     if (a.kind === "draft") applyChange(c, { claudeDraft: { text: words } }, who);
     else {
       const stopped = c.call.state === "stopped" || (works.has(c.id) && !["go", "preview"].includes(c.call.kind)); // after a Stop: the folder waits for their answer
       const live = a.kind === "plan" && cfg.previews !== "never" && (a.preview === true || cfg.previews === "always") && !readyPr(c); // a ready PR open: Go updates it, and its own preview shows the result
-      applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true, ...(live ? { preview: true } : {}) } : a.kind === "summary" && a.summary ? { summary: a.summary } : {}) }, who);
+      applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true, ...(live ? { preview: true } : {}), ...(covered.length ? { covers: covered, ...(a.left_out ? { leftOut: a.left_out } : {}) } : {}) } : a.kind === "summary" && a.summary ? { summary: a.summary } : {}) }, who);
+      /* the covered comments say where their plan is; ones an earlier plan here covered, and this one does not, are freed */
+      if (a.kind === "plan") {
+        for (const o of all.filter((x) => x.id !== c.id && (covered.some((k) => k.id === x.id) || x.joined?.lead === c.id))) {
+          const full = await st.get(o.id);
+          if (!full) continue;
+          const keep = covered.some((k) => k.id === o.id);
+          applyChange(full, { joinTo: keep ? { id: c.id, n: me?.n, with: covered.filter((k) => k.id !== o.id).map((k) => k.n) } : null }, who);
+          await st.put(full);
+        }
+      }
       if (works.has(c.id) && !stopped) dropWork(c.id); // a go that ends in words: the work folder goes
       if (live) {
         await st.put(c);
@@ -217,7 +250,7 @@ async function call(name, a = {}) {
     if (a.kind === "plan") return `Plan left on #${(await numbered(c.id, st))?.n}; it waits for a person's Go, then comes back to you`;
     return a.kind === "draft" ? `Draft left on #${n}, only ${withNames(c, ppl).call?.draft?.for || "they"} sees it` : a.kind === "ask" ? `Asked on #${n}; their reply comes back as a new call` : `Answered on #${n}`;
   }
-  if (c.call?.state === "stopped" && (name === "review_ship" || name === "review_preview"))
+  if (c?.call?.state === "stopped" && (name === "review_ship" || name === "review_preview")) // c: review_ack has no comment
     throw new Error(`${withNames(c, await people()).call.stoppedBy || "Someone"} pressed Stop: do not ship. Say what you had done with review_talk (kind "ask", options Throw it away / Carry on / Push what's done) and wait for their answer`);
   /* A LIST (step 5): Claude says which items its change did, every time (Nirav, 2026-11-11: #33 shipped with 0 of 3
      ticked); a ship without it is refused before anything is committed */
@@ -225,6 +258,7 @@ async function call(name, a = {}) {
     if (!Array.isArray(a.asks_done)) throw new Error(`#${(await numbered(c.id, st))?.n} tracks its asks as a list: ${c.asks.items.map((x, i) => `${i + 1}. [${x.done ? "x" : " "}] ${x.t}`).join("  ")}. Call review_ship again with asks_done: the numbers of the items this change did ([] if none of them)`);
     shipTicks.set(c.id, a.asks_done); // ticked once the change is really out (finishGo / the follow-up)
   }
+  if (name === "review_ship" && Array.isArray(a.covers_skipped)) shipSkips.set(c.id, a.covers_skipped.map(Number));
   if (name === "review_ship") return works.get(c.id)?.mode === "preview" ? previewBuild(c, st, a) : ship(c, st, a);
   if (name === "review_preview") return previewBuild(c, st, a);
   if (name === "review_undo") {
@@ -391,6 +425,7 @@ const startedConnected = (() => {
 })();
 const canHear = () => heard || startedConnected;
 async function draftRound() {
+  if (process.env.REVIEW_TESTS_ONLY === "1") return; // a test run never drafts the team's comments
   if (!ready || !cfg.drafts || !canHear()) return;
   try {
     const all = prepare(await store.list());
@@ -446,7 +481,7 @@ async function callRound() {
   if (!ready || !canHear()) return;
   try {
     const ppl = await people();
-    for (const sess of ["", ...localTests()]) {
+    for (const sess of roundSessions()) {
     const st = storeOf(sess);
     const all = prepare(await st.list());
     /* the calls this session holds: touched once a minute, so the page and other sessions know it is still here */
@@ -549,6 +584,10 @@ async function callRound() {
           `(a fresh copy of ${cfg.github.repo} ${cfg.github.base}, branch ${w.branch}). Edit files ONLY there, never in ${ROOT}.`,
           `Use the design system's tokens and components${cfg.designSystem ? ` (${cfg.designSystem})` : ""}. No installs, no dev server, no git: the review server does the git.`,
           ...asksLines(full, "With review_ship, pass asks_done: the numbers of the items your change did."),
+          ...(full.call.covers?.length ? [
+          `This plan covers ${full.call.covers.length} other comment${full.call.covers.length === 1 ? "" : "s"} too: make their part of the change in the same work folder.`,
+          ...coverLines(full.call.covers, all, ppl),
+          `One you find you cannot do as planned: leave it, pass covers_skipped with its number, and say why in the summary.`] : []),
           `When it is done: review_ship with id ${full.id}, a short PR title and a one or two sentence summary in design words.`,
           `It commits, pushes, opens the PR on the comment and moves it to For approval. If you find you cannot do it as planned,`,
           `review_talk instead (ask, or answer to say why); the work folder is thrown away. Then carry on with what you were doing.`,
@@ -564,6 +603,7 @@ async function callRound() {
         : k.kind === "sent" ? `${k.by} sent this comment to you from the drawer. A question: answer it (kind "answer"). A fix: plan the change (kind "plan"), it waits for their Go.`
         : k.kind === "accepted" ? `${k.by} accepted your suggestion ("${full.draft?.text || k.words}"). Plan exactly that (kind "plan"), in design words: it waits for their Go.`
         : k.kind === "draft" ? `${k.by} asked for help writing a reply: "${k.words}". Draft it (kind "draft"), only they see it.`
+        : k.kind === "together" ? [`${k.by} selected these to be done together, as ONE change: this comment and the ones below. Plan one change for all of them`, `(kind "plan", covers: [their numbers]). Leave out any that don't fit (someone else has it, a different kind of change) and say why in left_out.`, ...coverLines(k.covers || [], all, ppl)].join("\n")
         : asked ? `${k.by} answered your question ("${asked.note}"): "${k.words}". Carry on from there.`
         : `${k.by} wrote: "${k.words}"`;
       const text = [
@@ -590,6 +630,8 @@ async function callRound() {
         `- "draft": they asked for help writing a reply. The words they would send, in their voice.`,
         `- "plan": they want something changed. What you will change and where, in design words, one short paragraph; it`,
         `  waits for a person's Go (every change does), then comes back to you to make.`,
+        `  Several comments at once ("all the spacing comments on this page", "these three too"): review_list, then ONE plan`,
+        `  here with covers: [the other comments' numbers] (up to 9, any page) and left_out for the ones you leave and why.`,
         ...(cfg.previews === "never" ? [] : cfg.previews === "always" ? [`  Every plan comes with a live preview (the team's setting): you will be told where to make it.`] : [
         `  Decide on a live preview (preview: true) and say which in the plan, with why ("Live preview: this changes every`,
         `  banner's hover" / "No preview: only the label text changes"). PREVIEW when it changes how something looks (colour,`,
@@ -624,7 +666,9 @@ async function callRound() {
       send({ method: "notifications/claude/channel", params: { content: text, meta: { kind: "call", comment: String(c.n), project: String(store.project), ...(sess ? { session: sess } : {}) } } });
     }
     }
-  } catch {}
+  } catch (e) {
+    process.stderr.write(`[review] call round: ${String(e?.stack || e).split("\n").slice(0, 3).join(" | ")}\n`);
+  }
 }
 setInterval(callRound, CALL_EVERY).unref?.();
 /* STUCK (Nirav, 2026-11-11: #33's Go sat on a permission question on the always-on server; it moved only because we
@@ -669,7 +713,7 @@ async function stuckRound() {
   const seen = still >= STUCK_STILL ? paneWait(pane) : null;
   const changed = (seen ? `${seen.why}:${seen.text}` : "") !== (stuckNow || "");
   if (!seen && !changed && (still < QUIET_STILL || !held.size)) return; // moving, or idle with nothing held: nothing to do
-  for (const sess of ["", ...localTests()]) {
+  for (const sess of roundSessions()) {
     try {
       const st = storeOf(sess);
       const mine = (await st.list()).filter((x) => x.call?.state === "reading" && held.has(callKey(x)));
@@ -794,6 +838,15 @@ async function ship(c, st, a) {
     dropWork(c.id);
     return `DRY RUN: committed on ${w.branch}, not pushed. Files:\n${files}`;
   }
+  /* TESTS (test sessions only): everything after the PR as if GitHub opened #9999; nothing pushed, no PR */
+  if (process.env.REVIEW_SHIP_DRY === "pr" && /^_/.test(w.sess || "")) {
+    dropWork(c.id);
+    const fresh = await st.get(c.id);
+    applyChange(fresh, { pr: { n: 9999, url: "https://example.invalid/pull/9999", branch: w.branch, repo: gh.repo, state: "open", draft: false, for: w.by } }, w.by);
+    fresh.pr.builtAt = Date.now();
+    await st.put(fresh);
+    return finishGo(fresh, st, 9999, fresh.pr.url, summary, w.by);
+  }
   run("git", ["-C", w.dir, "push", "-q", "-u", w.remote, w.branch]);
   w.pushed = true;
   prSoon();
@@ -802,6 +855,7 @@ async function ship(c, st, a) {
     try { run("gh", ["pr", "edit", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--title", title]); } catch {} // the title follows the latest change
     const fresh = await st.get(c.id);
     tickShipped(fresh, w.by);
+    fresh.pr.builtAt = Date.now(); // a new build: "the pictures are on the way" shows till they come
     applyChange(fresh, { reply: `Updated PR #${fresh.pr.n}: ${summary}${stillOpen(fresh)} New before and after pictures come here in a minute or two.`, via: "claude", prN: fresh.pr.n }, w.by);
     const left = openAsks(fresh);
     if (fresh.status === "progress" && !left.length) applyChange(fresh, { status: "approval", via: "claude" }, w.by);
@@ -821,15 +875,42 @@ async function ship(c, st, a) {
   dropWork(c.id);
   const fresh = await st.get(c.id);
   applyChange(fresh, { pr: { n: prN, url, branch: w.branch, repo: gh.repo, state: "open", draft: false, for: w.by } }, w.by);
+  fresh.pr.builtAt = Date.now();
   await st.put(fresh);
   return finishGo(fresh, st, prN, url, summary, w.by);
 }
 /* the work is in a ready PR: Claude says so, and the comment waits for approval */
 async function finishGo(c, st, prN, url, summary, by) {
   const fresh = await st.get(c.id);
-  applyChange(fresh, { pr: { n: prN, draft: false } }, by);
+  /* ONE PR FOR MANY (step 6): each covered comment gets the same PR, its own Done line and For approval; its own
+     before and after follow (the PR round takes them for every comment with a PR) */
+  const skip = shipSkips.get(c.id) || [];
+  shipSkips.delete(c.id);
+  const all = fresh.call?.covers?.length ? prepare(await st.list()) : [];
+  const me = all.find((x) => x.id === c.id);
+  const inPr = (fresh.call?.covers || []).map((k) => all.find((x) => x.id === k.id)).filter((o) => o && o.status !== "approved" && !skip.includes(o.n));
+  const nums = inPr.map((o) => o.n);
+  applyChange(fresh, { pr: { n: prN, draft: false, ...(nums.length ? { with: nums } : {}) } }, by);
+  for (const o of (fresh.call?.covers || []).map((k) => all.find((x) => x.id === k.id)).filter(Boolean)) {
+    const full = await st.get(o.id);
+    if (!full) continue;
+    if (!inPr.includes(o)) {
+      applyChange(full, { joinTo: null }, by);
+      applyChange(full, { reply: `Left out of PR #${prN} on #${me?.n}: it couldn't be done as planned there. It's open as it was.`, via: "claude" }, by);
+      await st.put(full);
+      continue;
+    }
+    const others = [me?.n, ...nums.filter((x) => x !== o.n)].filter(Boolean);
+    applyChange(full, { pr: { n: prN, url: fresh.pr?.url || url, branch: fresh.pr?.branch, repo: fresh.pr?.repo, state: "open", draft: false, for: by, with: others } }, by);
+    full.pr.builtAt = Date.now();
+    applyChange(full, { joinTo: { id: c.id, n: me?.n, with: others.filter((x) => x !== me?.n), state: "pr" } }, by);
+    applyChange(full, { reply: `Done in PR #${prN} with #${others.join(", #")}${summary ? `: ${summary.replace(/\.?\s*$/, ".")}` : `, as planned on #${me?.n}.`}${stillOpen(full)} Its own before and after pictures come here in a minute or two.`, via: "claude", prN }, by);
+    if (full.status === "open") applyChange(full, { status: "progress", via: "claude" }, by);
+    if (full.status === "progress" && !openAsks(full).length) applyChange(full, { status: "approval", via: "claude" }, by);
+    await st.put(full);
+  }
   tickShipped(fresh, by);
-  applyChange(fresh, { reply: `${summary ? `Done: ${summary}` : "Done, as planned."} It's in PR #${prN}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview and before and after pictures show here in a minute or two"}.${stillOpen(fresh)}`, via: "claude", prN }, by);
+  applyChange(fresh, { reply: `${summary ? `Done: ${summary.replace(/\.?\s*$/, ".")}` : "Done, as planned."} It's in PR #${prN}${nums.length ? `, with #${nums.join(", #")}` : ""}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview and before and after pictures show here in a minute or two"}.${stillOpen(fresh)}`, via: "claude", prN }, by);
   const left = openAsks(fresh);
   if (fresh.status === "progress" && !left.length) applyChange(fresh, { status: "approval", via: "claude" }, by);
   await st.put(fresh);
@@ -837,6 +918,7 @@ async function finishGo(c, st, prN, url, summary, by) {
 }
 /* a comment's list after a change: what is still open stays In progress, said in Claude's Done */
 const shipTicks = new Map(); // comment id -> the list items (from 1) its shipping change did
+const shipSkips = new Map(); // comment id -> covered comments (numbers) its change left out
 const tickShipped = (c, by) => { const t = shipTicks.get(c.id); shipTicks.delete(c.id); if (t?.length) applyChange(c, { asksDone: t }, by); };
 const openAsks = (c) => (c.asks?.state === "list" ? c.asks.items.filter((x) => !x.done).map((x) => x.t) : []);
 const stillOpen = (c) => { const l = openAsks(c); return l.length ? ` Still open on the list: ${l.join("; ")}.` : ""; };
@@ -894,7 +976,7 @@ let prBuilding = false;
 async function prRound() {
   if (!ready || !cfg.github) return;
   let building = false;
-  for (const sess of ["", ...localTests()]) {
+  for (const sess of roundSessions()) {
     try {
       const st = storeOf(sess);
       for (const c of (await st.list()).filter((x) => x.pr?.n && (!x.pr.state || x.pr.state === "open"))) {
@@ -1002,7 +1084,7 @@ async function sendCheck(id, sess, st, msg, local) {
 }
 async function checkAgainRound() {
   if (!ready || !canHear()) return;
-  for (const sess of ["", ...localTests()]) {
+  for (const sess of roundSessions()) {
     try {
       const st = storeOf(sess);
       for (const c of await st.list()) {
@@ -1028,6 +1110,11 @@ async function checkAgainRound() {
 }
 setInterval(checkAgainRound, 60_000).unref?.();
 setTimeout(checkAgainRound, 20_000).unref?.(); // just after a start: what the last run left unchecked
+/* ONE PLAN FOR MANY (step 6): each covered comment, for Claude to read and change too */
+const coverLines = (ids, all, ppl) => ids.map((id) => all.find((x) => x.id === (id.id || id))).filter(Boolean).map((o) => {
+  const src = o.source?.file ? `${o.source.file}${o.source.line ? `:${o.source.line}` : ""}` : "find it from the page";
+  return `  #${o.n} (${o.id}) by ${withNames(o, ppl).by || "someone"}: "${o.text}" · Page: ${o.pageTitle || o.route || "?"}${o.route ? ` (${o.route})` : ""} · Code: ${src}${o.shot ? " · has a picture (review_picture)" : ""}`;
+});
 /* CLEARER COMMENTS (step 5): a comment that tracks its asks as a list, shown to Claude with what is ticked */
 const asksLines = (c, how) => (c.asks?.state === "list" ? [`It tracks its asks as a list (tick boxes in the same comment): ${c.asks.items.map((x, i) => `${i + 1}. [${x.done ? "x" : " "}] ${x.t}${x.route ? ` (on ${x.page || x.route}, ${x.route})` : ""}`).join("  ")}`, how] : []);
 /* the pairs for Claude to Read, one line each: where the change shows, or that it does not */

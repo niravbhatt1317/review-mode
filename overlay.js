@@ -1232,6 +1232,10 @@ root.innerHTML = `
   .pick-bar .pb-acts > .pb-act { padding: 0 13px 0 11px; }
   /* icons, as in the header (Nirav, 2026-10-27, picked C): Send keeps its short word in the orange; Brief is Claude's
      mark alone in a circle */
+  .pick-bar .pb-acts > .pb-act[data-kind="together"]:not(.primary) { width: auto; padding: 0 13px 0 11px; gap: 6px; } /* its word too: an icon alone read as "copy" (Nirav, 2026-11-12) */
+  .pick-bar .pb-acts > .pb-act[data-kind="together"] .pb-i svg { width: 15px; height: 15px; }
+  .pick-bar.tight .pb-acts > .pb-act[data-kind="together"] { width: 32px; padding: 0; }
+  .pick-bar.tight .pb-act[data-kind="together"] .pb-l { display: none; }
   .pick-bar .pb-acts > .pb-act:not(.primary) { width: 32px; padding: 0; justify-content: center; } /* Brief and Loop: their marks alone (Nirav, 2026-10-27: Loop out of ⋯, the only thing in it) */
   .pick-bar .pb-acts > .pb-act:not(.primary) .pb-i, .pick-bar .pb-acts > .pb-act:not(.primary) .pb-i svg { width: 15px; height: 15px; }
   /* as the header (Nirav, 2026-10-27): the marks in one light colour at rest, their own colours under the pointer and
@@ -1950,6 +1954,23 @@ root.innerHTML = `
   .th-stuck-t { font-weight: 600; color: #9A5B00; }
   .th-stuck-w { margin-top: 2px; color: var(--rv-ink-2); }
   .th-stuck-fix { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
+  /* ONE PLAN FOR MANY (step 6) */
+  .jn-cov { margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, #D97757 7%, var(--rv-surface)); }
+  .jn-h { font-size: 11px; font-weight: 600; color: var(--rv-ink-2); margin: 0 0 2px; }
+  .jn-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 0; border: 0; border-top: 1px solid color-mix(in srgb, #D97757 14%, transparent); background: none; font: 12px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink); text-align: left; cursor: pointer; }
+  .jn-row:first-of-type { border-top: 0; }
+  .jn-row:hover .jn-t { text-decoration: underline dotted; text-underline-offset: 3px; }
+  .jn-n { flex: 0 0 auto; min-width: 18px; height: 18px; border-radius: 9px; background: var(--rv-surface); box-shadow: inset 0 0 0 1px var(--rv-line); font-size: 10px; font-weight: 600; line-height: 18px; text-align: center; color: var(--rv-ink-2); }
+  .jn-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jn-row .av { width: 16px; height: 16px; font-size: 9px; flex: 0 0 auto; }
+  .jn-left { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
+  .jn-line { display: flex; align-items: center; gap: 6px; width: 100%; margin: 0 0 10px; padding: 7px 10px; border: 0; border-radius: 8px; background: hsl(var(--rv-n10)); font: 12px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); text-align: left; cursor: pointer; }
+  .jn-line .rv-cl-av, .jn-line svg { flex: 0 0 auto; }
+  .jn-line b { color: hsl(214 98% 42%); font-weight: 600; }
+  .jn-line:hover b { text-decoration: underline dotted; text-underline-offset: 3px; }
+  .th-with { display: inline-block; margin-left: 8px; font-size: 12px; color: var(--rv-ink-3); white-space: nowrap; }
+  .th-with .jn-go { border: 0; padding: 0; background: none; font: inherit; color: hsl(214 98% 42%); cursor: pointer; }
+  .th-with .jn-go:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
   .th-stuck-opts { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; }
   .th-stuck-opts .th-pick { text-align: left; white-space: normal; height: auto; padding: 5px 12px; line-height: 1.35; }
   .th-reading.idle .th-pick { flex: 0 0 auto; white-space: nowrap; padding: 0 12px; }
@@ -5273,7 +5294,7 @@ function refreshCard(c, animate = false) {
    changed list (to or from Approved). */
 function guessUpdate(c, body) {
   const keys = Object.keys(body).filter((k) => k !== "id" && k !== "via" && k !== "take");
-  const plain = keys.every((k) => ["status", "severity", "draftState", "withClaude", "callClaude", "callKind", "reply", "mentions", "quote", "go"].includes(k));
+  const plain = keys.every((k) => ["status", "severity", "draftState", "withClaude", "callClaude", "callKind", "callCovers", "reply", "mentions", "quote", "go"].includes(k));
   if (!keys.length || !plain || body.status === "approved") return null;
   if (body.draftState && !c.draft) return null;
   const was = { status: c.status, severity: c.severity, assignee: c.assignee, doneBy: c.doneBy, draft: c.draft && { ...c.draft }, call: c.call, withClaude: c.withClaude, history: c.history };
@@ -6211,7 +6232,7 @@ function threadOf(c) {
     /* a question Claude asked on a call: warm, with its quick picks, while the call still waits on it */
     const live = claudeSays && s.ask && c.call?.state === "asked" && c.call.askAt === s.at && c.status !== "approved";
     const planLive = claudeSays && s.plan && c.call?.state === "planned" && c.call.planAt === s.at && c.status !== "approved";
-    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(claudeSays && s.pr ? { prN: s.pr } : {}), ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}), ...(s.plan && claudeSays ? { plan: true, planLive, planAt: s.at, previewPlan: !!s.preview } : {}), ...(claudeSays && s.summary ? { summary: s.summary } : {}) });
+    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(claudeSays && s.pr ? { prN: s.pr } : {}), ...(claudeSays && s.covers?.length ? { covers: s.covers, leftOut: s.leftOut } : {}), ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}), ...(s.plan && claudeSays ? { plan: true, planLive, planAt: s.at, previewPlan: !!s.preview } : {}), ...(claudeSays && s.summary ? { summary: s.summary } : {}) });
     /* a move's reason is a reply, labelled with the move ("You put it back"); a bare move is the history's
        (Nirav, 2026-10-30: the words were written for someone to read) */
     else if (s.note && s.kind !== "mention") out.push({ msg: true, at: s.at, by: s.by, words: s.note, move: stepVerb(c, s, from), st: s.status, mk: moveKey(s, from), pill: movePill(c, s, from, doer) });
@@ -6311,6 +6332,7 @@ function callBusyHtml(c) {
   if (k.kind === "draft" && (k.state === "reading" || Date.now() - (k.at || 0) <= CALL_WAIT_MS)) return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.redo === "shorter" || /^Make your draft shorter/.test(k.words || "") ? "Claude is writing a shorter one…" : "Claude is writing a new draft…"}</span></div></div>`;
   if (k.state === "waiting" && Date.now() - (k.at || 0) > CALL_WAIT_MS) return `<div class="th-reading idle">${CLAUDE_AV()}<span>No Claude session has picked it up yet</span><button type="button" class="th-pick th-connect">Connect Claude</button></div>`;
   const read = k.read || [];
+  if (k.kind === "together") return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? `Claude is reading the ${(k.covers?.length || 0) + 1} comments, to plan one change…` : "Sent to Claude…"}</span></div></div>`;
   const rows = k.state === "reading" ? [["The thread", read.includes("thread")], ...(c.shot ? [["The picture", read.includes("picture")]] : []), ["The code and the design system", false]] : [];
   const list = rows.length ? `<ul>${rows.map(([t, ok]) => `<li class="${ok ? "ok" : "now"}">${t}</li>`).join("")}</ul>` : "";
   return `<div class="th-reading">${CLAUDE_AV()}<div><span class="th-rd-t">${k.state === "reading" ? "Claude is reading…" : "Sent to Claude…"}</span>${list}</div></div>`;
@@ -6418,6 +6440,28 @@ function planButtons(c, x) {
   const go = canGo(c) ? `<button type="button" class="th-pick pri th-plan-go">Go</button>` : `<button type="button" class="th-pick pri th-plan-go" disabled title="${esc(onlyWho([c.call?.by], "say Go"))}">Go</button>`;
   return `<div class="th-picks">${go}${live}<button type="button" class="th-pick th-plan-change">Change the plan</button></div>${canGo(c) ? "" : `<div class="th-only">${esc(onlyWho([c.call?.by], "say Go"))}. You can still reply.</div>`}`;
 }
+/* ONE PLAN FOR MANY (step 6, Nirav 2026-11-12): the comments a plan covers, each with its writer, a click away; and
+   who Claude left out and why */
+const anyComment = (k) => [...state.comments, ...(state.done || [])].find((x) => (k.id ? x.id === k.id : x.n === Number(k.n)));
+function coversHtml(x) {
+  const rows = x.covers.map((k) => {
+    const o = anyComment(k);
+    return `<button type="button" class="jn-row jn-go" data-id="${esc(k.id)}"><span class="jn-n">${esc(String(o?.n || k.n || "?"))}</span><span class="jn-t">${esc(o?.text || "")}</span>${o?.by ? noteFace(o.by) : ""}</button>`;
+  }).join("");
+  return `<div class="jn-cov"><div class="jn-h">Covers ${x.covers.length} more</div>${rows}${x.leftOut ? `<div class="jn-left">Left out: ${esc(x.leftOut)}</div>` : ""}</div>`;
+}
+/* a covered comment: where its plan is, until the PR is out (then the PR row says "with #…") */
+function joinedHtml(c) {
+  const j = c.joined;
+  if (!j || j.state !== "plan" || c.status === "approved") return "";
+  const lead = anyComment({ id: j.lead });
+  if (!lead) return "";
+  const k = lead.call;
+  const doing = k && (k.kind === "go" || k.kind === "preview") && (k.state === "waiting" || k.state === "reading");
+  const where = doing ? "Claude is making it there" : k?.state === "planned" ? "waiting for Go" : "";
+  const withN = (j.with || []).filter((n) => n !== c.n);
+  return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${CLAUDE_AV()}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""}${where ? ` · ${where}` : ""}</span></button>`;
+}
 /* THE PR ON THE COMMENT (step 2): the live preview first (the real page, to try the whole flow), then the PR and its
    state; the preview link comes once the Preview workflow has built it */
 function prRowHtml(c) {
@@ -6426,7 +6470,7 @@ function prRowHtml(c) {
   const st = p.state || "open";
   const ext = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>';
   const pv = st !== "open" ? "" : p.preview ? `<a class="th-pv" href="${esc(p.preview)}" target="_blank" rel="noopener">${p.draft ? "Try it live" : "Open preview"}${ext}</a>` : `<span class="th-pv building">Preview in about 1 min</span>`;
-  return `<div class="th-pr">${pv}<a class="th-prn" data-s="${esc(st)}" href="${esc(p.url)}" target="_blank" rel="noopener"><i></i>${p.draft ? "Draft PR" : "PR"} #${p.n} · ${st === "merged" ? "merged" : st === "closed" ? "closed" : "open"}${ext}</a></div>`;
+  return `<div class="th-pr">${pv}<a class="th-prn" data-s="${esc(st)}" href="${esc(p.url)}" target="_blank" rel="noopener"><i></i>${p.draft ? "Draft PR" : "PR"} #${p.n} · ${st === "merged" ? "merged" : st === "closed" ? "closed" : "open"}${ext}</a>${p.with?.length ? `<span class="th-with">with ${p.with.map((n) => `<button type="button" class="jn-go" data-n="${n}">#${n}</button>`).join(", ")}</span>` : ""}</div>`;
 }
 /* a reply Claude drafted for one person: only they see it, to use as their own */
 const myDraft = (c) => (c.call?.draft && isMe(c.call.draft.for) && c.status !== "approved" ? c.call.draft : null);
@@ -6481,7 +6525,7 @@ function threadHtml(c, moves = true) {
     /* a decided suggestion: what Claude suggested, in a quiet block, and who decided */
     const long = !x.sug && x.at !== newest && !x.ask && !x.planLive && isLong(x.words, 280), open = state.longOpen.has(`${c.id}:${x.at}`);
     const words = x.summary ? (c.pinned === x.at ? `<div class="th-words">${linkHtml(mentionHtml(x.words))} <span class="th-at">Pinned to the top</span></div>` : `<div class="th-words">${linkHtml(mentionHtml(x.words))}</div>${sumHtml(x.summary)}<div class="th-picks"><button type="button" class="th-pick th-pin" data-at="${x.at}">Pin to the top</button></div>`) : x.sug ? `<div class="th-sugg">${mentionHtml(x.words)}</div><div class="th-res" data-s="${x.sug}">${x.sug === "accepted" ? MOVE_SVG("accepted") : ""}${esc(x.decided)}</div>` : `<div class="th-words${long && !open ? " clamp" : ""}">${linkHtml(mentionHtml(x.words))}</div>${long ? longBtn(open) : ""}`;
-    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.claude && picsOf(c, x.at) ? picsFold(c, x, picsAt) : x.claude ? picsComing(c, x) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
+    return `<div class="th-msg${x.claude ? " claude" : ""}${x.ask || x.planLive ? " ask" : ""}${x.sug ? " sug" : ""}" data-at="${x.at}" data-by="${esc(x.by || "")}">${thFace(c, x.by)}<div class="th-body"><div class="th-who"><b>${thName(x.by)}</b>${x.plan ? `<span class="th-move">plan</span>` : ""}${x.move && !x.pill ? `<span class="th-move" data-s="${esc(x.st || "")}">${x.move}</span>` : ""}<span class="th-at" title="${esc(new Date(x.at).toLocaleString())}">${esc(agoText(x.at))}</span></div>${x.pill ? `<span class="th-pill" data-c="${MOVE_IC[x.mk][0]}">${MOVE_SVG(x.mk)}<span>${x.pill}</span></span>` : ""}${q}${words}${x.covers ? coversHtml(x) : ""}${x.claude && picsOf(c, x.at) ? picsFold(c, x, picsAt) : x.claude ? picsComing(c, x) : ""}${x.planLive ? planButtons(c, x) : ""}${x.picks?.length ? `<div class="th-picks">${x.picks.map((p) => `<button type="button" class="th-pick" data-pick="${esc(p)}">${esc(p)}</button>`).join("")}</div>` : ""}</div><button type="button" class="th-q" aria-label="Reply to this">${TH_ARROW}Reply</button></div>`;
   });
   if (myDraft(c)) rows.push(myDraftHtml(c));
   if (callBusy(c)) rows.push(callBusyHtml(c));
@@ -7176,6 +7220,7 @@ const draftShown = (c) => {
   const d = c.draft;
   if (!d || (d.state === "new" && d.unsure)) return false; // Claude's question is a thread message (Nirav, 2026-11-04)
   if (clashMoot(c)) return false; // settled the other way: its suggestion is moot
+  if (c.joined && d.state === "new") return false; // in another comment's plan (step 6): that plan is the one to say Go to
   if (c.clash?.state === "open" && c.status !== "approved") return false; // a clash first: the suggestion waits for which way it goes (one Claude box)
   if (claudeAgain(c) && state.thOpen.has(c.id)) return false; // drafting again: said at the end of the open thread
   const fresh = d.state === "drafting" && Date.now() - (d.at || 0) < DRAFT_LIVE_MS;
@@ -7273,7 +7318,8 @@ function clearHtml(c) {
       out.push(`<div class="cl-clash settled">Settled on <b>${esc(k.pick.label)}</b>${k.pick.n ? ` (#${k.pick.n})` : ""}, picked by ${esc(thName(k.by).replace(/^You$/, "you"))}.${mine ? "" : ` This one is covered by #${k.pick.n}.`}</div>`);
     }
   }
-  return { top: top.join(""), html: out.join("") };
+  const jn = joinedHtml(c);
+  return { top: top.join(""), html: jn + out.join("") };
 }
 /* two places: the writer's offers right under the comment's words; the list, the clash and the original above the thread */
 function clearSync(card, c) {
@@ -8133,7 +8179,7 @@ function renderPickPill() {
     /* two pills (Nirav, 2026-10-27): how many and a clear; then the actions, Send to Claude first and highlighted,
        Brief, and the rest (Loop) behind ⋯ */
     const X = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
-    bar.innerHTML = `<button type="button" class="pb-x" aria-label="Clear the selection">${X}<span class="scope-tip">Clear</span></button><div class="pb-count"><svg class="pb-drop" aria-hidden="true"><path/></svg><button type="button" class="pb-n" aria-pressed="false"></button></div><div class="pb-acts"><button type="button" class="pb-act primary" data-kind="send" aria-label="Send to Claude"><span class="pb-i"></span><span class="pb-l">Send</span><span class="scope-tip">Send to Claude</span></button><button type="button" class="pb-act" data-kind="prompt" aria-label="Copy a brief for Claude"><span class="pb-i"></span><span class="scope-tip">Copy prompt</span></button><button type="button" class="pb-act" data-kind="loop" aria-label="Copy a checklist for Loop"><span class="pb-i"></span><span class="scope-tip">Copy for Loop</span></button></div></div>`;
+    bar.innerHTML = `<button type="button" class="pb-x" aria-label="Clear the selection">${X}<span class="scope-tip">Clear</span></button><div class="pb-count"><svg class="pb-drop" aria-hidden="true"><path/></svg><button type="button" class="pb-n" aria-pressed="false"></button></div><div class="pb-acts"><button type="button" class="pb-act primary" data-kind="send" aria-label="Send to Claude"><span class="pb-i"></span><span class="pb-l">Send</span><span class="scope-tip">Send to Claude</span></button><button type="button" class="pb-act" data-kind="together" aria-label="Let Claude do them together"><span class="pb-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="11" height="11" rx="2.5"/><rect x="10" y="10" width="11" height="11" rx="2.5"/></svg></span><span class="pb-l">Together</span><span class="scope-tip">One plan for them all</span></button><button type="button" class="pb-act" data-kind="prompt" aria-label="Copy a brief for Claude"><span class="pb-i"></span><span class="scope-tip">Copy prompt</span></button><button type="button" class="pb-act" data-kind="loop" aria-label="Copy a checklist for Loop"><span class="pb-i"></span><span class="scope-tip">Copy for Loop</span></button></div></div>`;
     /* SHOW ONLY THESE (Nirav, 2026-10-27): the count toggles the list to the picked cards and back */
     bar.insertAdjacentHTML("afterbegin", `<button type="button" class="pb-all gone" aria-label="Select all"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12.2l2.4 2.4 4.8-5"/></svg><span class="scope-tip">Select all</span></button>`); // left of the count, right of the clear; only while the pointer is on the bar (Nirav, 2026-10-27)
     bar.querySelector(".pb-all").addEventListener("click", () => {
@@ -8162,6 +8208,7 @@ function renderPickPill() {
     bar.addEventListener("click", (e) => {
       const b = e.target.closest(".pb-act");
       if (!b) return;
+      if (b.dataset.kind === "together") return void togetherClaude();
       $(`.panel-head .panel-copy[data-kind="${b.dataset.kind}"]`)?.click();
     });
     pn.appendChild(bar);
@@ -8208,6 +8255,7 @@ function renderPickPill() {
     if (b.dataset.kind !== "send" && !b.querySelector(".pb-ring")) b.insertAdjacentHTML("beforeend", `<svg class="pb-ring" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="16" pathLength="100"/></svg>`);
     if (b.dataset.kind === "loop" && !b.querySelector(".pb-part")) b.insertAdjacentHTML("beforeend", `<i class="pb-part"></i>`); // "2/5", the part of a long checklist
   }
+  bar.querySelector('.pb-act[data-kind="together"]')?.toggleAttribute("hidden", n < 2); // two or more: one plan for them
   /* the labels while they fit, with room to spare on both sides; else the icons alone */
   bar.classList.remove("tight");
   const roomy = bar.scrollWidth + 40 <= pn.getBoundingClientRect().width;
@@ -8458,6 +8506,13 @@ panelBody.addEventListener("pointerover", (e) => {
   if (closing) holdStill(over, HIST_EASE.duration + 300);
 });
 panelBody.addEventListener("click", async (e) => {
+  const jn = e.target.closest(".jn-go");
+  if (jn) {
+    e.stopPropagation();
+    const o = anyComment(jn.dataset.id ? { id: jn.dataset.id } : { n: jn.dataset.n });
+    if (o) showInList(o, o.call?.planAt || null);
+    return;
+  }
   const rm = e.target.closest(".rm-toggle");
   if (rm) {
     e.stopPropagation();
@@ -9458,6 +9513,24 @@ function watchCall(id) {
 function claudeSeen() {
   const since = Date.now() - 3 * 86400000;
   return state.comments.some((c) => (c.history || []).some((h) => h.via === "claude" && h.at > since) || (c.draft?.via === "claude" && c.draft.at > since) || (c.call?.claimedAt || 0) > since);
+}
+/* TOGETHER (step 6, Nirav 2026-11-12): the selected fixes as one change: a call on the first, naming the others;
+   Claude plans once there (up to 10 comments), the others say where their plan is */
+async function togetherClaude() {
+  const list = [...state.selected].map((id) => state.comments.find((x) => x.id === id)).filter((c) => c && !c.pending && c.status !== "approved" && !isQ(c)).sort((a, b) => a.n - b.n);
+  if (list.length < 2) return toast("Select two or more fixes to do them together");
+  const go = list.slice(0, 10), lead = go[0];
+  const body = { id: lead.id, callClaude: `Do these together, as one change: #${go.map((c) => c.n).join(", #")}`, callKind: "together", callCovers: go.slice(1).map((c) => c.id) };
+  const undo = guessUpdate(lead, body); // "Claude is reading…" on the first one now
+  if (undo && !refreshCard(lead, true)) renderPanel();
+  const r = await api("update", body).catch(() => null);
+  if (!r?.entry) {
+    if (undo) { undo(); if (!refreshCard(lead)) renderPanel(); }
+    return toast(`Could not reach the hub${r?.error ? `: ${r.error}` : ""}`, true);
+  }
+  if (applyEntry(r.entry) || !refreshCard(r.entry)) renderPanel();
+  toast(`Claude plans #${go.map((c) => c.n).join(", #")} as one change, on #${lead.n}${list.length > 10 ? ` (the first 10; ${list.length - 10} for a next plan)` : ""}`);
+  watchCall(lead.id);
 }
 async function mentionClaude(c, words) {
   if (!c?.id) return;
