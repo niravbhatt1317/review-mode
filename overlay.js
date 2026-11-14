@@ -6503,6 +6503,13 @@ function joinedHtml(c) {
       return jnLine(lead, `In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""} · ${lead.call.state === "asked" ? "Claude asks something there" : "Claude is reading them"}`);
     }
   }
+  /* done: the line stays, now pointing at the comment the PR was made on (Nirav, 2026-11-14: #46 lost its way to #45) */
+  if (j?.state === "pr") {
+    const lead = anyComment({ id: j.lead });
+    if (!lead) return "";
+    const withN = (j.with || []).filter((n) => n !== c.n && n !== lead.n);
+    return jnLine(lead, `Done together with <b>#${esc(String(lead.n))}</b>${withN.length ? `, #${withN.join(", #")}` : ""}${c.pr?.n ? ` in PR #${esc(String(c.pr.n))}` : ""}`);
+  }
   if (!j || j.state !== "plan" || c.status === "approved") return "";
   const lead = anyComment({ id: j.lead });
   if (!lead) return "";
