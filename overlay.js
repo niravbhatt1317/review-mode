@@ -1633,7 +1633,9 @@ root.innerHTML = `
   .ba-chg { position: absolute; box-sizing: border-box; border: 1.5px dashed #E8590C; border-radius: 4px; pointer-events: none; }
   .ba-chg i { position: absolute; right: -1px; top: -15px; height: 13px; padding: 0 4px; border-radius: 3px; font-style: normal; font-size: 8.5px; font-weight: 600; line-height: 13px; color: #fff; background: #E8590C; white-space: nowrap; }
   .ba-chg.low i { top: 2px; right: 2px; } /* no room above it: inside, at its corner */
-  .ba-tabs { display: flex; gap: 4px; margin: 6px 0 4px; flex-wrap: wrap; }
+  .ba-tabs { display: flex; gap: 4px; margin: 6px 0 4px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; } /* one row, scrolled sideways when there are many (Nirav, 2026-11-14) */
+  .ba-tabs::-webkit-scrollbar { display: none; }
+  .ba-tabs .ba-tab { flex: 0 0 auto; }
   .ba-tab { height: 22px; padding: 0 9px; border: 0; border-radius: 999px; background: hsl(var(--rv-n10)); color: var(--rv-ink-2); font: inherit; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
   .ba-tab.on { background: var(--rv-ink); color: var(--rv-surface); }
   .ba-dot { width: 6px; height: 6px; border-radius: 50%; background: #E8A100; }
@@ -6359,8 +6361,21 @@ const picUrl = (file) => `/__review/shot/${file}${window.__reviewSession ? `?ses
 const picsOf = (c, at) => (c.pics || []).filter((p) => p.at === at && !p.hidden).at(-1) || null;
 /* BETTER PICTURES (Nirav, 2026-11-06): more pairs (other pages, other widths) as tabs; the changed part boxed on the
    after; a pair with no difference at all says so, never a quiet "Done" */
-const baViews = (p) => (p.views?.length ? p.views : [p]);
-const baPick = (c, p) => Math.min(state.baTab.get(`${c.id}:${p.sha}`) || 0, baViews(p).length - 1);
+/* ONE PR FOR MANY (Nirav, 2026-11-14): the first comment's Done shows, after its own pairs, each covered comment's own
+   pair as a tab, borrowed from that comment (taken once, no limit; "on the way" until it comes) */
+const baViews = (p, c) => {
+  const own = p.views?.length ? p.views : [p];
+  if (!c?.pr?.with?.length || c.joined || p.pr !== c.pr.n) return own;
+  const has = (n) => own.some((v) => v.label === `#${n}`); // pictures from before (the server took these tabs itself)
+  const more = c.pr.with.filter((n) => !has(n)).map((n) => {
+    const o = anyComment({ n });
+    const op = (o?.pics || []).filter((x) => x.pr === c.pr.n).sort((a, b) => (b.takenAt || 0) - (a.takenAt || 0))[0];
+    return op ? { ...(op.views?.[0] || op), label: `#${n}`, from: o.id, pics: op } : { label: `#${n}`, from: o?.id, coming: true };
+  });
+  if (!more.length) return own;
+  return [{ ...own[0], label: own.length > 1 && own[0].label && !/px$/.test(own[0].label) ? own[0].label : `#${c.n}` }, ...own.slice(1), ...more];
+};
+const baPick = (c, p) => Math.min(state.baTab.get(`${c.id}:${p.sha}`) || 0, baViews(p, c).length - 1);
 const chgHtml = (v) => (v.chg && !v.same ? `<span class="ba-chg${v.chg.y < 0.12 ? " low" : ""}" style="left:${(v.chg.x * 100).toFixed(2)}%;top:${(v.chg.y * 100).toFixed(2)}%;width:${(v.chg.w * 100).toFixed(2)}%;height:${(v.chg.h * 100).toFixed(2)}%"><i>Changed</i></span>` : "");
 /* PICTURES ON THE WAY (Nirav, 2026-11-11: "80% done but Claude is still making sure"): under the message a new build
    came with, until its pair arrives, the stage it is at, shimmering: the preview building, then the pictures */
@@ -6377,14 +6392,17 @@ function picsComing(c, x) {
 function picsHtml(c, p) {
   if (p.missed) return `<div class="ba-note">Claude couldn't get the change into a picture, so try it live.</div>`;
   const draft = c.pr?.draft && c.pr.planAt === p.at;
-  const all = baViews(p), i = baPick(c, p), v = all[i];
+  const all = baViews(p, c), i = baPick(c, p), v = all[i];
   const ar = v.w && v.h ? ` style="--ar:${v.w} / ${v.h}"` : "";
   const tabs = all.length > 1 ? `<div class="ba-tabs" role="tablist">${all.map((x, k) => `<button type="button" role="tab" class="ba-tab${k === i ? " on" : ""}" data-v="${k}" aria-selected="${k === i}">${esc(x.label || `Pair ${k + 1}`)}${x.same ? '<i class="ba-dot" title="No difference"></i>' : ""}</button>`).join("")}</div>` : "";
-  const same = v.same && !p.checked ? `<div class="ba-note warn">The before and after look the same here, so the change may not have landed. Claude is looking into it.</div>` : "";
-  const note = p.wrong || same ? "" : p.checked ? `<div class="ba-note ok">✓ Claude checked the after against the plan</div>`
-    : Date.now() - (p.takenAt || 0) < 5 * 60_000 ? `<div class="ba-note busy"><span>Claude is checking the after against the plan…</span></div>` : "";
+  const tabRow = tabs;
+  if (v.coming) return `<div class="th-ba-w" data-sha="${esc(p.sha)}">${tabRow}<div class="ba-note busy"><span>${esc(v.label)}'s own before and after are on the way…</span></div></div>`;
+  const q = v.pics || p; // a borrowed tab: its own comment's check
+  const same = v.same && !q.checked ? `<div class="ba-note warn">The before and after look the same here, so the change may not have landed. Claude is looking into it.</div>` : "";
+  const note = q.wrong || same ? "" : q.checked ? `<div class="ba-note ok">✓ Claude checked the after against the plan</div>`
+    : Date.now() - (q.takenAt || 0) < 5 * 60_000 ? `<div class="ba-note busy"><span>Claude is checking the after against the plan…</span></div>` : "";
   const lost = !v.found?.before || !v.found?.after ? `<div class="ba-note">The spot wasn't found on ${!v.found?.before && !v.found?.after ? "either page" : !v.found?.before ? "staging" : "the preview"}, so this is the whole window.</div>` : "";
-  const st = v.state || (p.views ? null : c.snapState);
+  const st = v.state || (v.from ? (v.pics?.views ? null : anyComment({ id: v.from })?.snapState) : p.views ? null : c.snapState);
   const how = st ? `<div class="ba-note">${st === "hover" ? "With the pointer over it" : st === "focus" ? "With the focus on it" : "With it open"}</div>` : "";
   return `<div class="th-ba-w" data-sha="${esc(p.sha)}">${tabs}<div class="th-ba${v.w && v.h && v.w / v.h > 1.4 ? " stack" : ""}" data-sha="${esc(p.sha)}" data-v="${i}"><button type="button" class="ba-pic" data-which="before"${ar}><img class="ba-im" src="${esc(picUrl(v.before))}" alt="Before, on staging" loading="lazy"><span class="ba-lb">Before · staging</span></button><button type="button" class="ba-pic af" data-which="after"${ar}><img class="ba-im" src="${esc(picUrl(v.after))}" alt="After, on the preview" loading="lazy">${chgHtml(v)}<span class="ba-lb">${draft ? "Planned · preview" : "After · preview"}</span></button></div>${how}${lost}${same}${note}</div>`;
 }
@@ -6410,19 +6428,19 @@ function picsFold(c, x, latestAt) {
   const p = picsOf(c, x.at);
   if (!p) return "";
   if (x.at === latestAt || state.baOpen.has(`${c.id}:${x.at}`)) return picsHtml(c, p);
-  const n = baViews(p).length;
+  const n = baViews(p, c).length;
   return `<button type="button" class="ba-fold" data-at="${x.at}"><span class="ba-mini"><img class="ba-im" src="${esc(picUrl(p.before))}" alt=""><img class="ba-im" src="${esc(picUrl(p.after))}" alt=""></span>Earlier before and after${n > 1 ? ` · ${n} pairs` : ""} · Show</button>`;
 }
 const baView = $(".ba-view");
 function openBa(c, p, mode = "side", vi = baPick(c, p)) {
-  const v = baViews(p)[vi] || p;
+  const v = baViews(p, c)[vi] || p;
   baView.dataset.id = c.id;
   baView.dataset.sha = p.sha;
   baView.dataset.v = vi;
   baView.querySelectorAll(".bav-seg button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
   const b = esc(picUrl(v.before)), a = esc(picUrl(v.after));
   const ar = v.w && v.h ? ` style="aspect-ratio:${v.w} / ${v.h}"` : ""; // its size before it arrives: the shimmer has a shape
-  baView.querySelector(".bav-t").textContent = `Before and after · #${c.n}${baViews(p).length > 1 && v.label ? ` · ${v.label}` : ""}`;
+  baView.querySelector(".bav-t").textContent = `Before and after · #${c.n}${baViews(p, c).length > 1 && v.label ? ` · ${v.label}` : ""}`;
   /* the slide starts at the change: the line on its left edge, so one drag across shows it */
   const at = v.chg && !v.same ? Math.max(2, Math.min(98, Math.round(v.chg.x * 100))) : 50;
   baView.querySelector(".bav-body").innerHTML = mode === "side"
@@ -8612,7 +8630,7 @@ panelBody.addEventListener("click", async (e) => {
     const at = Number(jn.dataset.at) || null;
     /* the Done message, on this comment's own tab of the pictures */
     if (o && at && me) for (const p of (o.pics || []).filter((x) => x.at === at)) {
-      const k = baViews(p).findIndex((v) => v.label === `#${me.n}`);
+      const k = baViews(p, o).findIndex((v) => v.label === `#${me.n}`);
       if (k > 0) state.baTab.set(`${o.id}:${p.sha}`, k);
     }
     if (o) showInList(o, at || o.call?.planAt || null);
