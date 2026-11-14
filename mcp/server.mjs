@@ -1022,7 +1022,7 @@ async function prRound() {
         const preview = base ? `${base.replace(/\/+$/, "")}${c.route && c.route.startsWith("/") ? c.route : ""}` : c.pr.preview;
         const state = info.state === "MERGED" ? "merged" : info.state === "CLOSED" ? "closed" : "open";
         if (state === "open" && !note && Date.now() - (c.pr.builtAt || c.pr.at || 0) < 10 * 60_000) building = true; // never fast for a PR with no preview
-        if (state === "open" && base && head && c.route && !(c.pics || []).some((p) => p.sha === head) && !snapping.has(c.id) && (snapFails.get(`${c.id}:${head}`) || 0) < 2) picsFor(c.id, sess, base.replace(/\/+$/, ""), head);
+        if (state === "open" && base && head && c.route && !(c.pics || []).some((p) => p.sha === head && picsCover(c, p)) && !snapping.has(c.id) && (snapFails.get(`${c.id}:${head}`) || 0) < 2) picsFor(c.id, sess, base.replace(/\/+$/, ""), head);
         if (preview === c.pr.preview && state === c.pr.state && !!info.isDraft === !!c.pr.draft) continue;
         const full = await st.get(c.id);
         applyChange(full, { pr: { n: c.pr.n, ...(preview ? { preview } : {}), state, draft: !!info.isDraft } }, defaultAs);
@@ -1038,6 +1038,9 @@ async function prRound() {
 const snapping = new Set();
 const snapFails = new Map(); // "<id>:<sha>" -> tries that failed: twice and it stops trying
 const PICS_DIR = path.join(os.homedir(), ".review-mode", "pics");
+/* pictures of this build that show every comment the PR also does: a Go on a built preview makes no new build, and its
+   pictures came before the others joined (Nirav, 2026-11-14: #45's had no tab for #46) */
+const picsCover = (c, p) => !c.pr?.with?.length || !!c.joined || c.pr.with.every((n) => (p.views || []).some((v) => v.label === `#${n}`));
 async function picsFor(id, sess, base, sha, quiet = false) {
   snapping.add(id);
   try {
@@ -1049,11 +1052,11 @@ async function picsFor(id, sess, base, sha, quiet = false) {
     const msg = c.pr.draft ? (c.history || []).find((h) => h.at === c.pr.planAt && h.via === "claude") : [...(c.history || [])].reverse().find((h) => h.via === "claude" && h.note && (h.pr === c.pr.n || (/^Done\b/.test(h.note) && h.at >= (c.pr.at || 0) - 5000))); // older "Done" messages carry no PR number
     if (!msg) return; // the "Done" message comes with the PR: the next round
     /* ONE PR FOR MANY: a tab for each comment the PR also does, at its own spot, so the pair shows every point (Nirav,
-       2026-11-14: #40's showed only its own spot and its widths). A covered comment on the same page takes the clicks
-       that reach this one's view when it has none of its own that are known to work */
+       2026-11-14: #40's showed only its own spot and its widths). A covered comment uses its own clicks to reach its view, or
+       this one's when it has none and is on the same page */
     const withC = c.pr.with?.length && !c.joined ? prepare(await st.list()).filter((o) => c.pr.with.includes(o.n)).slice(0, 3) : [];
     const own = snapViews(c);
-    const plan = [own[0], ...withC.map((o) => ({ comment: { ...o, snapSteps: o.route === c.route && c.snapSteps?.length ? c.snapSteps : o.snapSteps }, label: `#${o.n}` })), ...own.slice(1)].slice(0, 4);
+    const plan = [own[0], ...withC.map((o) => ({ comment: { ...o, snapSteps: o.snapSteps?.length ? o.snapSteps : o.route === c.route ? c.snapSteps : undefined }, label: `#${o.n}` })), ...own.slice(1)].slice(0, 4);
     if (withC.length && plan[0]) plan[0].label = `#${(await numbered(c.id, st))?.n || ""}`.replace(/#$/, plan[0].label);
     const r = await snap({ staging, preview: base, comment: c, login: cfg.previewLogin, views: plan });
     /* each pair's files, kept on the hub and here (for Claude to Read); the first pair is also the record's own */

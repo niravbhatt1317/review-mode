@@ -289,6 +289,13 @@ async function open(t, url, c, login, view) {
     const tall = Math.max(target.h + 160, Math.min(frame.w / 2.4, vh * 0.6));
     if (frame.h > tall && target.h < tall) frame = { ...frame, y: Math.max(0, target.y - (tall - target.h) * 0.6), h: tall };
   }
+  /* never smaller than 480 by 200 around the spot: a small spot (a picked "100%", an icon) filled the whole picture and
+     lost where it is (Nirav, 2026-11-14); the outline shows the spot inside */
+  if (frame) {
+    const mw = Math.min(480, vw), mh = Math.min(200, vh);
+    if (frame.w < mw) frame = { ...frame, x: Math.max(0, frame.x - (mw - frame.w) / 2), w: mw };
+    if (frame.h < mh) frame = { ...frame, y: Math.max(0, frame.y - (mh - frame.h) / 2), h: mh };
+  }
   if (frame && layer) frame = union([frame, { x: layer.x - 12, y: layer.y - 12, w: layer.w + 24, h: layer.h + 24 }]);
   const docW = (await t.ev("Math.max(document.documentElement.scrollWidth, innerWidth)")) || vw;
   return { target, frame, area: !!a, vw, vh, docW };
