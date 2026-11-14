@@ -1964,6 +1964,7 @@ root.innerHTML = `
   .jn-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .jn-row .av { width: 16px; height: 16px; font-size: 9px; flex: 0 0 auto; }
   .jn-left { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
+  .jn-left:first-child { margin-top: 0; } /* nothing covered, only left out */
   .jn-line { display: flex; align-items: center; gap: 6px; width: 100%; margin: 10px 0 0; padding: 7px 10px; border: 0; border-radius: 8px; background: hsl(var(--rv-n10)); font: 12px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); text-align: left; cursor: pointer; }
   .jn-line .rv-cl-av, .jn-line svg { flex: 0 0 auto; }
   .jn-line b { color: hsl(214 98% 42%); font-weight: 600; }
@@ -6243,7 +6244,7 @@ function threadOf(c) {
     /* a question Claude asked on a call: warm, with its quick picks, while the call still waits on it */
     const live = claudeSays && s.ask && c.call?.state === "asked" && c.call.askAt === s.at && c.status !== "approved";
     const planLive = claudeSays && s.plan && c.call?.state === "planned" && c.call.planAt === s.at && c.status !== "approved";
-    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(claudeSays && s.pr ? { prN: s.pr } : {}), ...(claudeSays && s.covers?.length ? { covers: s.covers, leftOut: s.leftOut } : {}), ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}), ...(s.plan && claudeSays ? { plan: true, planLive, planAt: s.at, previewPlan: !!s.preview } : {}), ...(claudeSays && s.summary ? { summary: s.summary } : {}) });
+    if (s.kind === "reply") out.push({ msg: true, at: s.at, by: claudeSays ? "Claude" : s.by, words: s.note || "", quote: s.quote, claude: claudeSays, ...(claudeSays && s.pr ? { prN: s.pr } : {}), ...(claudeSays && (s.covers?.length || s.leftOut) ? { covers: s.covers || [], leftOut: s.leftOut } : {}), ...(live ? { ask: true, mk: "ask", tip: "Waiting for an answer", picks: s.options || [] } : {}), ...(s.plan && claudeSays ? { plan: true, planLive, planAt: s.at, previewPlan: !!s.preview } : {}), ...(claudeSays && s.summary ? { summary: s.summary } : {}) });
     /* a move's reason is a reply, labelled with the move ("You put it back"); a bare move is the history's
        (Nirav, 2026-10-30: the words were written for someone to read) */
     else if (s.note && s.kind !== "mention") out.push({ msg: true, at: s.at, by: s.by, words: s.note, move: stepVerb(c, s, from), st: s.status, mk: moveKey(s, from), pill: movePill(c, s, from, doer) });
@@ -6459,7 +6460,7 @@ function coversHtml(x) {
     const o = anyComment(k);
     return `<button type="button" class="jn-row jn-go" data-id="${esc(k.id)}"><span class="jn-n">${esc(String(o?.n || k.n || "?"))}</span><span class="jn-t">${esc(o?.text || "")}</span>${o?.by ? noteFace(o.by) : ""}</button>`;
   }).join("");
-  return `<div class="jn-cov"><div class="jn-h">Covers ${x.covers.length} more</div>${rows}${x.leftOut ? `<div class="jn-left">Left out: ${esc(x.leftOut)}</div>` : ""}</div>`;
+  return `<div class="jn-cov">${rows ? `<div class="jn-h">Covers ${x.covers.length} more</div>${rows}` : ""}${x.leftOut ? `<div class="jn-left">Left out: ${esc(x.leftOut)}</div>` : ""}</div>`;
 }
 /* THE SAME PROBLEM ELSEWHERE (step 6): Claude's offer under its Done; a yes adds the pages to the list, on the same PR */
 state.ewPick = new Map(); // comment id -> routes ticked in "Pick pages"
@@ -6481,7 +6482,13 @@ function joinedHtml(c) {
      this one says so from the click */
   if (!j && c.status !== "approved") {
     const lead = togetherLead(c);
-    if (lead && lead.call.state !== "planned") {
+    /* planned without it: left out, and the plan says why (Nirav, 2026-11-14) */
+    if (lead?.call.state === "planned") {
+      const p = (lead.history || []).find((h) => h.at === lead.call.planAt);
+      const why = String(p?.leftOut || "").split(/[,;]\s*(?=#\d)/).find((t) => new RegExp(`#${c.n}(?!\\d)`).test(t));
+      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${CLAUDE_AV()}<span>Left out of Claude's plan on <b>#${esc(String(lead.n))}</b>${why ? `: ${esc(why.replace(new RegExp(`^\\s*#${c.n}\\s*[:,-]?\\s*`), ""))}` : ""}</span></button>`;
+    }
+    if (lead) {
       const withN = lead.call.covers.map((id) => state.comments.find((x) => x.id === id)).filter((x) => x && x.id !== c.id).map((x) => x.n);
       return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${CLAUDE_AV()}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""} · ${lead.call.state === "asked" ? "Claude asks something there" : "Claude is reading them"}</span></button>`;
     }

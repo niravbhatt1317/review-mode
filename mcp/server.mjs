@@ -216,11 +216,17 @@ async function call(name, a = {}) {
       if (bad.length) throw new Error(`Can't cover ${bad.join("; ")}. Leave those out (say why in left_out) and call review_talk again`);
       if (covered.length > 9) throw new Error("At most 9 other comments in one plan (10 in all): plan these, and say the rest come in a next plan");
     }
+    /* a Together call names its comments: each one is in the plan, or in left_out by its number (Nirav, 2026-11-14: #41
+       and #42 were quietly dropped, their cards said nothing) */
+    if (a.kind === "plan" && c.call?.kind === "together") {
+      const missing = (c.call.covers || []).map((id) => all.find((x) => x.id === id)).filter((o) => o && !covered.some((k) => k.id === o.id) && !new RegExp(`#${o.n}(?!\\d)`).test(a.left_out || ""));
+      if (missing.length) throw new Error(`${c.call.by} asked for #${missing.map((o) => o.n).join(", #")} too: put ${missing.length === 1 ? "it" : "each"} in covers, or in left_out by number with why ("#${missing[0].n} the design rules keep it"), and call review_talk again`);
+    }
     if (a.kind === "draft") applyChange(c, { claudeDraft: { text: words } }, who);
     else {
       const stopped = c.call.state === "stopped" || (works.has(c.id) && !["go", "preview"].includes(c.call.kind)); // after a Stop: the folder waits for their answer
       const live = a.kind === "plan" && cfg.previews !== "never" && (a.preview === true || cfg.previews === "always") && !readyPr(c); // a ready PR open: Go updates it, and its own preview shows the result
-      applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true, ...(live ? { preview: true } : {}), ...(covered.length ? { covers: covered, ...(a.left_out ? { leftOut: a.left_out } : {}) } : {}) } : a.kind === "summary" && a.summary ? { summary: a.summary } : {}) }, who);
+      applyChange(c, { reply: words, via: "claude", ...(a.kind === "ask" ? { ask: true, options: a.options || [] } : a.kind === "plan" ? { plan: true, ...(live ? { preview: true } : {}), ...(covered.length || a.left_out ? { covers: covered, ...(a.left_out ? { leftOut: a.left_out } : {}) } : {}) } : a.kind === "summary" && a.summary ? { summary: a.summary } : {}) }, who);
       /* the covered comments say where their plan is; ones an earlier plan here covered, and this one does not, are freed */
       if (a.kind === "plan") {
         for (const o of all.filter((x) => x.id !== c.id && (covered.some((k) => k.id === x.id) || x.joined?.lead === c.id))) {
@@ -615,7 +621,7 @@ async function callRound() {
         : k.kind === "accepted" ? `${k.by} accepted your suggestion ("${full.draft?.text || k.words}"). Plan exactly that (kind "plan"), in design words: it waits for their Go.`
         : k.kind === "draft" ? `${k.by} asked for help writing a reply: "${k.words}". Draft it (kind "draft"), only they see it.`
         : k.kind === "elsewhere" ? `${k.by} said yes to fixing it on other pages too: ${(full.elsewhere?.picked || []).map((r) => (full.elsewhere.pages || []).find((p) => p.route === r)?.page || r).join(", ")}. That is the go: kind "change" on the same PR #${full.pr?.n}, the same fix on those pages, then review_ship with asks_done for their list items.`
-        : k.kind === "together" ? [`${k.by} selected these to be done together, as ONE change: this comment and the ones below. Plan one change for all of them`, `(kind "plan", covers: [their numbers]). Leave out any that don't fit (someone else has it, a different kind of change) and say why in left_out.`, ...coverLines(k.covers || [], all, ppl)].join("\n")
+        : k.kind === "together" ? [`${k.by} selected these to be done together, as ONE change: this comment and the ones below. Plan one change for all of them`, `(kind "plan", covers: [their numbers]). Leave out any that don't fit (someone else has it, the design rules say no, a different kind of change): each one in left_out by its number, with why ("#41 the shared table style sets it"); none may go unnamed.`, ...coverLines(k.covers || [], all, ppl)].join("\n")
         : asked ? `${k.by} answered your question ("${asked.note}"): "${k.words}". Carry on from there.`
         : `${k.by} wrote: "${k.words}"`;
       const text = [

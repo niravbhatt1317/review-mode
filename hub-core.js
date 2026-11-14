@@ -367,7 +367,7 @@ export function applyChange(c, body, who, ctx = {}) {
     else if (!claude && !go && (mentions.includes("Claude") || c.call?.state === "asked" || qt.quote?.by === "Claude")) c.call = newCall(who, reply, at, { step: at, ...(c.call?.state === "asked" ? { answers: c.call.askAt } : {}) });
     /* on a fix a reply is a message in the thread: the status, the note (why it came back) and the faces stay */
     if (!isQ) {
-      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true, ...(body.preview === true ? { preview: true } : {}), ...(covers.covers?.length ? covers : {}) } : {}), ...(go ? { go: true, ...(planAsker && !sameWho(planAsker, who) ? { tell: [planAsker] } : {}) } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...sum, ...ment, ...qt });
+      (c.history ||= []).push({ at, by: who, status: from, from, kind: "reply", note: reply, ...(claude ? { via: "claude" } : {}), ...cask, ...forWho, ...(plan ? { plan: true, ...(body.preview === true ? { preview: true } : {}), ...(covers.covers?.length || covers.leftOut ? covers : {}) } : {}), ...(go ? { go: true, ...(planAsker && !sameWho(planAsker, who) ? { tell: [planAsker] } : {}) } : {}), ...(claude && Number.isFinite(Number(body.prN)) ? { pr: Number(body.prN) } : {}), ...sum, ...ment, ...qt });
       /* Go on a New comment picks it up: the person who said go is on it, with Claude */
       if (go && from === "open") {
         Object.assign(c, { status: "progress", assignee: who, pickedAt: at, withClaude: true });
