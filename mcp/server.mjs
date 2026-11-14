@@ -65,6 +65,7 @@ const holder = (c) => (c.status === "progress" ? c.assignee : c.status === "appr
 /* ---------- the tools ---------- */
 const asProp = { as: { type: "string", description: "The GitHub handle of the person you work for (the brief gives it). Leave out to use the default." } };
 const picsProps = {
+  steps: { type: "array", items: { type: "string" }, description: "Clicks that reach the comment's view first, when the page opens elsewhere by default (\"click Internal\", \"click All clients\", \"click the Profiles tab\"): up to 8, kept for every later pair" },
   state: { type: "string", enum: ["hover", "focus", "open"], description: "Take the pictures with the element in this state, when the change is about it: hover (a hover style, a tooltip), focus (the focus ring), open (clicked: a menu, a dropdown, a popover)" },
   pages: { type: "array", items: { type: "object", properties: { route: { type: "string" }, target: { type: "string", description: "The spot's visible words on that page" } }, required: ["route"] }, description: "Other pages the changed piece shows on (a shared component): a pair for each, up to 3, as tabs" },
   widths: { type: "array", items: { type: "number" }, description: "Other window widths, up to 2 (768 a tablet, 390 a phone): when the change may wrap or squeeze, or they asked to see it on a small screen" },
@@ -349,12 +350,7 @@ async function call(name, a = {}) {
     const key = `${c.id}:${p.sha}:resnap`;
     if ((snapFails.get(key) || 0) >= 3) throw new Error("Already retaken 3 times: answer review_checked with missed true");
     snapFails.set(key, (snapFails.get(key) || 0) + 1);
-    if (Array.isArray(a.steps)) c.snapSteps = a.steps.map((x) => String(x).trim()).filter(Boolean).slice(0, 8).map((x) => {
-      const m = x.match(/^(click|hover|press)\s+(.+)$/i);
-      if (!m) return { kind: "click", textKey: x.slice(0, 80) };
-      const kind = m[1].toLowerCase();
-      return kind === "press" ? { kind: "key", key: m[2].trim(), code: m[2].trim() } : { kind, textKey: m[2].trim().replace(/^["']|["']$/g, "").slice(0, 80) };
-    });
+    if (Array.isArray(a.steps)) c.snapSteps = snapStepsOf(a.steps);
     if (a.target) c.snapTarget = String(a.target).trim().slice(0, 80);
     setSnapPlan(c, a);
     await st.put(c);
@@ -1211,8 +1207,17 @@ const picsLines = (local) => local.map((v, i) => {
 /* BETTER PICTURES (Nirav, 2026-11-06): how Claude wants the pictures taken, kept on the comment for every later pair:
    a state on the element (hover, focus, open), the other pages the changed piece shows on, other widths */
 const SNAP_STATES = ["hover", "focus", "open"];
+const snapStepsOf = (list) => list.map((x) => String(x).trim()).filter(Boolean).slice(0, 8).map((x) => {
+  const m = x.match(/^(click|hover|press)\s+(.+)$/i);
+  if (!m) return { kind: "click", textKey: x.slice(0, 80) };
+  const kind = m[1].toLowerCase();
+  return kind === "press" ? { kind: "key", key: m[2].trim(), code: m[2].trim() } : { kind, textKey: m[2].trim().replace(/^["']|["']$/g, "").slice(0, 80) };
+});
 function setSnapPlan(c, p) {
   if (!p || typeof p !== "object") return;
+  /* the clicks that reach the comment's view on staging, said with the plan (Nirav, 2026-11-14: #40's customers search
+     shows only in "All clients"; told after a bad pair, it cost a round) */
+  if (Array.isArray(p.steps)) c.snapSteps = snapStepsOf(p.steps);
   if ("state" in p) c.snapState = SNAP_STATES.includes(p.state) ? p.state : null;
   if (Array.isArray(p.pages)) c.snapPages = p.pages.map((x) => (typeof x === "string" ? { route: x } : x)).filter((x) => x && /^\//.test(String(x.route || "")) && x.route !== c.route).slice(0, 3).map((x) => ({ route: String(x.route).slice(0, 300), ...(x.target ? { target: String(x.target).slice(0, 80) } : {}), ...(x.label ? { label: String(x.label).slice(0, 40) } : {}) }));
   if (Array.isArray(p.widths)) c.snapWidths = [...new Set(p.widths.map(Number).filter((n) => n >= 320 && n <= 1920 && n !== (c.viewport?.w || 1440)))].slice(0, 2);
