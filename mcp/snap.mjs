@@ -211,6 +211,9 @@ async function open(t, url, c, login, view) {
   await t.send("Emulation.setDeviceMetricsOverride", { width: vw, height: vh, deviceScaleFactor: 2, mobile: false });
   const pre = [];
   for (const [k, v] of Object.entries(login?.sessionStorage || {})) pre.push(`sessionStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(typeof v === "string" ? v : JSON.stringify(v))});`);
+  /* the app's own remembered choices when the comment was made (its org view, theme…): the same view, not the app's
+     default (Nirav, 2026-11-14: #40 was made in MSP Wide View, the pictures showed Agent Fleet inside "Internal") */
+  for (const [k, v] of Object.entries(c.app || {})) if (typeof v === "string") pre.push(`localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)});`);
   for (const [k, v] of Object.entries(login?.localStorage || {})) pre.push(`localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(typeof v === "string" ? v : JSON.stringify(v))});`);
   await t.send("Page.addScriptToEvaluateOnNewDocument", { source: `try { ${pre.join(" ")} } catch {}` });
   await t.send("Page.navigate", { url });
