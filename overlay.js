@@ -6484,7 +6484,7 @@ function elsewhereHtml(c) {
    the thread line under it): the Together icon, an outline, and an arrow to where it goes */
 const JN_IC = '<svg class="jn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h4l5 7"/><path d="M3 19h4l5-7"/><path d="M3 12h18"/><path d="m17 8 4 4-4 4"/></svg>';
 /* one line: a long one ends in "…", the whole of it on hover (Nirav, 2026-11-14) */
-const jnLine = (lead, h) => `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}" title="${esc(h.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'"))}">${JN_IC}<span class="jn-t">${h}</span>${JN_TO}</button>`;
+const jnLine = (lead, h, at = null) => `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}"${at ? ` data-at="${esc(String(at))}"` : ""} title="${esc(h.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'"))}">${JN_IC}<span class="jn-t">${h}</span>${JN_TO}</button>`;
 const JN_TO = '<svg class="jn-to" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'; // a chevron: it moves within the list (the ↗ is for opening a page)
 function joinedHtml(c) {
   const j = c.joined;
@@ -6508,7 +6508,9 @@ function joinedHtml(c) {
     const lead = anyComment({ id: j.lead });
     if (!lead) return "";
     const withN = (j.with || []).filter((n) => n !== c.n && n !== lead.n);
-    return jnLine(lead, `Done together with <b>#${esc(String(lead.n))}</b>${withN.length ? `, #${withN.join(", #")}` : ""}${c.pr?.n ? ` in PR #${esc(String(c.pr.n))}` : ""}`);
+    /* to Claude's Done there (the PR and the pictures), not to the plan (Nirav, 2026-11-14) */
+    const done = [...(lead.history || [])].reverse().find((h) => h.via === "claude" && h.kind === "reply" && h.pr === c.pr?.n);
+    return jnLine(lead, `Done together with <b>#${esc(String(lead.n))}</b>${withN.length ? `, #${withN.join(", #")}` : ""}${c.pr?.n ? ` in PR #${esc(String(c.pr.n))}` : ""}`, done?.at);
   }
   if (!j || j.state !== "plan" || c.status === "approved") return "";
   const lead = anyComment({ id: j.lead });
@@ -8606,7 +8608,14 @@ panelBody.addEventListener("click", async (e) => {
   if (jn) {
     e.stopPropagation();
     const o = anyComment(jn.dataset.id ? { id: jn.dataset.id } : { n: jn.dataset.n });
-    if (o) showInList(o, o.call?.planAt || null);
+    const me = anyComment({ id: jn.closest(".card")?.dataset.id });
+    const at = Number(jn.dataset.at) || null;
+    /* the Done message, on this comment's own tab of the pictures */
+    if (o && at && me) for (const p of (o.pics || []).filter((x) => x.at === at)) {
+      const k = baViews(p).findIndex((v) => v.label === `#${me.n}`);
+      if (k > 0) state.baTab.set(`${o.id}:${p.sha}`, k);
+    }
+    if (o) showInList(o, at || o.call?.planAt || null);
     return;
   }
   const rm = e.target.closest(".rm-toggle");
