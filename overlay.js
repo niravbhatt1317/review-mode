@@ -6483,6 +6483,8 @@ function elsewhereHtml(c) {
 /* the line on a covered card is a link to another comment's plan, not Claude talking (Nirav, 2026-11-14: it read like
    the thread line under it): the Together icon, an outline, and an arrow to where it goes */
 const JN_IC = '<svg class="jn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h4l5 7"/><path d="M3 19h4l5-7"/><path d="M3 12h18"/><path d="m17 8 4 4-4 4"/></svg>';
+/* one line: a long one ends in "…", the whole of it on hover (Nirav, 2026-11-14) */
+const jnLine = (lead, h) => `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}" title="${esc(h.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'"))}">${JN_IC}<span class="jn-t">${h}</span>${JN_TO}</button>`;
 const JN_TO = '<svg class="jn-to" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'; // a chevron: it moves within the list (the ↗ is for opening a page)
 function joinedHtml(c) {
   const j = c.joined;
@@ -6494,11 +6496,11 @@ function joinedHtml(c) {
     if (lead?.call.state === "planned") {
       const p = (lead.history || []).find((h) => h.at === lead.call.planAt);
       const why = String(p?.leftOut || "").split(/[,;]\s*(?=#\d)/).find((t) => new RegExp(`#${c.n}(?!\\d)`).test(t));
-      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${JN_IC}<span>Left out of Claude's plan on <b>#${esc(String(lead.n))}</b>${why ? `: ${esc(why.replace(new RegExp(`^\\s*#${c.n}\\s*[:,-]?\\s*`), ""))}` : ""}</span>${JN_TO}</button>`;
+      return jnLine(lead, `Left out of Claude's plan on <b>#${esc(String(lead.n))}</b>${why ? `: ${esc(why.replace(new RegExp(`^\\s*#${c.n}\\s*[:,-]?\\s*`), ""))}` : ""}`);
     }
     if (lead) {
       const withN = lead.call.covers.map((id) => state.comments.find((x) => x.id === id)).filter((x) => x && x.id !== c.id).map((x) => x.n);
-      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${JN_IC}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""} · ${lead.call.state === "asked" ? "Claude asks something there" : "Claude is reading them"}</span>${JN_TO}</button>`;
+      return jnLine(lead, `In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""} · ${lead.call.state === "asked" ? "Claude asks something there" : "Claude is reading them"}`);
     }
   }
   if (!j || j.state !== "plan" || c.status === "approved") return "";
@@ -6508,7 +6510,7 @@ function joinedHtml(c) {
   const doing = k && (k.kind === "go" || k.kind === "preview") && (k.state === "waiting" || k.state === "reading");
   const where = doing ? "Claude is making it there" : k?.state === "planned" ? "waiting for Go" : "";
   const withN = (j.with || []).filter((n) => n !== c.n);
-  return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${JN_IC}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""}${where ? ` · ${where}` : ""}</span>${JN_TO}</button>`;
+  return jnLine(lead, `In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""}${where ? ` · ${where}` : ""}`);
 }
 /* THE PR ON THE COMMENT (step 2): the live preview first (the real page, to try the whole flow), then the PR and its
    state; the preview link comes once the Preview workflow has built it */
