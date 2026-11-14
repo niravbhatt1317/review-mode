@@ -18,10 +18,14 @@ apt-get upgrade -yq
 apt-get install -yq git tmux curl ca-certificates gnupg jq ufw unattended-upgrades \
   fonts-noto-core fonts-noto-color-emoji fonts-liberation
 
+say "India time on the clock and in the logs"
+timedatectl set-timezone Asia/Kolkata
+
 say "Security updates by themselves, a restart at 03:30 India time when one needs it"
+# the time is the server's own clock, now India time (it was "22:00" for UTC, and became 10 pm India time, 2026-11-14)
 cat >/etc/apt/apt.conf.d/52review-upgrades <<'EOF'
 Unattended-Upgrade::Automatic-Reboot "true";
-Unattended-Upgrade::Automatic-Reboot-Time "22:00";
+Unattended-Upgrade::Automatic-Reboot-Time "03:30";
 EOF
 systemctl enable --now unattended-upgrades >/dev/null 2>&1 || true
 
