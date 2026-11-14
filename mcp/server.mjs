@@ -300,10 +300,11 @@ async function call(name, a = {}) {
     }
     if (c.pr.state === "open") {
       if (dry) return `DRY RUN: PR #${c.pr.n} would be closed and #${n} go back to In progress`;
-      run("gh", ["pr", "close", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--delete-branch", "--comment", `Undone from review comment #${n}.`]);
+      const fake = process.env.REVIEW_SHIP_DRY === "pr" && /^_/.test(a.session || ""); // tests: the PR #9999 that was never opened
+      if (!fake) run("gh", ["pr", "close", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--delete-branch", "--comment", `Undone from review comment #${n}.`]);
       /* any earlier PR of this comment still open goes too */
       const also = [];
-      for (const m of c.prsOpen || []) {
+      for (const m of fake ? [] : c.prsOpen || []) {
         try {
           if (JSON.parse(run("gh", ["pr", "view", String(m), "--repo", c.pr.repo || gh.repo, "--json", "state"])).state !== "OPEN") continue;
           run("gh", ["pr", "close", String(m), "--repo", c.pr.repo || gh.repo, "--delete-branch", "--comment", `Undone from review comment #${n}.`]);
@@ -315,7 +316,8 @@ async function call(name, a = {}) {
       say(`Undone: ${text} I closed PR #${c.pr.n}${also.length ? ` and #${also.join(", #")}` : ""}${/staging/i.test(text) ? "." : ", so nothing reaches staging."}`); // said once
       if (c.status === "approval") applyChange(c, { status: "progress", via: "claude" }, asker);
       await st.put(c);
-      return dry ? "DRY RUN: the PR would be closed" : `PR #${c.pr.n} closed; #${n} is In progress again.`;
+      const back = await undoCovered(c, st, asker, (m) => `Undone on #${n}: PR #${m} is closed, so this is In progress again.`);
+      return dry ? "DRY RUN: the PR would be closed" : `PR #${c.pr.n} closed; #${n}${back.length ? `, #${back.join(", #")}` : ""} ${back.length ? "are" : "is"} In progress again.`;
     }
     if (c.pr.state === "merged") {
       const sha = JSON.parse(run("gh", ["pr", "view", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--json", "mergeCommit"])).mergeCommit?.oid;
@@ -341,6 +343,7 @@ async function call(name, a = {}) {
       c.pr.undoes = old;
       say(`Undone: ${text} PR #${prN} takes PR #${old} back out of staging; it needs a merge like any PR.`, { prN });
       await st.put(c);
+      await undoCovered(c, st, asker, () => `Undone on #${n}: PR #${prN} takes PR #${old} back out of staging, this one's change with it.`, old);
       return `PR #${prN} undoes PR #${old}; a person merges it.`;
     }
     throw new Error(`PR #${c.pr.n} is ${c.pr.state}: nothing to undo`);
@@ -932,6 +935,25 @@ async function bringCovered(fresh, st, prN, url, summary, by) {
     await st.put(full);
   }
   return nums;
+}
+/* UNDO FOR MANY (Nirav, 2026-11-14): undoing the PR on the comment it was made on takes the comments it also did with
+   it: each is told, an open PR's go back to In progress (its PR closed), a merged one's hear what takes it out */
+async function undoCovered(c, st, by, words, merged = 0) {
+  const prN = merged || c.pr?.n;
+  const back = [];
+  for (const o of (await st.list()).filter((x) => x.id !== c.id && x.joined?.lead === c.id && x.pr?.n === prN)) {
+    const full = await st.get(o.id);
+    if (!full) continue;
+    if (!merged) {
+      applyChange(full, { pr: { n: prN, state: "closed" } }, by);
+      applyChange(full, { joinTo: null }, by);
+      if (full.status === "approval") applyChange(full, { status: "progress", via: "claude" }, by);
+    }
+    applyChange(full, { reply: words(prN), via: "claude" }, by);
+    await st.put(full);
+    back.push((await numbered(o.id, st))?.n);
+  }
+  return back.filter(Boolean);
 }
 /* the work is in a ready PR: Claude says so, and the comment waits for approval */
 async function finishGo(c, st, prN, url, summary, by) {
