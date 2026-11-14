@@ -347,7 +347,7 @@ export async function snap({ staging, preview, comment: c, login, views, timeout
   try {
     /* one pair after the other: a hidden tab in the back does not take clicks reliably */
     const out = [];
-    for (const v of list) out.push(await pair(ch.port, staging, preview, c, login, v));
+    for (const v of list) out.push(await pair(ch.port, staging, preview, v.comment || c, login, v)); // a view may be another comment's spot (one PR for many)
     return { views: out };
   } finally {
     clearTimeout(timer);

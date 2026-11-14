@@ -872,9 +872,10 @@ async function ship(c, st, a) {
     dropWork(c.id);
     try { run("gh", ["pr", "edit", String(c.pr.n), "--repo", c.pr.repo || gh.repo, "--title", title]); } catch {} // the title follows the latest change
     const fresh = await st.get(c.id);
+    const nums = fresh.call?.kind === "go" ? await bringCovered(fresh, st, fresh.pr.n, fresh.pr.url, summary, w.by) : [];
     tickShipped(fresh, w.by);
     fresh.pr.builtAt = Date.now(); // a new build: "the pictures are on the way" shows till they come
-    applyChange(fresh, { reply: `Updated PR #${fresh.pr.n}: ${summary}${stillOpen(fresh)} New before and after pictures come here in a minute or two.`, via: "claude", prN: fresh.pr.n }, w.by);
+    applyChange(fresh, { reply: `Updated PR #${fresh.pr.n}${nums.length ? `, with #${nums.join(", #")}` : ""}: ${summary}${stillOpen(fresh)} New before and after pictures come here in a minute or two.`, via: "claude", prN: fresh.pr.n }, w.by);
     const left = openAsks(fresh);
     if (fresh.status === "progress" && !left.length) applyChange(fresh, { status: "approval", via: "claude" }, w.by);
     await st.put(fresh);
@@ -900,13 +901,13 @@ async function ship(c, st, a) {
   later(prN);
   return finishGo(fresh, st, prN, url, summary, w.by);
 }
-/* the work is in a ready PR: Claude says so, and the comment waits for approval */
-async function finishGo(c, st, prN, url, summary, by) {
-  const fresh = await st.get(c.id);
-  /* ONE PR FOR MANY (step 6): each covered comment gets the same PR, its own Done line and For approval; its own
-     before and after follow (the PR round takes them for every comment with a PR) */
-  const skip = shipSkips.get(c.id) || [];
-  shipSkips.delete(c.id);
+/* ONE PR FOR MANY (step 6): each covered comment gets the same PR, its own Done line and For approval; its own
+   before and after follow (the PR round takes them for every comment with a PR). A new PR and an update to a ready one
+   both come here (Nirav, 2026-11-14: #40's Go updated its PR #13, and #43 and #44 were left behind) */
+async function bringCovered(fresh, st, prN, url, summary, by) {
+  const c = fresh;
+  const skip = shipSkips.get(fresh.id) || [];
+  shipSkips.delete(fresh.id);
   const all = fresh.call?.covers?.length ? prepare(await st.list()) : [];
   const me = all.find((x) => x.id === c.id);
   const inPr = (fresh.call?.covers || []).map((k) => all.find((x) => x.id === k.id)).filter((o) => o && o.status !== "approved" && !skip.includes(o.n));
@@ -930,6 +931,12 @@ async function finishGo(c, st, prN, url, summary, by) {
     if (full.status === "progress" && !openAsks(full).length) applyChange(full, { status: "approval", via: "claude" }, by);
     await st.put(full);
   }
+  return nums;
+}
+/* the work is in a ready PR: Claude says so, and the comment waits for approval */
+async function finishGo(c, st, prN, url, summary, by) {
+  const fresh = await st.get(c.id);
+  const nums = await bringCovered(fresh, st, prN, url, summary, by);
   tickShipped(fresh, by);
   applyChange(fresh, { reply: `${summary ? `Done: ${summary.replace(/\.?\s*$/, ".")}` : "Done, as planned."} It's in PR #${prN}${nums.length ? `, with #${nums.join(", #")}` : ""}${fresh.pr?.preview ? ", the same as the live preview" : "; the live preview and before and after pictures show here in a minute or two"}.${stillOpen(fresh)}`, via: "claude", prN }, by);
   const left = openAsks(fresh);
@@ -1041,7 +1048,14 @@ async function picsFor(id, sess, base, sha, quiet = false) {
     if (staging === base) return; // not a pr-N preview: nothing to compare with
     const msg = c.pr.draft ? (c.history || []).find((h) => h.at === c.pr.planAt && h.via === "claude") : [...(c.history || [])].reverse().find((h) => h.via === "claude" && h.note && (h.pr === c.pr.n || (/^Done\b/.test(h.note) && h.at >= (c.pr.at || 0) - 5000))); // older "Done" messages carry no PR number
     if (!msg) return; // the "Done" message comes with the PR: the next round
-    const r = await snap({ staging, preview: base, comment: c, login: cfg.previewLogin, views: snapViews(c) });
+    /* ONE PR FOR MANY: a tab for each comment the PR also does, at its own spot, so the pair shows every point (Nirav,
+       2026-11-14: #40's showed only its own spot and its widths). A covered comment on the same page takes the clicks
+       that reach this one's view when it has none of its own that are known to work */
+    const withC = c.pr.with?.length && !c.joined ? prepare(await st.list()).filter((o) => c.pr.with.includes(o.n)).slice(0, 3) : [];
+    const own = snapViews(c);
+    const plan = [own[0], ...withC.map((o) => ({ comment: { ...o, snapSteps: o.route === c.route && c.snapSteps?.length ? c.snapSteps : o.snapSteps }, label: `#${o.n}` })), ...own.slice(1)].slice(0, 4);
+    if (withC.length && plan[0]) plan[0].label = `#${(await numbered(c.id, st))?.n || ""}`.replace(/#$/, plan[0].label);
+    const r = await snap({ staging, preview: base, comment: c, login: cfg.previewLogin, views: plan });
     /* each pair's files, kept on the hub and here (for Claude to Read); the first pair is also the record's own */
     fs.mkdirSync(PICS_DIR, { recursive: true });
     const local = [];
