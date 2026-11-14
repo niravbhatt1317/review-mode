@@ -1965,11 +1965,11 @@ root.innerHTML = `
   .jn-row .av { width: 16px; height: 16px; font-size: 9px; flex: 0 0 auto; }
   .jn-left { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
   .jn-left:first-child { margin-top: 0; } /* nothing covered, only left out */
-  .jn-line { display: flex; align-items: center; gap: 8px; width: 100%; margin: 10px 0 0; padding: 7px 10px; box-sizing: border-box; border: 1px solid color-mix(in srgb, hsl(214 98% 44%) 16%, transparent); border-radius: 8px; background: color-mix(in srgb, hsl(214 98% 44%) 4%, var(--rv-surface)); font: 12px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); text-align: left; cursor: pointer; }
+  .jn-line { display: flex; align-items: center; gap: 8px; width: 100%; margin: 10px 0 0; padding: 7px 10px; box-sizing: border-box; border: 1px dashed color-mix(in srgb, hsl(214 98% 44%) 35%, transparent); border-radius: 8px; background: var(--rv-surface); font: 12px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); text-align: left; cursor: pointer; }
   .jn-line .rv-cl-av, .jn-line svg { flex: 0 0 auto; }
   .jn-line .jn-ic { width: 15px; height: 15px; color: hsl(214 98% 44%); }
   .jn-line .jn-to { width: 13px; height: 13px; margin-left: auto; color: var(--rv-ink-3); }
-  .jn-line:hover { background: color-mix(in srgb, hsl(214 98% 44%) 8%, var(--rv-surface)); } /* a tinted box with its own edge, not an outline around nothing (Nirav, 2026-11-14) */
+  .jn-line:hover { background: color-mix(in srgb, hsl(214 98% 44%) 8%, var(--rv-surface)); } /* the dashed edge on white, the tint only on hover (Nirav, 2026-11-14) */
   .jn-line:hover .jn-to { color: hsl(214 98% 42%); }
   .jn-line b { color: hsl(214 98% 42%); font-weight: 600; }
   .jn-line:hover b { text-decoration: underline dotted; text-underline-offset: 3px; }
