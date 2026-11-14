@@ -297,6 +297,8 @@ export function applyChange(c, body, who, ctx = {}) {
     const j = body.joinTo;
     if (j && typeof j === "object" && j.id && j.id !== c.id) c.joined = { lead: String(j.id).slice(0, 40), n: Number(j.n) || null, with: Array.isArray(j.with) ? j.with.map(Number).filter(Boolean).slice(0, 9) : [], state: j.state === "pr" ? "pr" : "plan", at: Date.now() };
     else delete c.joined;
+    /* its own plan, if it had one, gives way to the one plan (Nirav, 2026-11-14: #43 and #44 had their own Go): one Go, one PR */
+    if (c.joined?.state === "plan" && c.call && ["planned", "asked"].includes(c.call.state)) Object.assign(c.call, { state: "done", doneAt: Date.now(), folded: c.joined.lead });
   }
   /* THE SAME PROBLEM ELSEWHERE (step 6): Claude's offer under its Done, and the answer. A yes adds those pages to the
      comment's list (as items with their page) and calls Claude: a clear yes is the go on the same PR */

@@ -212,6 +212,7 @@ async function call(name, a = {}) {
         else if (kind(o.severity) === "question") bad.push(`#${num} is a question`);
         else if (has && !o.withClaude && !sameWho(has, c.call.by)) bad.push(`#${num}: ${withNames(o, ppl).assignee || has} has it`);
         else if (o.joined?.state === "plan" && o.joined.lead !== c.id) bad.push(`#${num} is in the plan on #${o.joined.n}`);
+        else if (o.pr?.state === "open" && !o.pr.draft && o.pr.n !== c.pr?.n) bad.push(`#${num} has its own PR #${o.pr.n}`);
         else covered.push({ id: o.id, n: o.n });
       }
       if (bad.length) throw new Error(`Can't cover ${bad.join("; ")}. Leave those out (say why in left_out) and call review_talk again`);
