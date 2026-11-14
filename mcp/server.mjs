@@ -295,6 +295,9 @@ async function call(name, a = {}) {
       }
       prSoon();
       say(`Undone: ${text} It's on the same PR #${c.pr.n}; new before and after pictures come in a minute or two.`, { prN: c.pr.n });
+      /* part of it taken back: it needs another look, not an approval of what is no longer there (Nirav, 2026-11-14: #45
+         stayed For approval after its own part was undone) */
+      if (c.status === "approval") applyChange(c, { status: "progress", via: "claude" }, asker);
       await st.put(c);
       return dry ? `DRY RUN: undo committed on ${c.pr.branch}, not pushed` : `Part undone on PR #${c.pr.n}.`;
     }
