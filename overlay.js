@@ -1965,8 +1965,12 @@ root.innerHTML = `
   .jn-row .av { width: 16px; height: 16px; font-size: 9px; flex: 0 0 auto; }
   .jn-left { margin-top: 4px; font-size: 11px; color: var(--rv-ink-3); }
   .jn-left:first-child { margin-top: 0; } /* nothing covered, only left out */
-  .jn-line { display: flex; align-items: center; gap: 6px; width: 100%; margin: 10px 0 0; padding: 7px 10px; border: 0; border-radius: 8px; background: hsl(var(--rv-n10)); font: 12px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); text-align: left; cursor: pointer; }
+  .jn-line { display: flex; align-items: center; gap: 8px; width: 100%; margin: 10px 0 0; padding: 7px 10px; border: 1px dashed color-mix(in srgb, hsl(214 98% 44%) 35%, transparent); border-radius: 8px; background: transparent; font: 12px/1.35 -apple-system, system-ui, sans-serif; color: var(--rv-ink-2); text-align: left; cursor: pointer; }
   .jn-line .rv-cl-av, .jn-line svg { flex: 0 0 auto; }
+  .jn-line .jn-ic { width: 15px; height: 15px; color: hsl(214 98% 44%); }
+  .jn-line .jn-to { width: 13px; height: 13px; margin-left: auto; color: var(--rv-ink-3); }
+  .jn-line:hover { background: color-mix(in srgb, hsl(214 98% 44%) 5%, transparent); }
+  .jn-line:hover .jn-to { color: hsl(214 98% 42%); }
   .jn-line b { color: hsl(214 98% 42%); font-weight: 600; }
   .jn-line:hover b { text-decoration: underline dotted; text-underline-offset: 3px; }
   .ew { margin-top: 8px; padding: 8px 10px; border: 1px dashed color-mix(in srgb, #D97757 45%, transparent); border-radius: 10px; background: color-mix(in srgb, #D97757 4%, var(--rv-surface)); font-size: 12.5px; line-height: 1.45; color: var(--rv-ink); }
@@ -6476,6 +6480,10 @@ function elsewhereHtml(c) {
   return `<div class="ew"><span><b>Also on ${pages.length} other page${pages.length === 1 ? "" : "s"}:</b> ${list}${pages.length === 1 && pages[0].why ? ` (${esc(pages[0].why)})` : ""}.</span><div class="ew-acts"><button type="button" class="th-pick ew-yes cl-pri"${may ? "" : " disabled"}>Fix ${pages.length === 1 ? "it there" : "those"} too</button>${pages.length > 1 ? `<button type="button" class="th-pick ew-pick"${may ? "" : " disabled"}>Pick pages</button>` : ""}<button type="button" class="th-pick ew-no"${may ? "" : " disabled"}>Not now</button></div>${may ? "" : `<div class="th-only">${esc(onlyWho([c.pr?.for, c.call?.by].filter(Boolean), "say yes"))}</div>`}</div>`;
 }
 /* a covered comment: where its plan is, until the PR is out (then the PR row says "with #…") */
+/* the line on a covered card is a link to another comment's plan, not Claude talking (Nirav, 2026-11-14: it read like
+   the thread line under it): the Together icon, an outline, and an arrow to where it goes */
+const JN_IC = '<svg class="jn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h4l5 7"/><path d="M3 19h4l5-7"/><path d="M3 12h18"/><path d="m17 8 4 4-4 4"/></svg>';
+const JN_TO = '<svg class="jn-to" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'; // a chevron: it moves within the list (the ↗ is for opening a page)
 function joinedHtml(c) {
   const j = c.joined;
   /* asked, not planned yet (Nirav, 2026-11-12: the line came only once Claude had planned): a Together call that names
@@ -6486,11 +6494,11 @@ function joinedHtml(c) {
     if (lead?.call.state === "planned") {
       const p = (lead.history || []).find((h) => h.at === lead.call.planAt);
       const why = String(p?.leftOut || "").split(/[,;]\s*(?=#\d)/).find((t) => new RegExp(`#${c.n}(?!\\d)`).test(t));
-      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${CLAUDE_AV()}<span>Left out of Claude's plan on <b>#${esc(String(lead.n))}</b>${why ? `: ${esc(why.replace(new RegExp(`^\\s*#${c.n}\\s*[:,-]?\\s*`), ""))}` : ""}</span></button>`;
+      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${JN_IC}<span>Left out of Claude's plan on <b>#${esc(String(lead.n))}</b>${why ? `: ${esc(why.replace(new RegExp(`^\\s*#${c.n}\\s*[:,-]?\\s*`), ""))}` : ""}</span>${JN_TO}</button>`;
     }
     if (lead) {
       const withN = lead.call.covers.map((id) => state.comments.find((x) => x.id === id)).filter((x) => x && x.id !== c.id).map((x) => x.n);
-      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${CLAUDE_AV()}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""} · ${lead.call.state === "asked" ? "Claude asks something there" : "Claude is reading them"}</span></button>`;
+      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${JN_IC}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""} · ${lead.call.state === "asked" ? "Claude asks something there" : "Claude is reading them"}</span>${JN_TO}</button>`;
     }
   }
   if (!j || j.state !== "plan" || c.status === "approved") return "";
@@ -6500,7 +6508,7 @@ function joinedHtml(c) {
   const doing = k && (k.kind === "go" || k.kind === "preview") && (k.state === "waiting" || k.state === "reading");
   const where = doing ? "Claude is making it there" : k?.state === "planned" ? "waiting for Go" : "";
   const withN = (j.with || []).filter((n) => n !== c.n);
-  return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${CLAUDE_AV()}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""}${where ? ` · ${where}` : ""}</span></button>`;
+  return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${JN_IC}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""}${where ? ` · ${where}` : ""}</span>${JN_TO}</button>`;
 }
 /* THE PR ON THE COMMENT (step 2): the live preview first (the real page, to try the whole flow), then the PR and its
    state; the preview link comes once the Preview workflow has built it */
