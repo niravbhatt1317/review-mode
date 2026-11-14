@@ -6480,10 +6480,10 @@ function joinedHtml(c) {
   /* asked, not planned yet (Nirav, 2026-11-12: the line came only once Claude had planned): a Together call that names
      this one says so from the click */
   if (!j && c.status !== "approved") {
-    const lead = state.comments.find((x) => x.id !== c.id && x.call?.kind === "together" && (x.call.state === "waiting" || x.call.state === "reading") && (x.call.covers || []).includes(c.id));
-    if (lead) {
+    const lead = togetherLead(c);
+    if (lead && lead.call.state !== "planned") {
       const withN = lead.call.covers.map((id) => state.comments.find((x) => x.id === id)).filter((x) => x && x.id !== c.id).map((x) => x.n);
-      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${CLAUDE_AV()}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""} · Claude is reading them</span></button>`;
+      return `<button type="button" class="jn-line jn-go" data-id="${esc(lead.id)}">${CLAUDE_AV()}<span>In Claude's plan on <b>#${esc(String(lead.n))}</b>${withN.length ? `, with #${withN.join(", #")}` : ""} · ${lead.call.state === "asked" ? "Claude asks something there" : "Claude is reading them"}</span></button>`;
     }
   }
   if (!j || j.state !== "plan" || c.status === "approved") return "";
@@ -7277,11 +7277,17 @@ function settle(card, c) {
    Claude do it" (sent to Claude, no second pick-up) or Ignore. Once it is For approval it is gone. */
 const DRAFT_LIVE_MS = 10 * 60 * 1000;
 const myName = (x) => !!x && (isMe(x) || (!!state.hub?.handle && String(x).toLowerCase() === state.hub.handle.toLowerCase()));
+const CALL_LIVE = ["waiting", "reading", "asked", "planned"];
+/* the comment whose Together call, still being read, names this one (step 6) */
+const togetherLead = (c) => state.comments.find((x) => x.id !== c.id && x.call?.kind === "together" && CALL_LIVE.includes(x.call.state) && (x.call.covers || []).includes(c.id));
 const draftShown = (c) => {
   const d = c.draft;
   if (!d || (d.state === "new" && d.unsure)) return false; // Claude's question is a thread message (Nirav, 2026-11-04)
   if (clashMoot(c)) return false; // settled the other way: its suggestion is moot
   if (c.joined && d.state === "new") return false; // in another comment's plan (step 6): that plan is the one to say Go to
+  /* one Claude at a time on a card (Nirav, 2026-11-14: "Claude is looking at it…" beside "Claude is reading the 3
+     comments"): while it is called here, or in a Together call from another comment, the call speaks, not the draft */
+  if (c.status !== "approved" && (CALL_LIVE.includes(c.call?.state) || togetherLead(c))) return false;
   if (c.clash?.state === "open" && c.status !== "approved") return false; // a clash first: the suggestion waits for which way it goes (one Claude box)
   if (claudeAgain(c) && state.thOpen.has(c.id)) return false; // drafting again: said at the end of the open thread
   const fresh = d.state === "drafting" && Date.now() - (d.at || 0) < DRAFT_LIVE_MS;
